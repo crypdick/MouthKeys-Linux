@@ -389,8 +389,8 @@ class Window(QWidget):
             self.polling = False
             if "result" in response:
                 result = response["result"]
-                service_version = result.get("version")
-                version_text = service_version or "Unknown"
+                service_version = result["version"]
+                version_text = service_version
                 if service_version != __version__:
                     version_text += " — restart MouthKeys after updating"
                 self.service_version.setText(version_text)

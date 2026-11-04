@@ -27,9 +27,6 @@ def test_settings_show_app_and_running_service_versions(monkeypatch):
     status["version"] = "0.0.1"
     window.poll()
     assert window.service_version.text() == "0.0.1 — restart MouthKeys after updating"
-    del status["version"]
-    window.poll()
-    assert window.service_version.text() == "Unknown — restart MouthKeys after updating"
     monkeypatch.setattr(
         gui.Window, "send", lambda self, *args, callback: callback({"error": "Disconnected"})
     )
@@ -50,7 +47,12 @@ def test_offscreen_controller_renders_history_and_saves_settings(monkeypatch):
 
     def request(action, **data):
         if action == "status":
-            return {"phase": "idle", "message": "Ready", "seconds": 0}
+            return {
+                "phase": "idle",
+                "message": "Ready",
+                "seconds": 0,
+                "version": version("mouthkeys-linux"),
+            }
         if action == "history":
             return [
                 {

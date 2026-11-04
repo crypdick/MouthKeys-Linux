@@ -82,6 +82,11 @@ after changing desktop session types; its display environment is inherited at la
    Loading and failed shortcut commands also appear in the panel. There are no sounds.
 3. When transcription finishes, paste with Ctrl+V, or Ctrl+Shift+V in most terminals.
 
+The recording timer and “Listening” status start only after the first audio buffer is saved.
+Capture limits FFmpeg input probing so waveform data is available promptly; a source that
+produces no audio within five seconds fails instead of showing a running timer. Speak when
+the recording panel appears. Live transcript words still depend on the preview interval below.
+
 The panel opens near the bottom of the screen containing the pointer. Drag it to reposition;
 double-click its surface to reset. History opens the main window, Copy copies the finished
 transcript, × cancels/dismisses, and Reprocess retries retained audio. Linux compositors control
@@ -249,6 +254,8 @@ change the clipboard, synthesize keys, show windows, or play sounds.
 Before calling a desktop setup verified, run this manual check:
 
 - Download a model, warm it, choose your actual microphone, and dictate two sentences.
+- Start from an idle microphone and speak as soon as the recording panel appears; confirm
+  the waveform responds promptly and the final transcript includes the first word. Repeat once.
 - Paste into an editor and a terminal (Ghostty/c11 where available); confirm Unicode and newlines.
 - Cancel a recording; confirm there is no clipboard change or late paste.
 - Switch windows while X11 inference runs; confirm it falls back to copy.

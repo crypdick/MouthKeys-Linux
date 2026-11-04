@@ -55,8 +55,8 @@ from Hugging Face; dictation itself uses cached models with `local_files_only=Tr
 
 **App Settings** shows the app version and the running recording service version. A mismatch
 means an older process is still running. `mouthkeys --version` reports the command's version;
-`mouthkeys status` includes the service's version. Services from before version reporting show
-as **Unknown** in Settings.
+`mouthkeys status` includes the service's version. Restart the app and service after updating;
+older services without version reporting are unsupported.
 
 To update from this checkout, finish any dictation and close the settings window, then run:
 

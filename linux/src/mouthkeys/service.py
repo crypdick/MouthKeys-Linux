@@ -11,6 +11,7 @@ import time
 import uuid
 import wave
 
+from . import __version__
 from .audio import Recorder, check_audio, live_meter
 from .config import Config, runtime_dir, state_dir
 from .delivery import Delivery
@@ -62,6 +63,7 @@ class Controller:
     def status(self):
         with self.lock:
             return {
+                "version": __version__,
                 "notice": self.notice,
                 "preview": self.preview_text,
                 "meter": self.meter if self.phase == "recording" else {},

@@ -51,6 +51,25 @@ The default is `base.en` (English), CPU, and the model's stored precision with h
 fallbacks (`compute_type=default`). Downloads come
 from Hugging Face; dictation itself uses cached models with `local_files_only=True`.
 
+### Update and check your version
+
+**App Settings** shows the app version and the running recording service version. A mismatch
+means an older process is still running. `mouthkeys --version` reports the command's version;
+`mouthkeys status` includes the service's version. Services from before version reporting show
+as **Unknown** in Settings.
+
+To update from this checkout, finish any dictation and close the settings window, then run:
+
+```sh
+mouthkeys shutdown
+git pull --ff-only
+uv tool install --force --python 3.13 './linux[gui]'
+mouthkeys gui
+```
+
+Check that both versions in App Settings match the version in `linux/pyproject.toml`.
+Updating the package alone does not restart an existing recording service.
+
 ## Set up your shortcut
 
 In GNOME **Settings → Keyboard → View and Customize Shortcuts → Custom Shortcuts**, add:
@@ -234,6 +253,13 @@ disable login startup. Uninstall with `uv tool uninstall mouthkeys-linux` and re
 delete the MouthKeys XDG directories separately if you want to erase them.
 
 ## Development and validation
+
+After a push to `main` passes CI, GitHub Actions bumps the patch version with `uv version`,
+validates the updated package, and commits `linux/pyproject.toml` and `linux/uv.lock` together.
+The version commit does not trigger another bump. Pull the version commit before installing
+an update. PRs and manual check runs do not bump versions; stale runs and retries skip a bump
+when `main` has already advanced. This changes package versions without publishing packages
+or adding automatic update checks to the app.
 
 ```sh
 ./linux/check.sh                     # Full headless checks and packaging

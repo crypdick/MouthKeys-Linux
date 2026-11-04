@@ -12,7 +12,7 @@ permissions:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   linux:
@@ -30,3 +30,41 @@ jobs:
           sudo apt-get install -y libgl1 libegl1 libopengl0
       - name: Validate Linux
         run: ./linux/check.sh
+
+  version:
+    name: Bump version after successful main push
+    needs: linux
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: astral-sh/setup-uv@d0d8abe699bfb85fec6de9f7adb5ae17292296ff # v6
+        with:
+          version: "0.13.5"
+      - name: Qt offscreen libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgl1 libegl1 libopengl0
+      - name: Bump, validate, and commit version
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          # Skip stale pushes and reruns whose version commit already reached main.
+          if [ "$(git rev-parse HEAD)" != "$SOURCE_SHA" ]; then
+            echo "Main has advanced; no version change needed for this run."
+            exit 0
+          fi
+          uv version --project linux --bump patch --no-sync
+          ./linux/check.sh
+          version=$(uv version --project linux --short)
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add linux/pyproject.toml linux/uv.lock
+          git commit -m "Release $version" -m "Source-Commit: $SOURCE_SHA"
+          # GITHUB_TOKEN pushes do not trigger another workflow run.
+          git push origin HEAD:main

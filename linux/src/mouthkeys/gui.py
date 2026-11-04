@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from . import __version__
 from .config import Config
 from .processes import python_command
 from .service import ensure_daemon, ensure_overlay, request
@@ -236,6 +237,13 @@ class Window(QWidget):
         tabs.addWidget(history)
         settings = QWidget()
         form = QFormLayout(settings)
+        self.app_version = QLabel(__version__)
+        self.app_version.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        form.addRow("App version", self.app_version)
+        self.service_version = QLabel("Connecting…")
+        self.service_version.setWordWrap(True)
+        self.service_version.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        form.addRow("Recording service version", self.service_version)
         self.fields = {}
         config = asdict(Config.load())
 
@@ -381,10 +389,17 @@ class Window(QWidget):
             self.polling = False
             if "result" in response:
                 result = response["result"]
+                service_version = result.get("version")
+                version_text = service_version or "Unknown"
+                if service_version != __version__:
+                    version_text += " — restart MouthKeys after updating"
+                self.service_version.setText(version_text)
                 seconds = f"  {result['seconds']:.1f}s" if result["phase"] == "recording" else ""
                 self.status.setText(f"{result['phase'].upper()}{seconds} · {result['message']}")
                 self.toggle.setEnabled(result["phase"] in ("idle", "recording"))
                 self.send("history", callback=self.update_history)
+            else:
+                self.service_version.setText("Unavailable")
 
         self.send("status", callback=update)
 

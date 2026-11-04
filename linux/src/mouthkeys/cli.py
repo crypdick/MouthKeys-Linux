@@ -6,6 +6,7 @@ import sys
 from dataclasses import asdict
 from pathlib import Path
 
+from . import __version__
 from .config import Config
 
 
@@ -41,6 +42,7 @@ def install_desktop(autostart=False):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description="MouthKeys — local Linux dictation")
+    parser.add_argument("--version", action="version", version=f"MouthKeys {__version__}")
     commands = parser.add_subparsers(dest="command", required=True)
     for action in (
         "gui",

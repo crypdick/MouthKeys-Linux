@@ -1,8 +1,43 @@
 import time
+from importlib.metadata import version
 
 import pytest
 
 pytest.importorskip("PySide6")
+
+
+def test_settings_show_app_and_running_service_versions(monkeypatch):
+    from PySide6.QtWidgets import QApplication
+
+    from mouthkeys import gui
+
+    app = QApplication.instance() or QApplication([])
+    current = version("mouthkeys-linux")
+    status = {"phase": "idle", "message": "Ready", "seconds": 0, "version": current}
+
+    def send(self, action, data=None, callback=None):
+        callback({"result": status if action == "status" else []})
+
+    monkeypatch.setattr(gui.Window, "send", send)
+    window = gui.Window()
+    window.timer.stop()
+    window.nav.setCurrentRow(1)
+    assert window.app_version.text() == current
+    assert window.service_version.text() == current
+    status["version"] = "0.0.1"
+    window.poll()
+    assert window.service_version.text() == "0.0.1 — restart MouthKeys after updating"
+    del status["version"]
+    window.poll()
+    assert window.service_version.text() == "Unknown — restart MouthKeys after updating"
+    monkeypatch.setattr(
+        gui.Window, "send", lambda self, *args, callback: callback({"error": "Disconnected"})
+    )
+    window.poll()
+    assert window.service_version.text() == "Unavailable"
+    assert not window.isVisible()
+    window.close()
+    app.processEvents()
 
 
 def test_offscreen_controller_renders_history_and_saves_settings(monkeypatch):

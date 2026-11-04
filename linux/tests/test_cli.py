@@ -4,11 +4,27 @@ import socket
 import subprocess
 import sys
 import time
+from importlib.metadata import version
 from pathlib import Path
+
+import pytest
 
 from mouthkeys.cli import main
 from mouthkeys.config import runtime_dir
 from mouthkeys.service import request
+
+
+def test_cli_reports_version_without_starting_service(monkeypatch, capsys):
+    from mouthkeys import service
+
+    def unexpected():
+        raise AssertionError("Version must not start a service")
+
+    monkeypatch.setattr(service, "ensure_daemon", unexpected)
+    with pytest.raises(SystemExit) as error:
+        main(["--version"])
+    assert error.value.code == 0
+    assert capsys.readouterr().out.strip() == f"MouthKeys {version('mouthkeys-linux')}"
 
 
 def test_config_cli_and_doctor(capsys):
@@ -49,6 +65,7 @@ def test_real_daemon_ipc_duplicate_start_malformed_request_and_shutdown():
         else:
             raise AssertionError("Daemon failed to start")
         assert result["phase"] == "idle"
+        assert result["version"] == version("mouthkeys-linux")
         duplicate = subprocess.run([sys.executable, "-m", "mouthkeys", "daemon"], timeout=3)
         assert duplicate.returncode == 0
         assert request("status")["phase"] == "idle"

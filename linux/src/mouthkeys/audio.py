@@ -34,6 +34,8 @@ class Recorder:
                     "1",
                     "-fragment_size",
                     "640",  # 20 ms of mono 16 kHz PCM, before the input opens.
+                    "-probesize",
+                    "32",  # Pulse already declares PCM; avoid buffering seconds to probe it.
                     "-i",
                     config.audio_source,
                     "-t",
@@ -54,9 +56,19 @@ class Recorder:
                 stderr=self.errors,
                 start_new_session=True,
             )
-            time.sleep(0.15)
-            if self.process.poll() is not None:
-                raise RuntimeError(self.error() or "Microphone capture failed")
+            deadline = time.monotonic() + 5
+            while True:
+                if self.process.poll() is not None:
+                    raise RuntimeError(self.error() or "Microphone capture failed")
+                try:
+                    with wave.open(str(path), "rb") as wav:
+                        if len(wav.readframes(320)) >= 640:
+                            break  # A saved 20 ms buffer, including silence, proves readiness.
+                except (OSError, EOFError, wave.Error):
+                    pass  # FFmpeg may still be opening the source or writing the WAV header.
+                if time.monotonic() >= deadline:
+                    raise RuntimeError("Microphone did not produce audio within 5 seconds")
+                time.sleep(0.02)
         except BaseException:
             if self.process is not None:
                 self.process.stdin.close()

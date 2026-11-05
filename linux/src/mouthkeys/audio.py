@@ -1,3 +1,4 @@
+import json
 import os
 import signal
 import subprocess
@@ -8,6 +9,60 @@ from pathlib import Path
 
 from .config import Config
 from .processes import python_command
+
+
+def bluetooth_capture_ready(source):
+    """PipeWire's Bluetooth loopback can run before its real microphone exists."""
+    if source == "default":
+        try:
+            source = subprocess.run(
+                ["pactl", "get-default-source"],
+                capture_output=True,
+                text=True,
+                check=True,
+                timeout=0.5,
+            ).stdout.strip()
+        except (OSError, subprocess.SubprocessError):
+            return True  # No source discovery: retain normal PulseAudio readiness.
+    if not source.startswith("bluez_input."):
+        return True
+    try:
+        result = subprocess.run(
+            ["pactl", "-f", "json", "list", "sources"],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=0.5,
+        )
+        sources = json.loads(result.stdout)
+        selected_source = next((s for s in sources if s.get("name") == source), None)
+        if selected_source is None:
+            return False
+        if selected_source.get("properties", {}).get("bluez5.loopback") not in (True, "true"):
+            return True  # Native PulseAudio capture does not need a PipeWire graph.
+        result = subprocess.run(
+            ["pw-dump", "Node"],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=0.5,
+        )
+        nodes = [node.get("info", {}) for node in json.loads(result.stdout)]
+    except (OSError, subprocess.SubprocessError, ValueError) as exc:
+        raise RuntimeError("Cannot verify Bluetooth microphone readiness with pw-dump") from exc
+    selected = next((n for n in nodes if n.get("props", {}).get("node.name") == source), None)
+    if selected is None:
+        return False
+    props = selected.get("props", {})
+    if props.get("bluez5.loopback") not in (True, "true"):
+        return True
+    device = props.get("device.id")
+    return device is not None and any(
+        str(n.get("props", {}).get("device.id")) == str(device)
+        and n.get("props", {}).get("bluez5.loopback-target") in (True, "true")
+        and n.get("state") == "running"
+        for n in nodes
+    )
 
 
 class Recorder:
@@ -60,12 +115,15 @@ class Recorder:
                     raise RuntimeError(self.error() or "Microphone capture failed")
                 try:
                     with wave.open(str(path), "rb") as wav:
-                        if len(wav.readframes(320)) >= 640:
-                            break  # A saved 20 ms buffer, including silence, proves readiness.
+                        samples_ready = len(wav.readframes(320)) >= 640
+                    if samples_ready and bluetooth_capture_ready(config.audio_source):
+                        break  # Silence is valid only after the physical input is ready.
                 except (OSError, EOFError, wave.Error):
                     pass  # FFmpeg may still be opening the source or writing the WAV header.
                 if time.monotonic() >= deadline:
-                    raise RuntimeError("Microphone did not produce audio within 5 seconds")
+                    raise RuntimeError(
+                        "Microphone did not produce audio or become ready within 5 seconds"
+                    )
                 time.sleep(0.02)
         except BaseException:
             if self.process is not None:

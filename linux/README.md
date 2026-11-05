@@ -102,9 +102,13 @@ after changing desktop session types; its display environment is inherited at la
 3. When transcription finishes, paste with Ctrl+V, or Ctrl+Shift+V in most terminals.
 
 The recording timer and “Listening” status start only after the first audio buffer is saved.
-Capture limits FFmpeg input probing so waveform data is available promptly; a source that
-produces no audio within five seconds fails instead of showing a running timer. Speak when
-the recording panel appears. Live transcript words still depend on the preview interval below.
+On PipeWire, Bluetooth virtual inputs can supply silence while the headset is still switching
+from playback to microphone mode. MouthKeys also waits for that headset's physical capture node
+to run before showing Listening. This check uses `pw-dump` (from PipeWire tools); it neither waits
+for speech nor keeps the microphone open between recordings. Capture limits FFmpeg input probing
+so waveform data is available promptly; a source that produces no audio or cannot become ready
+within five seconds fails instead of showing a running timer. Speak when the recording panel
+appears. Live transcript words still depend on the preview interval below.
 
 The panel opens near the bottom of the screen containing the pointer. Drag it to reposition;
 double-click its surface to reset. History opens the main window, Copy copies the finished

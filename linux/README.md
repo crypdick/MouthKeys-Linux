@@ -288,7 +288,10 @@ uv run --project linux python linux/tests/smoke_transcription.py
 ```
 
 Unit/integration tests use fake microphones and delivery adapters, temporary XDG directories,
-and bounded waits. Qt smoke checks use the offscreen backend. Tests never capture live audio,
+and bounded waits. Qt smoke checks use the offscreen backend; the shared test fixture clears
+desktop theme/input-module overrides and selects the built-in Fusion style so inherited
+GTK/input plugins cannot require a display. This applies to direct pytest runs as well as
+`check.sh`, without changing the desktop app's environment. Tests never capture live audio,
 change the clipboard, synthesize keys, show windows, or play sounds.
 
 Before calling a desktop setup verified, run this manual check:

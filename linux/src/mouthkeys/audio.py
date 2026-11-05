@@ -122,6 +122,25 @@ def read_live_audio(path: Path, seconds=20):
     return _read_live_audio(path, seconds)[0]
 
 
+def read_audio_from(path: Path, start_frame=0, seconds=None):
+    """Read forward from a committed PCM frame, including an unfinished WAV."""
+    import numpy as np
+
+    with path.open("rb") as source:
+        with wave.open(source, "rb") as wav:
+            if (wav.getnchannels(), wav.getsampwidth(), wav.getframerate()) != (1, 2, 16000):
+                raise ValueError("Expected mono 16 kHz PCM")
+            frames = min(wav.getnframes(), max(0, (path.stat().st_size - source.tell()) // 2))
+            if start_frame > frames:
+                raise ValueError("Recording shrank after transcription started")
+            wav.setpos(start_frame)
+            count = frames - start_frame
+            if seconds is not None:
+                count = min(count, int(seconds * 16000))
+            raw = wav.readframes(count)
+    return np.frombuffer(raw[: len(raw) // 2 * 2], dtype="<i2").astype(np.float32) / 32768.0
+
+
 def live_meter(path: Path):
     import math
 

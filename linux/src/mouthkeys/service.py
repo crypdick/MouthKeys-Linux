@@ -299,7 +299,10 @@ class Controller:
             path = self.history.recording(self.item_id)
             check_audio(path)
             with self.model_lock:
-                text = self.transcriber.transcribe(path, self.config)
+                with self.lock:
+                    skip = self.cancelled or self.interrupted
+                if not skip:
+                    text = self.transcriber.transcribe(path, self.config)
             with self.lock:
                 if self.interrupted:
                     return

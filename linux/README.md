@@ -116,11 +116,21 @@ If your compositor tiles the panel or gives it focus, disable it in Settings or 
 with `mouthkeys config recording_panel on`. Verify focus behavior on your desktop before
 enabling X11 automatic paste.
 
-Live previews run locally on the selected model, roughly two seconds after the previous preview
-finishes, over the most recent 20 seconds of audio. They can revise words and lag on slower CPUs;
-`mouthkeys warmup` avoids first-use model loading. They are not saved or delivered. Stopping
-waits for any preview inference, then transcribes the complete recording for history and delivery.
-The preview and final pass share one model worker lock. The waveform uses actual recorded energy with 20 ms capture buffers and a separate 60 Hz
+Live transcription runs locally on the selected model, roughly two seconds after the previous
+update finishes. Completed Whisper segments ending at least two seconds before the audio snapshot
+are retained; newer text remains provisional and may change. Updates read forward from the first
+uncommitted frame, normally up to 30 seconds at a time, so slow inference never skips earlier speech.
+If no completed boundary is available, that window grows with incoming audio rather than freezing.
+Stopping waits for useful in-flight inference, then decodes only the uncommitted audio through the
+end of the recording. If the last update already covers the finalized audio, its result is reused
+without another decode. There is no second pass over committed text. Segment boundaries can affect
+accuracy compared with a full-recording pass; Reprocess always starts fresh from retained audio.
+If a preview fails, finalization retries its uncommitted audio. A segment with no boundary before
+the two-second margin stays provisional until finalization, which can mean a longer stop wait.
+The engine cannot interrupt a native inference call; cancel suppresses delivery and skips queued
+final inference. One model worker is shared throughout, without loading a second model.
+`mouthkeys warmup` avoids first-use model loading. Live text is not saved or delivered until stop.
+The waveform uses actual recorded energy with 20 ms capture buffers and a separate 60 Hz
 animation clock. Bars scroll at 12 per second of speech, ease to their measured heights, and
 hold during silence after a 250 ms hangover, following the native macOS motion. Only the newest
 20 ms of audio is metered; preview inference does not drive animation. Cancel discards the preview and suppresses final delivery.
@@ -294,6 +304,9 @@ Before calling a desktop setup verified, run this manual check:
   error feedback, then confirm the next successful recording clears it.
 - Close Settings and start with the shortcut: confirm the floating panel appears, shows words
   while speaking, and leaves your editor focused. Check both light and dark system appearances.
+- Dictate for more than 30 seconds with several sentences and pauses; confirm earlier text stays
+  present and the final words arrive once, including when stopping mid-sentence. Compare Reprocess
+  for boundary omissions, repetition, and punctuation; time stop-to-delivery for both paths.
 - Stop, cancel, and start again while preview inference is running; check that old words never
   appear in the new recording and cancellation never changes the clipboard.
 - On GNOME Wayland, KDE Wayland, and Sway, start from a focused editor and keep typing;

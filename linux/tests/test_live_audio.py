@@ -4,7 +4,6 @@ import wave
 import numpy as np
 
 from mouthkeys.audio import live_meter, read_live_audio
-from mouthkeys.transcribe import Transcriber
 
 
 def test_unfinished_wav_preview_reads_bounded_tail(tmp_path):
@@ -27,9 +26,6 @@ def test_unfinished_wav_preview_reads_bounded_tail(tmp_path):
     meter = live_meter(path)
     assert meter["frame"] == len(samples)
     assert 0 <= meter["level"] <= 1
-    engine = Transcriber()
-    engine._decode = lambda audio, config: str(len(audio))
-    assert engine.preview(path, None) == "320000"
 
 
 def test_meter_uses_fresh_20ms_tail_not_previous_speech(tmp_path):

@@ -337,6 +337,7 @@ def test_final_inference_waits_for_preview_and_cancel_suppresses_delivery(contro
     finish(controller)
     controller.preview_worker.join(3)
     assert controller.status()["preview"] == ""
+    assert not controller.transcriber.entered.is_set()
     assert not controller.delivery.calls
 
 

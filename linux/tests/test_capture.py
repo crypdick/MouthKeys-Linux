@@ -8,6 +8,11 @@ import wave
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def fake_bluetooth_readiness(monkeypatch):
+    monkeypatch.setattr("mouthkeys.audio.bluetooth_capture_ready", lambda _: True)
+
+
 @pytest.mark.parametrize("crash", [False, True])
 def test_capture_lifeline_stops_child_on_stop_or_daemon_death(tmp_path, crash):
     ready, stopped = tmp_path / "ready", tmp_path / "stopped"

@@ -13,6 +13,10 @@ def isolated_environment(tmp_path, monkeypatch):
     for key in ("DISPLAY", "WAYLAND_DISPLAY", "XDG_SESSION_TYPE"):
         monkeypatch.delenv(key, raising=False)
     monkeypatch.setenv("QT_QPA_PLATFORM", "offscreen")
+    # Desktop theme/input plugins can still require a display with the offscreen backend.
+    monkeypatch.setenv("QT_QPA_PLATFORMTHEME", "")
+    monkeypatch.setenv("QT_IM_MODULE", "")
+    monkeypatch.setenv("QT_STYLE_OVERRIDE", "Fusion")
     # Never let tests accidentally use a real microphone/clipboard or synthesize keys.
     import subprocess
 

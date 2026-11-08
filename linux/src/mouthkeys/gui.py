@@ -467,7 +467,11 @@ class Window(QWidget):
             self.download = None
             self.download_button.setEnabled(True)
             self.download_button.setText("Download selected model")
-            QMessageBox.information(self, "Model download", "Model ready" if code == 0 else output)
+            if code == 0:
+                self.send("warmup")
+            QMessageBox.information(
+                self, "Model download", "Model downloaded" if code == 0 else output
+            )
 
         self.download.finished.connect(finished)
         self.download.start()

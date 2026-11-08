@@ -6,6 +6,61 @@ import pytest
 pytest.importorskip("PySide6")
 
 
+@pytest.mark.parametrize("success", [True, False])
+def test_download_retries_unavailable_model_only_after_success(monkeypatch, tmp_path, success):
+    from types import SimpleNamespace
+
+    from PySide6.QtWidgets import QApplication
+
+    from mouthkeys import gui
+    from mouthkeys.service import Controller
+
+    app = QApplication.instance() or QApplication([])
+    ready = tmp_path / "model-ready"
+
+    def load(config):
+        if not ready.exists():
+            raise RuntimeError("Model missing")
+
+    controller = Controller(transcriber=SimpleNamespace(load=load))
+    controller.command("warmup")
+    controller.worker.join(2)
+    assert not controller.worker.is_alive()
+    assert "Model unavailable" in controller.status()["message"]
+    monkeypatch.setattr(gui, "request", controller.command)
+    # Exercise real QProcess completion without network or model inference.
+    script = (
+        f"from pathlib import Path; Path({str(ready)!r}).touch()"
+        if success
+        else "import sys; print('Download failed'); sys.exit(1)"
+    )
+    monkeypatch.setattr(gui, "python_command", lambda *args: ["python", "-c", script])
+    messages = []
+    monkeypatch.setattr(gui.QMessageBox, "information", lambda *args: messages.append(args[-1]))
+    window = gui.Window()
+    window.timer.stop()
+    try:
+        window.download_button.click()
+        deadline = time.monotonic() + 4
+        while time.monotonic() < deadline:
+            app.processEvents()
+            if messages and not window.jobs and controller.status()["phase"] == "idle":
+                break
+            time.sleep(0.01)
+        assert window.download is None
+        assert not window.jobs
+        assert window.download_button.isEnabled()
+        if success:
+            assert controller.status()["message"] == "Model ready"
+        else:
+            assert "Model unavailable" in controller.status()["message"]
+            assert "Download failed" in messages[0]
+        assert not window.isVisible()
+    finally:
+        window.close()
+        app.processEvents()
+
+
 def test_settings_show_app_and_running_service_versions(monkeypatch):
     from PySide6.QtWidgets import QApplication
 

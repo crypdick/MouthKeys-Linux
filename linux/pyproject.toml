@@ -19,6 +19,8 @@ Documentation = "https://github.com/crypdick/MouthKeys-Linux/blob/main/linux/REA
 
 [project.optional-dependencies]
 gui = ["PySide6-Essentials>=6.8,<7"]
+onnx = ["onnx-asr[cpu,hub]>=0.12,<0.13"]
+diarization = ["sherpa-onnx>=1.12.20,<2"]
 
 [dependency-groups]
 dev = ["pytest>=8,<10", "ruff>=0.12"]

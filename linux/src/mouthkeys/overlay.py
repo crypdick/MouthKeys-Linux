@@ -6,12 +6,14 @@ import socket
 import subprocess
 import sys
 import time
+from dataclasses import replace
 
-from PySide6.QtCore import QRect, QRectF, QSize, QSocketNotifier, Qt, QTimer
+from PySide6.QtCore import QPoint, QRect, QRectF, QSize, QSocketNotifier, Qt, QTimer
 from PySide6.QtGui import QColor, QCursor, QFont, QIcon, QPainter, QPen, QPixmap, QTextLayout
-from PySide6.QtWidgets import QApplication, QPushButton, QWidget
+from PySide6.QtWidgets import QApplication, QMenu, QPushButton, QWidget
 
 from .config import Config, runtime_dir
+from .desktop import source_names
 from .gui import Request
 from .processes import python_command
 from .trace import Trace
@@ -56,6 +58,8 @@ class Overlay(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.setFixedSize(424, 146)
+        self.settings = Config.load()
+        self.panel_scale = 1.0
         self.data = {}
         self.trace = Trace()
         self.meter_frame = None
@@ -85,6 +89,12 @@ class Overlay(QWidget):
             button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
             button.clicked.connect(lambda checked=False, action=action: self.action(action))
             self.buttons[action] = button
+        self.mic_button = QPushButton(self)
+        self.mic_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.mic_button.setToolTip("Choose microphone for next recording")
+        self.mic_button.setAccessibleName("Choose microphone")
+        self.mic_button.clicked.connect(self.choose_microphone)
+        self.apply_settings(self.settings)
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.poll)
         self.timer.start(200)
@@ -95,7 +105,10 @@ class Overlay(QWidget):
         QApplication.styleHints().colorSchemeChanged.connect(self.apply_theme)
 
     def apply_theme(self, *_):
-        light = QApplication.styleHints().colorScheme() == Qt.ColorScheme.Light
+        theme = self.settings.theme
+        light = theme == "light" or (
+            theme == "system" and QApplication.styleHints().colorScheme() == Qt.ColorScheme.Light
+        )
         self.surface = "#ffffff" if light else "#111214"
         self.ink = "#111214" if light else "#ebebec"
         self.edge = "#111214" if light else "#2c2e33"
@@ -112,11 +125,65 @@ class Overlay(QWidget):
             button.setIcon(button_icon(action, self.ink))
         self.update()
 
-    def send(self, action, callback=None):
+    def apply_settings(self, config):
+        previous = self.settings
+        self.settings = config
+        self.panel_scale = config.overlay_size / 100
+        self.setFixedSize(round(424 * self.panel_scale), round(146 * self.panel_scale))
+        for action, x, y in (
+            ("history", 6, 29),
+            ("copy", 6, 83),
+            ("cancel", 388, 29),
+            ("reprocess", 388, 83),
+        ):
+            self.buttons[action].setGeometry(
+                round(x * self.panel_scale),
+                round(y * self.panel_scale),
+                round(30 * self.panel_scale),
+                round(30 * self.panel_scale),
+            )
+        self.mic_button.setGeometry(
+            round(185 * self.panel_scale),
+            round(110 * self.panel_scale),
+            round(108 * self.panel_scale),
+            round(20 * self.panel_scale),
+        )
+        if previous.theme != config.theme:
+            self.apply_theme()
+        if (previous.overlay_position, previous.overlay_bottom_offset, previous.overlay_size) != (
+            config.overlay_position,
+            config.overlay_bottom_offset,
+            config.overlay_size,
+        ):
+            self.positioned = False
+
+    def choose_microphone(self):
+        menu = QMenu(self)
+        try:
+            names = ["default", *source_names()]
+        except Exception:
+            names = ["default"]
+        config = Config.load()
+        excluded = {s.strip() for s in config.microphone_never.split(",")}
+        for name in names:
+            if name not in excluded:
+                action = menu.addAction(name)
+                action.triggered.connect(
+                    lambda checked=False, name=name: replace(
+                        Config.load(), audio_source=name
+                    ).save()
+                )
+        menu.exec(self.mic_button.mapToGlobal(self.mic_button.rect().bottomLeft()))
+
+    def send(self, action, callback=None, item_id=None):
         data = (
-            {"id": self.data["id"]}
-            if action in ("copy", "reprocess") and self.data.get("id")
-            else {}
+            {"id": item_id}
+            if item_id
+            else (
+                {"id": self.data["id"]}
+                if action in ("copy", "reprocess") and self.data.get("id")
+                else {}
+            )
         )
         job = Request(action, data, parent=self)
         self.jobs.add(job)
@@ -138,7 +205,7 @@ class Overlay(QWidget):
 
     def action(self, action):
         if action == "history":
-            subprocess.Popen(python_command("mouthkeys", "gui"), start_new_session=True)
+            self.send("history", self.show_history)
         elif action == "cancel":
             if self.active:
                 self.send("cancel")
@@ -146,6 +213,37 @@ class Overlay(QWidget):
             self.dismiss_at = 0
         else:
             self.send(action)
+
+    def show_history(self, response):
+        if "error" in response:
+            self.notice = (response["error"], time.monotonic() + 10)
+            self.update()
+            return
+        menu = QMenu(self)
+        rows = response.get("result", [])[:12]
+        if not rows:
+            menu.addAction("No history yet").setEnabled(False)
+        for row in rows:
+            text = row.get("text") or row.get("error") or row.get("status", "Recording")
+            submenu = menu.addMenu(" ".join(text.split())[:65])
+            copy = submenu.addAction("Copy transcript")
+            copy.setEnabled(bool(row.get("text")))
+            copy.triggered.connect(
+                lambda checked=False, item_id=row["id"]: self.send("copy", item_id=item_id)
+            )
+            retry = submenu.addAction("Reprocess audio")
+            retry.setEnabled(not self.active)
+            retry.triggered.connect(
+                lambda checked=False, item_id=row["id"]: self.send("reprocess", item_id=item_id)
+            )
+        menu.addSeparator()
+        menu.addAction(
+            "Open full history / settings",
+            lambda: subprocess.Popen(python_command("mouthkeys", "gui"), start_new_session=True),
+        )
+        self.history_menu = menu
+        origin = self.mapToGlobal(QPoint(round(42 * self.panel_scale), 0))
+        menu.popup(origin - QPoint(0, menu.sizeHint().height()))
 
     def poll(self):
         if self.pending:
@@ -171,16 +269,23 @@ class Overlay(QWidget):
     def place(self):
         screen = QApplication.screenAt(QCursor.pos()) or QApplication.primaryScreen()
         area = screen.availableGeometry()
-        self.move(area.center().x() - self.width() // 2, area.bottom() - self.height() - 50)
+        y = (
+            area.top() + self.settings.overlay_bottom_offset
+            if self.settings.overlay_position == "top"
+            else area.bottom() - self.height() - self.settings.overlay_bottom_offset
+        )
+        self.move(area.center().x() - self.width() // 2, y)
         self.positioned = True
 
     def set_status(self, data):
-        if Config.load().recording_panel == "off":
+        config = Config.load()
+        self.apply_settings(config)
+        if config.recording_panel == "off":
             self.hide()
             self.active = False
             self.notice_serial = None
             return
-        active = data["phase"] in ("recording", "stopping", "transcribing", "delivering", "loading")
+        active = active_phase(data["phase"])
         new_recording = data.get("id") != self.data.get("id")
         if active and (not self.active or new_recording):
             self.dismiss_at = None
@@ -215,7 +320,9 @@ class Overlay(QWidget):
                 self.meter_frame = None
             meter = data.get("meter", {})
             if meter.get("frame") is not None and meter["frame"] != self.meter_frame:
-                self.trace.ingest(meter["level"], min(now, meter["at"]))
+                self.trace.ingest(
+                    meter["level"] * config.visualizer_sensitivity / 100, min(now, meter["at"])
+                )
                 self.meter_frame = meter["frame"]
         else:
             self.trace.stop(now)
@@ -223,6 +330,8 @@ class Overlay(QWidget):
             self.animation.start(16)
         self.active = active
         self.data = data
+        self.mic_button.setText(data.get("microphone", "default"))
+        self.mic_button.setEnabled(not active)
         if data["phase"] == "recording":
             self.seconds = data.get("seconds", 0)
         self.buttons["copy"].setEnabled(not active and bool(data.get("preview")))
@@ -235,7 +344,14 @@ class Overlay(QWidget):
             return
         now = time.monotonic()
         self.trace.advance(now)
-        self.update(QRect(53, 68, 252, 40))
+        self.update(
+            QRect(
+                round(53 * self.panel_scale),
+                round(68 * self.panel_scale),
+                round(252 * self.panel_scale),
+                round(40 * self.panel_scale),
+            )
+        )
         if (
             self.data.get("phase") == "idle"
             and self.trace.stopped_at is not None
@@ -245,12 +361,15 @@ class Overlay(QWidget):
 
     def paintEvent(self, event):
         p = QPainter(self)
+        p.scale(self.panel_scale, self.panel_scale)
         p.fillRect(42, 8, 340, 130, QColor(0, 0, 0, 80))
         p.fillRect(42, 6, 340, 130, QColor(self.surface))
         p.setPen(QColor(self.edge))
-        p.drawRect(42, 6, 339, 129)
+        if self.settings.overlay_border == "on":
+            p.drawRect(42, 6, 339, 129)
         phase = self.data.get("phase", "idle")
         text = self.data.get("preview", "")
+        text = text[-self.settings.preview_chars :] if self.settings.live_preview == "on" else ""
         if phase == "idle":
             text = self.data.get("message", "Ready")
         elif phase != "recording":
@@ -307,10 +426,9 @@ class Overlay(QWidget):
         mono.setPixelSize(10)
         p.setFont(mono)
         p.setPen(QColor(self.dim))
-        p.drawText(54, 124, "LIVE PREVIEW" if active_phase(phase) else "MOUTHKEYS")
-        mic = self.data.get("microphone", "DEFAULT").upper()
-        p.drawText(190, 124, p.fontMetrics().elidedText(mic, Qt.TextElideMode.ElideRight, 100))
-        p.drawText(302, 124, "LOCAL")
+        words, wpm = live_counters(self.data.get("preview", ""), self.seconds)
+        p.drawText(54, 124, f"{words} W / {wpm} WPM" if active_phase(phase) else "MOUTHKEYS")
+        p.drawText(302, 124, "WORDS")
         p.end()
 
     def mousePressEvent(self, event):
@@ -329,7 +447,12 @@ class Overlay(QWidget):
 
 
 def active_phase(phase):
-    return phase in ("recording", "stopping", "transcribing", "delivering", "loading")
+    return phase in ("recording", "stopping", "queued", "transcribing", "delivering", "loading")
+
+
+def live_counters(text, seconds):
+    words = len(text.split())
+    return words, round(words * 60 / seconds) if seconds > 0 else 0
 
 
 def launch():

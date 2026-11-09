@@ -23,12 +23,15 @@ microphone capture, and paste behavior require the manual checklist in `linux/RE
 
 ## Product rules
 
-Keep dictation local, telemetry off, and update checks off. Downloads happen only on explicit
-request. Clipboard delivery is the default. Wayland has no automatic paste. X11 automatic paste
-requires an explicit stop, a captured destination, and focus rechecks; never activate a target
-window or send Return. Preserve Ghostty/terminal clipboard paste behavior. Cancel before delivery
+Target upstream MouthKeys feature parity, adapting platform integrations for Linux. Keep local
+dictation available, telemetry off, and update checks off. Downloads happen only on explicit
+request. Cloud AI, Spoken Send, media controls, and other optional behavior must be configurable;
+do not invent prohibitions on these features. CLI/i3 shortcut bindings are sufficient; integrated
+shortcut management is lower priority. Clipboard delivery is the default. Automatic delivery and
+Spoken Send require explicit configuration and destination/focus checks supported by the desktop.
+Never silently activate another window. Preserve Ghostty/terminal clipboard paste behavior. Cancel before delivery
 must suppress late delivery. Keep recovery audio bounded and private, and persist transcripts before
-desktop delivery. Expose configuration in App Settings as well as the CLI.
+desktop delivery unless the user explicitly disables history (then use memory and temporary audio). Expose configuration in App Settings as well as the CLI.
 
 ## Git and delivery
 

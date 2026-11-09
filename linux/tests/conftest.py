@@ -17,7 +17,21 @@ def isolated_environment(tmp_path, monkeypatch):
     import subprocess
 
     original_run, original_popen = subprocess.run, subprocess.Popen
-    forbidden = {"ffmpeg", "pw-record", "parec", "wl-copy", "xclip", "xdotool", "wtype", "ydotool"}
+    forbidden = {
+        "ffmpeg",
+        "pw-record",
+        "parec",
+        "wl-copy",
+        "xclip",
+        "xdotool",
+        "wtype",
+        "ydotool",
+        "xprop",
+        "swaymsg",
+        "hyprctl",
+        "playerctl",
+        "paplay",
+    }
 
     def guarded(function):
         def call(args, *a, **kw):

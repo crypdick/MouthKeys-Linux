@@ -2,17 +2,17 @@
 
 Local dictation for Linux, in the personal [crypdick/MouthKeys-Linux](https://github.com/crypdick/MouthKeys-Linux)
 repository. Record with a desktop shortcut, transcribe on your CPU or NVIDIA GPU, and paste into your
-editor or terminal. No account, cloud transcription, telemetry, or update checks.
+editor or terminal. Local transcription works without an account. Optional AI cleanup supports local or cloud providers; telemetry and update checks stay off.
 
 The Linux runtime is Python/Qt with [faster-whisper](https://github.com/SYSTRAN/faster-whisper).
 The macOS app is maintained in the upstream MouthKeys repository. This Linux implementation
-does not provide full macOS feature parity: no Apple/Parakeet models, media controls, Spoken Send,
-or automatic clipboard restoration. The Linux UI provides recording controls, history, copy,
-audio reprocessing, model downloads, and settings. Its floating recording panel follows the
+targets upstream feature parity using Linux integrations. It includes optional Spoken Send, local/cloud
+AI cleanup and prompt profiles, dictionary/formatting, media controls, a system tray, searchable
+history and audio exports, stats, and file transcription with optional speaker labels. Its floating recording panel follows the
 macOS Datasheet Mono design: a square 340 × 130 panel, side controls, three-line live transcript,
 real microphone trace, timer, and system light/dark appearance. The main window uses the same
 sidebar, typography hierarchy, and ruled surfaces. Linux uses system sans/monospace fonts in
-place of Apple's fonts and does not expose macOS-only settings.
+place of Apple's fonts and adapts macOS-only integrations where Linux alternatives exist. See [Parity and limits](#parity-and-limits).
 
 ## Install
 
@@ -98,7 +98,7 @@ after changing desktop session types; its display environment is inherited at la
    `mouthkeys status` also reports it for a status bar. With the GUI extra installed, a floating
    panel appears automatically, including when Settings is closed. It shows provisional words
    while you speak, then the final delivery status. It never intentionally takes keyboard focus.
-   Loading and failed shortcut commands also appear in the panel. There are no sounds.
+   Loading and failed shortcut commands also appear in the panel. Sounds are off unless you choose a local cue file in App Settings.
 3. When transcription finishes, paste with Ctrl+V, or Ctrl+Shift+V in most terminals.
 
 The recording timer and “Listening” status start only after the first audio buffer is saved.
@@ -140,19 +140,32 @@ hold during silence after a 250 ms hangover, following the native macOS motion. 
 20 ms of audio is metered; preview inference does not drive animation. Cancel discards the preview and suppresses final delivery.
 
 Recordings stop automatically after five minutes by default. Automatic stops only copy;
-they never select the currently focused window for automatic paste. A busy model rejects additional
-recording commands explicitly; it never silently replaces pending work. Cancel suppresses
-delivery even if inference has already started. Inference must finish before another recording
-can start. Only one model worker runs at a time. Capture shutdown and text delivery run
+they never select the currently focused window for automatic paste. You can start another recording while earlier dictations transcribe; final inference and delivery
+remain ordered. Queue capacity is configurable (`queue_limit`, default 8); full queues reject new
+recordings without dropping existing work. Cancel suppresses
+delivery even if inference has already started. Cancellation applies to the latest visible recording; earlier queued work stays intact. Starting
+a new recording suppresses any pending Spoken Send from an earlier job. Only one model worker runs at a time. Capture shutdown and text delivery run
 outside the controller state lock so status remains responsive. Once delivery has started,
 cancellation reports that it is too late to withdraw the clipboard/paste operation.
 
 ## Text delivery
 
-**Clipboard mode is the default on every desktop.** It writes the finished text to the clipboard
-and leaves it there. It replaces your previous clipboard contents; Linux does not yet provide
-the macOS version's multi-format clipboard snapshot/restore. Clipboard managers may retain
-dictated text. History is saved before delivery, even if the clipboard tool fails.
+**Clipboard mode is the default on every desktop.** It writes finished text to the clipboard and
+leaves it there. Clipboard managers may retain dictated text. With history enabled, raw and final
+transcripts are saved before delivery, even if desktop delivery fails. With history disabled,
+transcripts stay in memory and recording audio uses a private runtime temporary directory.
+
+Optional X11 `restore_clipboard=on` snapshots all formats advertised through Qt (up to 32 MiB),
+then restores them only while MouthKeys still owns the clipboard. A user copy wins. Restoration
+waits `clipboard_restore_delay_ms` (default 500 ms, range 100–5000); this is not proof a slow app
+consumed the paste. Snapshot failure falls back to normal clipboard delivery. Wayland restoration
+and hiding temporary text from clipboard managers are not implemented. These limitations are
+reported rather than claiming macOS-equivalent paste verification.
+
+X11 `insertion_mode=direct` requests clipboard-free typing for printable single-line text into
+identified non-terminal windows. Unknown window classes, multiline/control characters, and terminals
+(including Ghostty/c11) always use clipboard paste. `copy_to_clipboard=off` keeps direct insertion
+clipboard-free; clipboard-mode delivery still necessarily changes the clipboard.
 
 **X11 optional automatic paste:**
 
@@ -164,13 +177,17 @@ mouthkeys config paste_shortcut ctrl+v
 
 The daemon snapshots the focused X window on an explicit stop, before acknowledging it,
 and rechecks before sending the paste shortcut. If the window changed or cannot be identified, it only copies. It never activates a
-window or sends Return. This check cannot distinguish tabs, panes, or fields within the same
+window. It sends Return only when Spoken Send is explicitly enabled and its checks pass. This check cannot distinguish tabs, panes, or fields within the same
 X window and is not equivalent to macOS Accessibility validation. Use clipboard mode if you
 switch panes while waiting. A `paste_requested` status means the shortcut was sent, not proof
 the destination accepted it. Terminal text always uses clipboard paste, never simulated typing.
 
-**Wayland:** native apps cannot be safely targeted with X11 tools. Automatic paste is therefore
-disabled, even when `delivery` is set to `x11`. GNOME and KDE work with `wl-copy` plus your
+**Wayland:** native apps cannot be safely targeted with X11 tools. `delivery=x11` never injects
+keys into native Wayland apps. For explicitly opted-in automatic paste, set `delivery=wayland`
+and configure `paste_backend=wtype` or `ydotool` as below. Sway (`swaymsg`) and Hyprland
+(`hyprctl`) supply window identity, rechecked before paste. Unsupported compositors and changed
+focus fall back to copy; this cannot distinguish fields/panes inside one window. Duration-limit
+stops still only copy. Clipboard mode remains the default. GNOME and KDE work with `wl-copy` plus your
 normal paste key. For an explicit “paste last dictation now” desktop shortcut:
 
 ```sh
@@ -254,9 +271,12 @@ restarting. An active recording is excluded until it finishes. Adjust it in Sett
 `mouthkeys config audio_budget_mb 1000` (decimal MB). A recording larger than the budget
 can lose its recovery audio immediately. Clear history deletes transcripts and audio.
 
-Upstream macOS saves ordinary history audio only when enabled (off by default); Linux
-retains recovery audio by default. The storage budget bounds that Linux behavior, rather
-than implying parity with upstream's audio-saving preference. No transcript is written to the daemon diagnostic log.
+`save_audio=on` keeps successful history audio within the storage budget; off retains only latest
+success and failure/interruption recovery audio. `save_history=off` writes no transcript rows and
+uses private runtime temporary recording files, removed on completion/cancel/shutdown and cleaned
+on next service startup after a crash. This explicitly opts out of crash-recovery history and the
+persist-before-delivery guarantee. Clipboard managers and explicitly configured cloud providers
+have their own retention behavior. No transcript is intentionally written to the daemon diagnostic log.
 
 To stop the background service, use `mouthkeys shutdown`. Shutdown, SIGTERM, and SIGINT
 stop capture and preserve interrupted audio for reprocessing, without starting transcription
@@ -265,6 +285,196 @@ Remove `~/.config/autostart/mouthkeys.desktop` to
 disable login startup. Uninstall with `uv tool uninstall mouthkeys-linux` and remove
 `~/.local/share/applications/mouthkeys.desktop`. These steps leave history/models intact;
 delete the MouthKeys XDG directories separately if you want to erase them.
+
+## Parity features
+
+All configuration fields are exposed in **App Settings** and `mouthkeys config KEY VALUE`.
+Opening settings does not rewrite existing configuration. Per-recording settings are captured
+when recording starts; changes affect later recordings. Destructive history actions wait until
+pending recordings finish. No installation/restart is performed by changing application code.
+
+### Tray, microphones, media, and appearance
+
+`mouthkeys tray` starts a system-tray controller. `mouthkeys gui` also shows a tray icon when
+supported, enabled with `tray=on`. Closing Settings leaves that tray running; Quit tray exits
+its UI without stopping the recording service. The menu contains record/stop, cancel, copy,
+reprocess, microphone selection, Settings, and service shutdown. Desktop tray support varies
+(GNOME may require an AppIndicator extension); use the GUI or i3 commands when unavailable.
+
+Set `launch_at_startup=on` to create the user autostart entry. `show_window_at_login=off` starts
+the tray (or daemon when tray disabled); on opens Settings. Updating these preferences rewrites
+only MouthKeys' desktop/autostart entries, not the installed package or running service.
+
+`microphone_preferred`, `microphone_fallback`, and `microphone_never` contain comma-separated
+PulseAudio source names. Preferred order wins, then a permitted default, then fallback order.
+Explicit source selection never overrides Never. Selection is resolved before each recording;
+an unplugged active capture is reported, not silently spliced to another device mid-recording.
+
+`pause_media=on` uses optional `playerctl` to pause playing MPRIS players during capture. Only
+players MouthKeys actually paused are resumed, and only if still paused. `sound_file` selects
+an existing local cue, `sound_volume` controls volume, and `sound_output` selects the PulseAudio
+output for optional `paplay`. No cue plays unless configured. Optional tray notifications are
+controlled by `show_microphone_alerts` and `show_paste_alerts`.
+
+Overlay options: `overlay_position`, `overlay_size` (percent), `overlay_bottom_offset`,
+`preview_chars`, `visualizer_sensitivity`, `overlay_border`, `live_preview`, and `theme`
+(system/light/dark). The overlay includes live word count/WPM, microphone selection, inline
+history copy/reprocess, and existing controls. Requested positions/focus remain compositor-dependent.
+
+### Dictionary and spoken formatting
+
+**Custom Dictionary** offers replacement, punctuation, and formatting-action tables. Separate
+spoken aliases with commas; enable/disable rules individually. Punctuation/action replacement
+cells use `\n` for newline and `\t` for tab. Import replaces the dictionary after confirmation;
+export writes private JSON. **Train by voice** captures a recognized phrase without delivery:
+type correct replacement, record it, stop, review the recognized trigger, then Save. This is
+trigger training, not speaker-embedding pronunciation matching.
+
+Formatting preferences include `remove_filler_words` and editable `filler_words`,
+`lowercase_first`, `remove_trailing_period`, `literal_formatting` (slash commands and explicit
+@ mentions), `question_mark_shortcut` (QQ/trailing Q), and `spoken_formatting` with customizable
+`literal_prefix`. Formatting is deterministic and independent of AI cleanup.
+
+`smart_capitalization` and `space_between_dictations` use actual text before the caret when
+Linux AT-SPI exposes it. No guessed context is used when unavailable. Optional system packages
+`python3-gi` and `gir1.2-atspi-2.0` provide this integration; uv-managed Python can use the bounded
+system-Python helper. Password fields are excluded. AT-SPI availability varies by toolkit and
+accessibility configuration; this is not reliable terminal-pane identity verification.
+
+### Spoken Send
+
+Spoken Send is off until `spoken_send=on`. Configure `spoken_send_phrase` (default `send it`),
+`spoken_send_key` (`return`, `shift+return`, `ctrl+return`), and `send_after_pause` (default off).
+A recognized trailing command phrase is removed and the key follows successful requested X11
+insertion after a half-second cancel window. Sentence-owned phrases such as “I will send it”
+are not commands; say the literal prefix before the phrase to dictate it. Terminals always use
+plain Return. Cancel can suppress a pending send after text insertion, but cannot withdraw text
+already delivered. Starting another recording suppresses an earlier job's pending send.
+
+With `send_after_pause=on`, a trailing send phrase plus half a second of quiet stops recording
+and requests the configured send. Continue talking or use the overlay send control to disarm.
+CLI/i3 start/stop bindings do not convey key-hold state; this differs from macOS hold-to-talk.
+Spoken Send requires an unchanged X11 window and explicit automatic-delivery configuration;
+clipboard-only, duration-limit, and generic Wayland paths do not send. X11 focus cannot distinguish
+fields/panes inside a window: validate this opt-in on your desktop before relying on it.
+
+### Optional AI cleanup, prompts, Command and Edit
+
+`ai_enabled=on` enables cleanup using a configured local or remote provider. This sends transcript
+text to that endpoint; no audio is sent. `ai_provider` selects protocol, not a destination:
+
+| Protocol | Example full endpoint |
+| --- | --- |
+| `compatible` (OpenAI, LM Studio, other compatible providers) | `https://api.openai.com/v1/chat/completions` |
+| `anthropic` | `https://api.anthropic.com/v1/messages` |
+| `gemini` | `https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent` |
+| `ollama` | `http://localhost:11434/api/chat` |
+
+Set `ai_endpoint`, `ai_model`, `ai_prompt`, `ai_max_tokens`, and `ai_timeout` explicitly. Remote
+endpoints require HTTPS; HTTP is allowed only for loopback. Redirects are rejected. Set the API
+key in the recording service's environment under the variable named by `ai_key_env`, default
+`MOUTHKEYS_AI_API_KEY`; never paste a key into endpoint URLs or profile files. Restart the service
+manually after changing environment variables. Provider errors fall back to formatted raw text
+with visible error feedback; provider error bodies are not put in diagnostic logs.
+
+**AI Prompts** saves named profiles with independent prompt/provider/model/endpoint settings;
+select one using `ai_profile` in App Settings. Backups include profiles, never environment secrets.
+**Command / Edit** accepts typed or recorded instructions. Command Mode proposes an editable shell
+command and explanation, and runs it only after a separate confirmation showing that exact command.
+Execution is bounded to 30 seconds and 64 KiB output. Edit Mode uses text pasted into its selection
+box and returns reviewable output with Copy; it never silently replaces another application's text.
+CLI/i3 may bind `mouthkeys start --mode command`, `--mode edit --selected-text TEXT`, or normal
+dictation. Recorded proposals appear in Command / Edit after stopping; nothing is automatically
+executed or inserted for these modes.
+
+### Linux ONNX engines and speaker-labeled files
+
+Default Whisper installation is unchanged. Optional [onnx-asr](https://istupakov.github.io/onnx-asr/usage/)
+provides Linux CPU Parakeet TDT v2/v3 and Canary models:
+
+```sh
+uv tool install --python 3.13 './linux[gui,onnx,diarization]'
+mouthkeys config engine onnx
+mouthkeys config model nemo-parakeet-tdt-0.6b-v3
+mouthkeys config device cpu
+mouthkeys config compute_type default
+mouthkeys download
+mouthkeys warmup
+mouthkeys models
+```
+
+ONNX supports `default`, `auto`, `float32`, and `int8` precision. CPU is supplied by the optional
+extra; CUDA needs separately installed `onnxruntime-gpu` and compatible NVIDIA libraries. Runtime
+loads offline-only; explicit download also fetches required Silero VAD. ONNX uses bounded VAD
+chunks, not Apple's/CoreML's streaming implementation. `mouthkeys delete-model MODEL` removes
+only app-owned cached artifacts, never a user-entered local directory; an already loaded model
+remains resident until changed or service restarted. GUI offers catalog, download cancellation,
+and cached-model deletion. A cancelled download is not marked installed.
+
+**File Transcription** accepts chosen/dropped audio and exports TXT or timestamped JSON. For
+optional CPU [speaker diarization](https://k2-fsa.github.io/sherpa/onnx/speaker-diarization/index.html):
+
+```sh
+mouthkeys download-speakers
+mouthkeys config file_speaker_labels on
+mouthkeys config file_speaker_count 0  # Automatic; 1–20 specifies count
+mouthkeys transcribe recording.wav --json --output transcript.json
+```
+
+Speaker models download only on explicit request. Labels are segment-level greatest-overlap
+assignments, not word-aligned identification; JSON preserves full speaker turns. File transcription
+uses no live microphone/clipboard and does not silently add files to dictation history.
+
+### History, stats, backups, and API
+
+History supports case-insensitive Unicode search, pagination, individual deletion, audio opening,
+and transcript/audio pair export. **Stats** shows time-window counts, time saved against configurable
+`typing_wpm`, daily usage, streaks (`weekends_break_streak`), records, and available destination-app
+metadata. **Backup & Audio** provides usage, audio-only deletion, ZIP export, backup/restore. Restore
+validates before applying and merges history by UUID without deleting other recordings.
+
+```sh
+mouthkeys history --query phrase --limit 100 --offset 0
+mouthkeys stats
+mouthkeys audio-usage
+mouthkeys export-audio recordings.zip
+mouthkeys backup-export backup.json
+mouthkeys backup-import backup.json --yes
+mouthkeys delete --id ENTRY_UUID
+mouthkeys delete-audio --yes
+mouthkeys dictionary-export dictionary.json
+mouthkeys dictionary-import dictionary.json --yes
+```
+
+Optional loopback API: set `api_enabled=on`, `api_port`, and a service environment variable named
+by `api_token_env` (default `MOUTHKEYS_API_TOKEN`, at least 24 characters). Restart service yourself.
+Every request requires `Authorization: Bearer TOKEN`. Browser-origin/rebinding requests are rejected;
+no CORS is enabled. Routes: `GET /v1/health`, `/v1/history`, `/v1/stats`,
+`GET/POST /v1/dictionary/replacements`, `POST /v1/postprocess` with JSON `text`, and
+`POST /v1/transcribe` with JSON `audio_base64`. Requests are limited to 25 MiB and API audio to 10 decoded minutes. Eight connection slots,
+15-second read deadlines, and serialized inference bound API resource use; arbitrary file-path
+requests and remote binding are not supported. API shares the recording model lock.
+
+## Parity and limits
+
+Upstream baseline: BenevolentFutures/MouthKeys `d50ad008` (2026-11-01). Defaults remain compatible
+with saved Linux settings. Configurable cloud AI and Spoken Send are supported—not forbidden by
+Linux policy. Remaining gaps are implementation/platform limits, not invented product decisions:
+
+- No proven paste-consumption or pane/field verification; X11/Sway/Hyprland use window focus,
+  other Wayland compositors fall back to copy. No “Return to Starting Field” activation across applications.
+- Clipboard restoration is X11-only and timed; clipboard-manager exclusion is not implemented.
+- Native Apple ASR/CoreML engines cannot run on Linux. Parakeet/Canary are alternatives; Nemotron,
+  Qwen3 ASR, Cohere Transcribe, and Parakeet Flash-specific backends are not yet integrated.
+- No automatic correction-learning or advanced pronunciation embeddings/vocabulary boosting.
+  Manual/voice trigger training is supported.
+- No automatic selected-text replacement, per-app prompt routing, or integrated global shortcut
+  capture. CLI/i3 bindings and reviewable Command/Edit output are supported.
+- No macOS notch-specific layout, Hollyland battery telemetry, or usage milestone badges.
+- No dedicated persistent file-transcription history browser; export results to keep them.
+
+These are outstanding parity work, not claims of completion. Real microphone, compositor focus,
+paste timing, optional model accuracy, sounds/media, and tray hosting require desktop checks below.
 
 ## Development and validation
 
@@ -320,3 +530,20 @@ Before calling a desktop setup verified, run this manual check:
   compositor; final delivery should still target the editor when using X11 automatic paste.
 
 The macOS application, Xcode build, and tests are maintained in the upstream MouthKeys repository.
+
+Additional opt-in desktop checks:
+
+- Enable Spoken Send on X11; verify phrase removal, configured key, sentence-owned phrases,
+  cancel countdown, and no Return after beginning a second recording or switching windows.
+- Dictate two recordings while first inference is pending; confirm FIFO delivery and queued × cancel.
+- Enable clipboard restoration; verify image/file formats survive, and copying new content during
+  delivery wins. Tune restore delay on slow applications; no paste-consumption guarantee is made.
+- On Sway/Hyprland with opted-in automatic paste, switch windows during inference: only copy.
+  Unsupported Wayland compositors must never inject an automatic paste key.
+- Check tray start/stop, close/reopen Settings, audio-process quit guard, and optional notifications.
+- Verify microphone priority/Never, playerctl pause/resume, and selected local sound/output.
+- Verify optional Parakeet/Canary and speaker models against actual recordings after explicit download.
+- Disable history, dictate, then Copy last; confirm latest in-memory text and no transcript/audio
+  history remains. Restart service and confirm that private last transcript is unavailable.
+- Configure a local AI endpoint first; inspect cleanup, prompt selection, Command proposal confirmation,
+  and Edit output. Cloud requests occur only after configuring/enabling that provider.

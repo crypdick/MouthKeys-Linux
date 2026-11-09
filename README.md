@@ -1,8 +1,9 @@
 # MouthKeys-Linux
 
 Local dictation for Linux: record with a desktop shortcut, transcribe on your CPU or NVIDIA
-GPU, and paste into your editor or terminal. No account, cloud transcription, telemetry,
-or update checks.
+GPU, and paste into your editor or terminal. Optional Linux ONNX engines, Spoken Send,
+local/cloud AI cleanup, dictionary/formatting, system tray, searchable history, and file
+transcription. Local dictation needs no account. No telemetry or update checks.
 
 This repository maintains the Linux Python/Qt implementation of
 [MouthKeys](https://github.com/BenevolentFutures/MouthKeys). The macOS app is maintained upstream.

@@ -1,0 +1,99 @@
+"""Optional Linux desktop affordances; no global grabs or privileged services."""
+
+import subprocess
+import threading
+from pathlib import Path
+
+
+def command(args):
+    return subprocess.run(args, capture_output=True, text=True, check=True, timeout=2).stdout
+
+
+def source_names():
+    return [
+        line.split()[1]
+        for line in command(["pactl", "list", "short", "sources"]).splitlines()
+        if len(line.split()) >= 2
+    ]
+
+
+def source_list(value):
+    return [name.strip() for name in value.split(",") if name.strip()]
+
+
+def choose_source(config):
+    """Explicit source wins, except an explicitly excluded source is never opened."""
+    never = set(source_list(config.microphone_never))
+    if config.audio_source != "default":
+        if config.audio_source in never:
+            raise ValueError("Selected microphone is in Never list")
+        return config.audio_source
+    preferred = source_list(config.microphone_preferred)
+    fallback = source_list(config.microphone_fallback)
+    if not (preferred or fallback or never):
+        return "default"
+    available = source_names()
+    for name in preferred:
+        if name in available and name not in never:
+            return name
+    default = command(["pactl", "get-default-source"]).strip()
+    if default in available and default not in never and default not in fallback:
+        return default
+    for name in fallback:
+        if name in available and name not in never:
+            return name
+    for name in available:
+        if name not in never and not name.endswith(".monitor"):
+            return name
+    raise ValueError("No available microphone outside Never list")
+
+
+class MediaSession:
+    """Resume only players this recording actually paused, and only if still paused."""
+
+    def __init__(self):
+        self.paused = []
+
+    def pause(self, config):
+        if config.pause_media != "on":
+            return
+        try:
+            players = command(["playerctl", "--list-all"]).splitlines()
+        except (OSError, subprocess.SubprocessError):
+            return
+        for player in players:
+            try:
+                if command(["playerctl", "--player", player, "status"]).strip() == "Playing":
+                    command(["playerctl", "--player", player, "pause"])
+                    self.paused.append(player)
+            except (OSError, subprocess.SubprocessError):
+                continue
+
+    def resume(self):
+        players, self.paused = self.paused, []
+        for player in players:
+            try:
+                if command(["playerctl", "--player", player, "status"]).strip() == "Paused":
+                    command(["playerctl", "--player", player, "play"])
+            except (OSError, subprocess.SubprocessError):
+                continue
+
+
+def play_sound(config):
+    """Opt-in local file only. Never download cues or block microphone lifecycle."""
+    if not config.sound_file:
+        return
+    threading.Thread(target=_play_sound, args=(config,), daemon=True).start()
+
+
+def _play_sound(config):
+    path = Path(config.sound_file).expanduser()
+    if not path.is_file():
+        return
+    args = ["paplay", "--volume", str(round(config.sound_volume / 100 * 65536))]
+    if config.sound_output != "default":
+        args += ["--device", config.sound_output]
+    try:
+        subprocess.run(args + [str(path)], check=True, capture_output=True, timeout=3)
+    except (OSError, subprocess.SubprocessError):
+        pass  # An unavailable cue must never discard a recording.

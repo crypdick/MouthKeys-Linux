@@ -110,13 +110,11 @@ def test_cancel_recording_stops_capture_without_delivery(controller):
     assert not controller.delivery.calls
 
 
-def test_cancel_during_inference_suppresses_late_paste_and_rejects_overlap(controller):
+def test_cancel_during_inference_suppresses_late_paste(controller):
     controller.transcriber.release.clear()
     controller.command("start")
     controller.command("stop")
     assert controller.transcriber.entered.wait(2)
-    with pytest.raises(ValueError, match="Busy"):
-        controller.command("start")
     controller.command("cancel")
     with pytest.raises(ValueError, match="Busy"):
         controller.command("clear")

@@ -394,3 +394,48 @@ def test_every_config_is_editable_in_settings_and_new_options_roundtrip(monkeypa
     assert not window.isVisible()
     window.close()
     app.processEvents()
+
+
+def test_queued_overlay_cancel_reaches_controller(monkeypatch):
+    from PySide6.QtWidgets import QApplication
+
+    from mouthkeys.overlay import Overlay
+
+    app = QApplication.instance() or QApplication([])
+    panel = Overlay()
+    panel.timer.stop()
+    panel.animation.stop()
+    calls = []
+    monkeypatch.setattr(panel, "show", lambda: None)
+    monkeypatch.setattr(panel, "send", lambda action, *args, **kwargs: calls.append(action))
+    panel.set_status({"phase": "queued", "id": "pending", "preview": "queued words"})
+    assert panel.active
+    panel.action("cancel")
+    assert calls == ["cancel"]
+    panel.close()
+    app.processEvents()
+
+
+def test_stale_search_results_do_not_replace_current_search(monkeypatch):
+    from PySide6.QtWidgets import QApplication
+
+    from mouthkeys import gui
+
+    app = QApplication.instance() or QApplication([])
+    monkeypatch.setattr(gui.Window, "poll", lambda self: None)
+    window = gui.Window()
+    window.timer.stop()
+    pending = []
+    monkeypatch.setattr(window, "send", lambda action, data, callback: pending.append(callback))
+    window.search.setText("A")
+    window.search.setText("B")
+    window.search.setText("A")
+    received = []
+    monkeypatch.setattr(window, "update_history", lambda response: received.append(response))
+    pending[0]({"result": ["stale A"]})
+    pending[1]({"result": ["stale B"]})
+    assert not received
+    pending[2]({"result": []})
+    assert received == [{"result": []}]
+    window.close()
+    app.processEvents()

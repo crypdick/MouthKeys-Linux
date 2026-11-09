@@ -3,7 +3,13 @@ from pathlib import Path
 from .config import Config, cache_dir
 
 
-def download(model: str):
+def download(model: str, engine="whisper", compute_type="default"):
+    if engine == "onnx":
+        from .engines import download_onnx
+
+        return download_onnx(model, compute_type)
+    if engine != "whisper":
+        raise ValueError("Unknown engine")
     from faster_whisper.utils import download_model
 
     return download_model(model, cache_dir=str(cache_dir() / "models"))
@@ -20,8 +26,19 @@ class Transcriber:
         self.covered = 0
 
     def load(self, config: Config):
-        key = (config.model, config.device, config.compute_type)
+        key = (
+            config.model,
+            config.device,
+            config.compute_type,
+            getattr(config, "engine", "whisper"),
+        )
         if key != self.key:
+            if getattr(config, "engine", "whisper") == "onnx":
+                from .engines import load_onnx
+
+                self.model = load_onnx(config)
+                self.key = key
+                return
             from faster_whisper import WhisperModel
 
             self.model = WhisperModel(
@@ -34,13 +51,24 @@ class Transcriber:
             self.key = key
 
     def _session(self, path, config):
-        key = (path, config.model, config.device, config.compute_type, config.language)
+        key = self._stream_key(path, config)
         if key != self.stream_key:
             self.stream_key = key
             self.cursor = 0
             self.committed = []
             self.pending = ""
             self.covered = 0
+
+    @staticmethod
+    def _stream_key(path, config):
+        return (
+            path,
+            config.model,
+            config.device,
+            config.compute_type,
+            config.language,
+            getattr(config, "engine", "whisper"),
+        )
 
     def preview(self, path: Path, config: Config):
         """Keep completed segments; revise only the uncommitted audio prefix."""
@@ -76,7 +104,7 @@ class Transcriber:
         """Finalize a live session, or decode a standalone file from its beginning."""
         from .audio import read_audio_from
 
-        key = (path, config.model, config.device, config.compute_type, config.language)
+        key = self._stream_key(path, config)
         try:
             if key != self.stream_key:
                 return self._decode(str(path), config)
@@ -93,6 +121,18 @@ class Transcriber:
 
     def _segments(self, audio, config):
         self.load(config)
+        if getattr(config, "engine", "whisper") == "onnx":
+            if isinstance(audio, str):
+                from faster_whisper.audio import decode_audio
+
+                audio = decode_audio(audio, sampling_rate=16000)
+            return list(
+                self.model.recognize(
+                    audio,
+                    sample_rate=16000,
+                    language=None if config.language == "auto" else config.language,
+                )
+            )
         segments, _ = self.model.transcribe(
             audio,
             language=None if config.language == "auto" else config.language,

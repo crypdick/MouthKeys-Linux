@@ -1,7 +1,7 @@
 """Opt-in Hollyland Lark A1 status heartbeat through Linux hidraw.
 
-Protocol adapted from BenevolentFutures/MouthKeys d50ad008 LarkA1Protocol,
-Atin Woodard; protocol decoding credit pedrozimmermannsoares/vorssaint-utils#2510.
+Protocol adapted from BenevolentFutures/MouthKeys d50ad008 LarkA1Protocol.
+Protocol decoding credit: pedrozimmermannsoares/vorssaint-utils#2510.
 Only the fixed read-status heartbeat exists: no firmware/settings commands.
 Linux ioctl definitions follow include/uapi/linux/hidraw.h.
 """

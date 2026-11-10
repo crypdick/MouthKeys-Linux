@@ -41,5 +41,5 @@ changes to the parent project or its website. Upstream changes are adapted by ha
 
 Carry authorized changes through branch, build, tests, fresh-context review, merge to `main`,
 and push. The user prefers direct merges without PRs. Ask only for decisions or desktop checks
-that require the user. Do not install over or restart the user's running app without authorization.
+that require the user.
 macOS code and tooling are maintained upstream.

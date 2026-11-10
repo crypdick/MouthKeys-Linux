@@ -22,6 +22,15 @@ bindings are acceptable; integrated shortcuts are optional, lower-priority alter
   WAV with locally constructed tiny random weights. [Recorded evidence](tests/native_smoke_evidence.json)
   and [reproducer](tests/smoke_native.py) cover Qwen/Cohere inference and NeMo streaming/file inference/
   actual word offsets. This proves integration, **not pretrained recognition accuracy or speed**.
+- **Installed-wheel acceptance:** a non-editable wheel in a separate temporary environment runs
+  CLI version/configuration and an isolated daemon start/status/shutdown; hidden offscreen Settings
+  exposes all 121 configuration fields and imports new modules/assets. Internet sockets are denied;
+  no installed-user-app upgrade, desktop delivery, audio capture or visible windows are involved.
+  [Recorded evidence](tests/distribution_smoke_evidence.json) and
+  [reproducer](tests/smoke_distribution.py) are distinct from editable-checkout unit tests.
+  The probe also passes with hostile Python import environment variables; an injected shutdown
+  failure reaps its owned daemon and does not emit success. Installation was independently observed
+  using uv's offline cache, not inferred by the probe.
 - **Scoped pretrained Whisper regression:** existing local large-v3 and large-v3-turbo checkpoints
   recognize the public fixture with real word offsets and committed-preview continuation; turbo also
   saves file history and exports private TXT/JSON. [Recorded evidence](tests/whisper_smoke_evidence.json)

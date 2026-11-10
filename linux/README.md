@@ -619,9 +619,31 @@ inference, streaming/caches, timings, and worker isolation—not pretrained reco
 available checkpoint. Never download a large/gated model implicitly to turn smoke evidence into an
 accuracy claim. Record package versions, model revision, device, language, and observed errors.
 
-After a push to `main` passes CI, GitHub Actions bumps the patch version with `uv version`, validates,
-and commits `linux/pyproject.toml`/`linux/uv.lock` together. Pull that version commit before reinstalling.
+The workflow defines a patch bump after successful **push-triggered** `main` runs: `uv version`,
+validation, and one commit updating `linux/pyproject.toml`/`linux/uv.lock`. Confirm a run actually exists
+for the pushed SHA; if no push run appears, start `gh workflow run build.yml --ref main` on this fork
+and check its result. Manual dispatch validates but does not run the push-only version job.
+Pull any resulting version commit before reinstalling.
 The application performs no update polling. Linux changes target this personal fork, not upstream macOS.
+
+Test the built wheel separately from an editable checkout or the installed application:
+
+```sh
+uv build linux
+uv venv --python 3.13 /tmp/mouthkeys-wheel-env
+uv pip install --offline --python /tmp/mouthkeys-wheel-env/bin/python \
+  './linux/dist/mouthkeys_linux-0.2.1-py3-none-any.whl[gui]'
+timeout --kill-after=5s 45s /tmp/mouthkeys-wheel-env/bin/python -I \
+  linux/tests/smoke_distribution.py \
+  --expect-version 0.2.1 --report /tmp/mouthkeys-wheel-evidence.json
+```
+
+Use the current artifact version and a new temporary environment. Offline installation needs its
+dependencies already cached. The probe denies Internet sockets, uses private temporary XDG paths,
+starts/stops only its isolated daemon, checks CLI→Settings configuration and packaged assets, and
+constructs Settings hidden/offscreen. It does not replace the user's app, capture audio, touch the
+clipboard, synthesize keys, play sounds or show windows. This is packaging/runtime evidence, not
+compositor or microphone acceptance.
 
 ### Manual desktop and hardware checklist
 

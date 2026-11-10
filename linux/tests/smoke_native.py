@@ -15,7 +15,8 @@ CPU-only development environment, without modifying the installed application::
     /tmp/mouthkeys-native-smoke-env/bin/python linux/tests/smoke_native.py \
         --build-tiny nemo --artifact /tmp/mouthkeys-tiny-nemo --stream --word-times
     /tmp/mouthkeys-native-smoke-env/bin/python linux/tests/smoke_native.py \
-        --engine nemo --artifact /absolute/path/model.nemo --stream
+        --engine nemo --artifact /absolute/path/model.nemo --stream --stream-repeat 3 \
+        --word-times --expect-greeting --report /tmp/mouthkeys-native-acceptance.json
 
 Use --artifact with an existing local model to test a real checkpoint. Tiny
 builders use installed library classes and synthetic tokenizers/random weights;
@@ -28,7 +29,9 @@ import hashlib
 import importlib.metadata
 import json
 import os
+import re
 import tempfile
+import time
 from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
@@ -260,6 +263,22 @@ def build_tiny_nemo(path):
     (path / "mouthkeys-smoke-artifact.json").write_text(json.dumps({"random_tiny_model": "nemo"}))
 
 
+def greeting_count(text):
+    assert not re.search(r"<EOU>|<[a-z]{2}-[A-Z]{2}>", text), "Decoder marker leaked"
+    return len(re.findall(r"\bhello\b", text.casefold()))
+
+
+def check_word_times(words, samples, expect_greeting):
+    assert words, "Decoder supplied no word alignment"
+    assert all(0 <= word["start"] <= word["end"] <= samples / 16000 for word in words)
+    if expect_greeting:
+        starts = [word["start"] for word in words if greeting_count(word["word"])]
+        assert starts and starts == sorted(starts), "Expected ordered greeting word timings"
+        assert all(word["start"] < word["end"] for word in words)
+        return len(set(starts))
+    return 0
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--artifact", type=Path, required=True)
@@ -269,6 +288,10 @@ def main():
         "--fixture", type=Path, default=Path(__file__).parent / "resources/dictation_fixture.wav"
     )
     parser.add_argument("--stream", action="store_true")
+    parser.add_argument("--stream-repeat", type=int, choices=range(1, 11), default=1)
+    parser.add_argument("--expect-greeting", action="store_true", help="Require a recognized hello")
+    parser.add_argument("--native-timeout", type=int, help="Override the configured worker timeout")
+    parser.add_argument("--revision", default="main", help="Record the local artifact revision")
     parser.add_argument(
         "--word-times", action="store_true", help="Request authoritative NeMo word alignment"
     )
@@ -285,69 +308,115 @@ def main():
         WANDB_MODE="disabled",
     )
     isolate_network()
-    if args.build_tiny:
-        build_tiny(args.build_tiny, args.artifact)
-        if args.build_tiny == "nemo":
-            args.engine = "nemo"
+    if args.build_tiny == "nemo":
+        args.engine = "nemo"
     if args.word_times and args.engine != "nemo":
         raise ValueError("Native word alignment smoke requires --engine nemo")
+    if args.stream and args.engine != "nemo":
+        raise ValueError("Native cache-aware streaming smoke requires --engine nemo")
+    if args.stream_repeat > 1 and not args.stream:
+        raise ValueError("Repeated input requires --stream")
     from mouthkeys.audio import read_audio_from
     from mouthkeys.config import Config
     from mouthkeys.native_asr import speech_spans
     from mouthkeys.native_worker import NativeWorkerBackend
 
-    if not speech_spans(read_audio_from(args.fixture)):
+    audio = read_audio_from(args.fixture)
+    if not speech_spans(audio):
         raise ValueError(
             "Smoke fixture must contain speech; empty VAD would not exercise inference"
         )
 
     with tempfile.TemporaryDirectory(prefix="mouthkeys-smoke-state-") as state:
-        for key in ("XDG_CONFIG_HOME", "XDG_STATE_HOME", "XDG_RUNTIME_DIR"):
+        for key in (
+            "XDG_CONFIG_HOME",
+            "XDG_STATE_HOME",
+            "XDG_RUNTIME_DIR",
+            "XDG_CACHE_HOME",
+            "HF_HOME",
+        ):
             directory = Path(state) / key
             directory.mkdir(mode=0o700)
             os.environ[key] = str(directory)
+        if args.build_tiny:
+            build_tiny(args.build_tiny, args.artifact)
+        defaults = Config()
+        is_tiny = (args.artifact / "mouthkeys-smoke-artifact.json").is_file()
         config = replace(
-            Config(),
+            defaults,
             engine=args.engine,
             model=str(args.artifact.resolve()),
+            model_revision=args.revision,
             device="cpu",
-            asr_max_tokens=8,
-            native_timeout_seconds=60,
+            compute_type="float32",
+            asr_max_tokens=8 if is_tiny else defaults.asr_max_tokens,
+            native_timeout_seconds=(
+                args.native_timeout
+                if args.native_timeout is not None
+                else defaults.native_timeout_seconds
+            ),
             pronunciation_matching="on" if args.word_times else "off",
-        )
-        audio = read_audio_from(args.fixture)
+        ).validate()
+        load_started = time.monotonic()
         worker = NativeWorkerBackend(config)
+        timings = {"load_seconds": round(time.monotonic() - load_started, 3)}
         operations = []
+        word_counts = {}
+        greetings = {}
         try:
             if args.stream:
-                if args.engine != "nemo":
-                    raise ValueError("Native cache-aware streaming smoke requires --engine nemo")
-                worker.stream(audio[: len(audio) // 2], config, "smoke")
-                text = worker.stream(audio, config, "smoke", final=True)
+                import numpy as np
+
+                stream_audio = audio
+                cuts = [len(audio) // 2]
+                if args.stream_repeat > 1:
+                    padded = np.concatenate([audio, np.zeros(8000, dtype=audio.dtype)])
+                    stream_audio = np.tile(padded, args.stream_repeat)
+                    cuts = [len(padded) * count for count in range(1, args.stream_repeat + 1)]
+                stream_started = time.monotonic()
+                previews = [worker.stream(stream_audio[:cut], config, "smoke") for cut in cuts]
+                text = worker.stream(stream_audio, config, "smoke", final=True)
+                timings["stream_seconds"] = round(time.monotonic() - stream_started, 3)
+                expected = min(2, args.stream_repeat)
+                if args.expect_greeting:
+                    greetings["stream"] = greeting_count(text)
+                    assert greetings["stream"] >= expected, "Repeated greetings were lost"
+                    if args.stream_repeat > 1:
+                        assert any(greeting_count(preview) for preview in previews), (
+                            "No greeting was recognized before finalization"
+                        )
                 if args.word_times:
-                    assert worker.words, "Streaming decoder supplied no word alignment"
-                    assert all(
-                        0 <= word["start"] <= word["end"] <= len(audio) / 16000
-                        for word in worker.words
+                    timed_greetings = check_word_times(
+                        worker.words, len(stream_audio), args.expect_greeting
                     )
+                    assert not args.expect_greeting or timed_greetings >= expected
+                    word_counts["stream"] = len(worker.words)
                     print(json.dumps({"operation": "stream words", "words": worker.words}))
-                worker.reset_stream()
-                print(json.dumps({"operation": "stream", "text": text}))
                 operations.append("stream")
+                worker.reset_stream()
+                assert not worker.words, "Reset retained previous word alignment"
+                if args.expect_greeting:
+                    fresh_audio = padded if args.stream_repeat > 1 else audio
+                    fresh = worker.stream(fresh_audio, config, "fresh", final=True)
+                    assert greeting_count(fresh) == 1, "Fresh session did not isolate its greeting"
+                    operations.append("reset")
+                print(json.dumps({"operation": "stream", "text": text}))
+            file_started = time.monotonic()
             segments = worker.segments(audio, config)
+            timings["file_seconds"] = round(time.monotonic() - file_started, 3)
             assert all(0 <= s.start <= s.end <= len(audio) / 16000 for s in segments)
+            if args.expect_greeting:
+                greetings["file"] = greeting_count(" ".join(s.text for s in segments))
+                assert greetings["file"], "Expected file greeting was not recognized"
             print(
                 json.dumps(
                     {"operation": "segments", "segments": [vars(s) for s in segments]}, default=vars
                 )
             )
             if args.word_times:
-                assert any(s.words for s in segments), "Offline decoder supplied no word alignment"
-                assert all(
-                    0 <= word.start <= word.end <= len(audio) / 16000
-                    for segment in segments
-                    for word in segment.words
-                )
+                words = [vars(word) for segment in segments for word in segment.words]
+                check_word_times(words, len(audio), args.expect_greeting)
+                word_counts["file"] = len(words)
             operations.append("segments")
         finally:
             worker.close()
@@ -361,18 +430,30 @@ def main():
         report = {
             "timestamp_utc": datetime.now(UTC).isoformat(),
             "result": "passed",
-            "validation": "functional only; NOT accuracy",
+            "validation": (
+                "Short English greeting regression; not a general accuracy benchmark"
+                if args.expect_greeting
+                else "functional only; NOT accuracy"
+            ),
             "engine": args.engine,
             "artifact_name": args.artifact.name,
+            "revision": args.revision,
+            "device": config.device,
+            "compute_type": config.compute_type,
+            "native_timeout_seconds": config.native_timeout_seconds,
             "operations": operations,
             "audio_samples": len(audio),
             "fixture_sha256": hashlib.sha256(args.fixture.read_bytes()).hexdigest(),
             "versions": versions,
             "network": "AF_INET/AF_INET6 denied by seccomp",
             "word_times": args.word_times,
+            "stream_repeat": args.stream_repeat,
+            "expected_greeting_counts": greetings,
+            "word_counts": word_counts,
+            **timings,
         }
         args.report.write_text(json.dumps(report, indent=2) + "\n")
-    print("FUNCTIONAL_SMOKE_PASSED; random tiny models are NOT accuracy validation")
+    print("FUNCTIONAL_SMOKE_PASSED; fixture regression is not a general accuracy benchmark")
 
 
 if __name__ == "__main__":

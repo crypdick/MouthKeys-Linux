@@ -37,6 +37,11 @@ bindings are acceptable; integrated shortcuts are optional, lower-priority alter
   and [reproducer](tests/smoke_transcription.py) identify exact revisions, fixture hash, package versions,
   and socket-denied isolation. No download, microphone, desktop operation, broad language coverage,
   accuracy benchmark, or performance measurement is implied.
+- **Scoped pretrained native regression:** [recorded evidence](tests/pretrained_native_evidence.json)
+  covers Parakeet Flash, Qwen3 ASR 0.6B, and NeMo Nemotron 3.5 on CPU. Three explicitly downloaded,
+  pinned public checkpoints recognized the English fixture with network sockets denied during
+  inference. Both NeMo checkpoints also exercised growing-prefix streaming, finalization, reset,
+  and native word timing. The fixture is not a broad accuracy or performance benchmark.
 - **Desktop / hardware / broader pretrained acceptance:** actual compositor/toolkit, microphone, clipboard,
   receiver, provider account, or authorized checkpoint is exercised. These checks remain pending
   unless a concrete result is recorded; passing headless tests does not promote them automatically.
@@ -45,7 +50,7 @@ bindings are acceptable; integrated shortcuts are optional, lower-priority alter
 
 | Area and required behavior | Implemented path / headless evidence | Remaining acceptance / limits |
 | --- | --- | --- |
-| Whisper, Parakeet v2/v3/Flash, Nemotron offline/streaming, Qwen3, Cohere; Linux alternatives to Apple ASR | `transcribe`, `engines`, `native_asr`, isolated `native_worker`; engine/native/incremental tests. Real tiny Qwen/Cohere/NeMo worker smokes recorded; existing pretrained Whisper large-v3/turbo fixture regression recorded separately. | Other authorized pretrained checkpoints, each supported language/revision, CUDA/resource behavior, long-session quality, and broad accuracy remain unmeasured. Apple APIs are replaced, not run on Linux. |
+| Whisper, Parakeet v2/v3/Flash, Nemotron offline/streaming, Qwen3, Cohere; Linux alternatives to Apple ASR | `transcribe`, `engines`, `native_asr`, isolated `native_worker`; engine/native/incremental tests. Pretrained public-fixture evidence for Whisper large-v3/turbo, Parakeet Flash, Qwen3 ASR 0.6B, and NeMo Nemotron 3.5; additional tiny-worker smokes for Qwen/Cohere/NeMo. | Other checkpoints and backends, multilingual quality, CUDA/resource behavior, and long-session quality remain unmeasured. Apple APIs are replaced, not run on Linux. |
 | Pretrained Whisper word offsets, committed preview/final continuation, and file workflow | `tests/whisper_smoke_evidence.json`: large-v3 `edaa852…` and turbo `0a363e9…`, public WAV greeting, actual word times and committed segments; turbo decode/transcribe/finalize, private file-history and TXT/JSON export roundtrip. `smoke_transcription.py` denies Internet sockets and isolates XDG data; no new weights downloaded. | Only the recorded short public-fixture regression is accepted. It does not establish multilingual accuracy, arbitrary long recordings, production latency/RAM, or compositor behavior. |
 | Model manager: catalog, installed/active state, language/weight/RAM/speed/accuracy, sort/filter, progress/cancel/delete | Local model browser, revision-aware cache readiness, explicit activate/download/delete, service-reported resident model identity/active row, structured Hub progress. Missing required Whisper tokenizer files cannot trigger an implicit runtime download. Unknown measurements are displayed as unknown. | Validate resident-model transitions when settings differ, loading fails, or cache is deleted; selected settings alone are not proof a model is loaded. Measure RAM/speed/accuracy using authorized checkpoints; test interrupted transfers and real provider preparation UI. |
 | Replacements, multiple triggers, spoken-trigger training, import/export | Dictionary tables/enable switches, non-delivering voice trigger capture, one-pass transforms, stale-edit guards, private JSON; `test_formatting`, `test_gui`, `test_learning`. | Real pronunciation/ASR failures, Unicode/punctuation examples, and dictionary conflict workflows need user-level acceptance. |
@@ -85,7 +90,7 @@ bindings are acceptable; integrated shortcuts are optional, lower-priority alter
 | AI-failure, microphone-change and paste notifications | Separate `show_ai_alerts` (default on), `show_microphone_alerts`, `show_paste_alerts`; typed AI notices plus raw-text fallback and deduplicated tray notifications; desktop/GUI tests. | Real desktop notification delivery/preferences and toolkit paste alerts remain manual acceptance; disabled notifications do not suppress recoverable status/history. |
 | Language-first guided setup and non-delivering tryout | Search by language name/code/alias, compatible engine/model/language/revision routes adapted from upstream; English v2/Flash, known native sets, all locked Whisper codes (Cantonese v3-only). Explicit Apply saves/synchronizes route and backend precision default without loading/downloading. Stale tryout callback generations ignored; inline regional banner consumes current tryout text. `setup_languages`, `onboarding`, `test_setup`. | Optional engine installation/checkpoint access and real language/voice quality remain external acceptance; selecting a route never installs dependencies/downloads a checkpoint. |
 | Backup/API: profiles/routes/dictionary/custom vocabulary/pronunciation/history/file history; audio export; validation | Private backup with prevalidation and UUID merge, separate audio ZIP; authenticated bounded loopback history/stats/replacement/custom-word/transcribe/postprocess API; data/API tests. | Full user roundtrip including startup application, old/new schema migration, absent optional extras and permission/disk failures. API limits and native isolation are tested but deployment-specific exposure still needs user review. |
-| Delivery gates for this fresh-audit batch | Version 0.2.1 passes locked sync, Ruff check/format, 790 headless tests and wheel/source builds. Fresh-context review reports no outstanding blocker. Artifacts include the new UI modules, exact upstream base-prompt asset, five cue presets and offline Whisper reproducer/evidence; model weights/user databases are excluded. | Merge/push are recorded in Git. Built/merged source is not an installed/running-app upgrade; no install/restart without request. External acceptance below remains open. |
+| Delivery gates | Version 0.2.2 passes locked sync, Ruff check/format, 791 headless tests and wheel/source builds. Fresh-context review covers the Wayland clipboard launcher and NeMo language-marker fixes. Artifacts include the UI modules, base-prompt asset, cue presets and fixture evidence; model weights/user databases are excluded. | Merge/push are recorded in Git. Built/merged source and an installed/running-app upgrade are separate checks. External acceptance below remains open. |
 
 ## Pending evidence and genuine constraints
 
@@ -93,9 +98,9 @@ bindings are acceptable; integrated shortcuts are optional, lower-priority alter
    actual X11/Wayland compositor and target toolkits. No live microphone, clipboard, focus, key,
    sound, or receiver action is authorized merely by running the test suite.
 2. Pretrained checkpoint tests require already available artifacts or an explicit download request;
-   gated terms/account access may need the user. Existing pretrained Whisper fixture results are
-   recorded above; tiny native smoke output is not reported as recognized text or an accuracy/latency
-   benchmark, and neither evidence level establishes broad language/model acceptance.
+   gated terms/account access may need the user. Scoped Whisper and native pretrained results are
+   recorded above. Tiny native smoke and short pretrained fixtures do not establish broad
+   language/model acceptance or runtime performance.
 3. Record real-model language coverage, speed/RAM and recognition quality; native model metadata
    and parameter/weight sizes do not establish runtime measurements. Never manufacture these values.
 4. AT-SPI, portal, compositor virtual-key, and HID support differ by desktop/hardware. Where no

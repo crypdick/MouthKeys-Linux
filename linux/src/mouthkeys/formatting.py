@@ -1,6 +1,6 @@
 """Deterministic dictation formatting, including conservative Spoken Send parsing.
 
-Behavior adapted from BenevolentFutures/MouthKeys d50ad008, by Atin Woodard,
+Behavior adapted from BenevolentFutures/MouthKeys d50ad008:
 SpokenSendParser, QuestionMarkShortcut, and ASRService spoken/literal formatting.
 No desktop effects here.
 """

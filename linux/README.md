@@ -615,9 +615,21 @@ uv pip install --python /tmp/mouthkeys-native-smoke-env/bin/python \
 Artifact destinations must not already exist. These smoke builders use real installed model classes,
 synthetic tokenizers/random tiny weights, and the existing WAV fixture. They exercise loading,
 inference, streaming/caches, timings, and worker isolation—not pretrained recognition quality.
-`smoke_native.py --engine nemo --artifact /absolute/path/model.nemo --stream` instead uses an already
-available checkpoint. Never download a large/gated model implicitly to turn smoke evidence into an
-accuracy claim. Record package versions, model revision, device, language, and observed errors.
+For an existing Parakeet Flash or NeMo Nemotron checkpoint, exercise real word timings and repeated
+stream prefixes with:
+
+```sh
+/tmp/mouthkeys-native-smoke-env/bin/python linux/tests/smoke_native.py \
+  --engine nemo --artifact /absolute/path/model.nemo --revision REVISION \
+  --stream --stream-repeat 3 --word-times --expect-greeting \
+  --report /tmp/mouthkeys-native-acceptance.json
+```
+
+For an existing Qwen checkpoint directory, use `--engine transformers --expect-greeting` without the
+streaming and word-timing switches. [Pretrained evidence](tests/pretrained_native_evidence.json)
+records the pinned revisions, actual cache continuation/reset, and scoped English recognition for
+all three on CPU. Inference runs offline; neither this fixture nor tiny weights establish broad
+accuracy, language coverage, or performance.
 
 The workflow defines a patch bump after successful **push-triggered** `main` runs: `uv version`,
 validation, and one commit updating `linux/pyproject.toml`/`linux/uv.lock`. Confirm a run actually exists

@@ -4,12 +4,15 @@ import importlib
 import json
 import math
 import os
+import re
 import tarfile
 from copy import deepcopy
 from pathlib import Path
 from types import SimpleNamespace
 
 from .engines import READY, managed_path
+
+_NEMOTRON_LANGUAGE_TAG = re.compile(r"\s*<[a-z]{2}-[A-Z]{2}>")
 
 # These names/classes are documented by stable Transformers 5.22.2 and NVIDIA NeMo 3.
 # No remote Python model code is imported from a downloaded model repository.
@@ -517,10 +520,17 @@ class NemoBackend:
                 # Encoder frames have quantized right edges; the final frame
                 # may extend beyond the actual (unpadded) recording boundary.
                 end = min(end, duration)
-            text = str(item["word"]).replace("<EOU>", "").strip()
+            text = self._transcript_text(str(item["word"]))
             if text and math.isfinite(start) and math.isfinite(end) and 0 <= start <= end:
                 words.append({"word": text, "start": start + offset, "end": end + offset})
         return words
+
+    def _transcript_text(self, text):
+        if hasattr(self.model, "set_inference_prompt"):
+            # NeMo strips language tags from decoded text, but its independent
+            # timestamp renderer can still emit them as word records.
+            text = _NEMOTRON_LANGUAGE_TAG.sub("", text)
+        return text.replace("<EOU>", "").strip()
 
     def _language(self, config):
         if hasattr(self.model, "set_inference_prompt"):
@@ -597,7 +607,7 @@ class NemoBackend:
             )
             self.caches = channel, time_cache, cache_len
             values = [getattr(text, "text", text) for text in texts]
-            self.stream_text = _text(values).replace("<EOU>", "").strip()
+            self.stream_text = self._transcript_text(_text(values))
             if config.pronunciation_matching == "on" and texts:
                 self.words = self._word_times(texts[0], duration=len(samples) / 16000)
                 # NeMo timestamp rendering replaces the token timestep list by
@@ -620,8 +630,8 @@ class NemoBackend:
     def segments(self, samples, config, *, presegmented=False):
         if self.stream_key is not None:
             raise RuntimeError("Native recording is active; finish it before file transcription")
-        self._language(config)
         self._vocabulary(config)
+        self._language(config)
         output = []
         self.words = []
         spans = [{"start": 0, "end": len(samples)}] if presegmented else speech_spans(samples)
@@ -636,7 +646,7 @@ class NemoBackend:
                 )
             if isinstance(results, tuple):
                 results = results[0]
-            text = _text(getattr(results[0], "text", results[0])).replace("<EOU>", "").strip()
+            text = self._transcript_text(_text(getattr(results[0], "text", results[0])))
             words = (
                 self._word_times(results[0], span["start"] / 16000, len(audio) / 16000)
                 if config.pronunciation_matching == "on"

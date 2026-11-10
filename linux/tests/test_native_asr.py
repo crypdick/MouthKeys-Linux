@@ -461,3 +461,30 @@ def test_cache_aware_word_rendering_restores_mergeable_timestep_list(monkeypatch
     assert all(hyp.timestamp == [0] for hyp in hypotheses)
     assert backend.words[0]["word"] == "hello"
     assert backend.stream_key is None
+
+
+def test_prompted_native_file_strips_decoder_tags_from_text_and_word_times(monkeypatch):
+    backend, _ = streaming_backend(monkeypatch)
+    backend.model.encoder.subsampling_factor = 8
+    backend.model.cfg = SimpleNamespace(preprocessor=SimpleNamespace(window_stride=0.01))
+    calls = []
+    backend.model.set_inference_prompt = lambda language: calls.append(("prompt", language))
+    backend.model.decoding = SimpleNamespace(
+        set_strip_lang_tags=lambda enabled: calls.append(("strip_tags", enabled))
+    )
+    hypothesis = SimpleNamespace(
+        text="Hello. <en-US>",
+        timestamp={
+            "word": [
+                {"word": "Hello.", "start_offset": 1, "end_offset": 4},
+                {"word": "<en-US>", "start_offset": 4, "end_offset": 5},
+            ]
+        },
+    )
+    backend.model.transcribe = lambda **kwargs: [hypothesis]
+    monkeypatch.setattr(backend, "_vocabulary", lambda config: calls.append(("configure", True)))
+    config = replace(Config(), engine="nemo", pronunciation_matching="on", language="en")
+    segments = backend.segments(np.zeros(16000), config, presegmented=True)
+    assert calls == [("configure", True), ("prompt", "en-US"), ("strip_tags", True)]
+    assert segments[0].text == "Hello."
+    assert segments[0].words == [{"word": "Hello.", "start": 0.08, "end": 0.32}]

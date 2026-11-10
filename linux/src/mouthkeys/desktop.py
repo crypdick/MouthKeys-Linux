@@ -88,10 +88,22 @@ class MediaSession:
 def play_sound(config, stop=False, preview=False):
     """Opt-in local file only. Never download cues or block microphone lifecycle."""
     preset = getattr(config, "sound_preset", "custom")
+    if not preview and getattr(config, "sounds_enabled", "on") != "on":
+        return
     if preset == "none":
         return
     if preset == "mouthkeys":
         path = Path(__file__).parent / "assets/sounds" / ("FV_end.wav" if stop else "FV_start.wav")
+    elif preset.startswith("fluid_sfx_"):
+        sounds = {
+            "fluid_sfx_0": ("FV_start_0", "FV_end_0"),
+            "fluid_sfx_1": ("FV_start", None),
+            "fluid_sfx_2": ("FV_start_2", None),
+            "fluid_sfx_3": ("sfx_3", None),
+            "fluid_sfx_4": ("sfx_4", None),
+        }
+        name = sounds.get(preset, (None, None))[bool(stop)]
+        path = Path(__file__).parent / "assets/sounds" / f"{name}.wav" if name else None
     else:
         path = getattr(config, "sound_stop_file", "") if stop else config.sound_file
     if not path:

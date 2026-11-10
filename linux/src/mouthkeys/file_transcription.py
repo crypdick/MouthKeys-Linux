@@ -158,11 +158,20 @@ def _decode_bounded(path, max_seconds):
     return np.frombuffer(raw.getbuffer(), dtype=np.int16).astype(np.float32) / 32768.0
 
 
-def transcribe_file(path, config, *, transcriber=None, max_seconds=None):
-    """Decode arbitrary FFmpeg-supported files without capture, delivery, or history writes."""
+def transcribe_file(path, config, *, transcriber=None, max_seconds=None, on_progress=None):
+    """Decode files without capture/delivery/history; optionally report stage dictionaries.
+
+    Transcription counters count completed ASR chunks (including uncovered intervals),
+    not estimated wall-clock completion. Whole-file backends report only their stage.
+    """
     from faster_whisper.audio import decode_audio
 
+    def progress(stage, **details):
+        if on_progress is not None:
+            on_progress({"stage": stage, **details})
+
     started = time.monotonic()
+    progress("decode")
     samples = (
         decode_audio(str(path), sampling_rate=16000)
         if max_seconds is None
@@ -194,9 +203,11 @@ def transcribe_file(path, config, *, transcriber=None, max_seconds=None):
         return decoded
 
     if config.file_speaker_labels == "on":
+        progress("diarization")
         turns = diarize(samples, config.file_speaker_count)
     if turns and config.file_diarization_mode == "turns":
         segments = []
+        chunks = []
         duration = len(samples) / 16000
         covered = 0.0
         for turn in sorted(turns, key=lambda item: item["start"]):
@@ -205,24 +216,30 @@ def transcribe_file(path, config, *, transcriber=None, max_seconds=None):
                 continue
             # Decode uncovered intervals too: diarization misses must not silently lose words.
             if start > covered:
-                segments.extend(
-                    decode(
-                        samples[round(covered * 16000) : round(start * 16000)], covered, end=start
-                    )
-                )
-            segments.extend(
-                decode(
-                    samples[round(start * 16000) : round(end * 16000)], start, turn["speaker"], end
-                )
-            )
+                chunks.append((covered, start, None))
+            chunks.append((start, end, turn["speaker"]))
             covered = max(covered, end)
         if covered < duration:
-            segments.extend(decode(samples[round(covered * 16000) :], covered, end=duration))
+            chunks.append((covered, duration, None))
+        for index, (start, end, speaker) in enumerate(chunks):
+            progress(
+                "transcribe",
+                completed=index,
+                total=len(chunks),
+                kind="turn" if speaker is not None else "uncovered",
+            )
+            segments.extend(
+                decode(samples[round(start * 16000) : round(end * 16000)], start, speaker, end)
+            )
+            progress("transcribe", completed=index + 1, total=len(chunks))
         segments.sort(key=lambda item: item["start"])
     else:
+        # Backends may block before returning their full segment list. No invented percentage.
+        progress("transcribe")
         segments = decode(samples)
         if turns:
             label_segments(segments, turns)
+    progress("finalize")
     return {
         "text": " ".join(segment["text"] for segment in segments).strip(),
         "segments": segments,

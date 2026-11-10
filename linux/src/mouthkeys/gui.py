@@ -130,7 +130,14 @@ def field_value(field):
 def setting_group(key):
     if "shortcut" in key or key in ("hotkey_mode", "shortcut_backend"):
         return "Desktop"
-    if key in ("edit_profile", "command_profile", "edit_prompt", "command_prompt"):
+    if key in (
+        "edit_profile",
+        "command_profile",
+        "edit_prompt",
+        "command_prompt",
+        "command_confirm",
+        "command_continue",
+    ):
         return "AI cleanup"
     if key in ("native_timeout_seconds", "file_diarization_mode"):
         return "Speech"
@@ -150,7 +157,11 @@ def setting_group(key):
         return "AI cleanup"
     if key.startswith("spoken_send") or key == "send_after_pause":
         return "Spoken Send"
-    if key.startswith(("microphone_", "sound_")) or key in ("audio_source", "pause_media"):
+    if key.startswith(("microphone_", "sound_")) or key in (
+        "audio_source",
+        "pause_media",
+        "sounds_enabled",
+    ):
         return "Microphone & media"
     if key.startswith(("paste_", "clipboard_")) or key in (
         "delivery",
@@ -179,6 +190,8 @@ def setting_group(key):
         "show_window_at_login",
         "show_microphone_alerts",
         "show_paste_alerts",
+        "show_ai_alerts",
+        "hide_from_taskbar",
         "onboarding_complete",
     ):
         return "Desktop"
@@ -220,6 +233,7 @@ class Request(QThread):
 class Window(QWidget):
     def __init__(self):
         super().__init__()
+        self.setWindowFlag(Qt.WindowType.Tool, Config.load().hide_from_taskbar == "on")
         self.setWindowTitle("MouthKeys")
         icon_path = str(Path(__file__).parent / "assets" / "icon.png")
         self.setWindowIcon(QIcon(icon_path))
@@ -398,6 +412,17 @@ class Window(QWidget):
             "delivery": ["clipboard", "x11", "wayland"],
             "paste_backend": ["auto", "xdotool", "wtype", "ydotool"],
             "paste_shortcut": ["ctrl+shift+v", "ctrl+v"],
+            "sound_preset": [
+                ("Custom files", "custom"),
+                ("None", "none"),
+                ("Legacy MouthKeys pair", "mouthkeys"),
+                *((f"Sound {index + 1}", f"fluid_sfx_{index}") for index in range(5)),
+            ],
+            "command_confirm": [
+                ("Every command", "on"),
+                ("Destructive commands (upstream heuristic)", "destructive"),
+                ("No individual confirmation", "off"),
+            ],
         }
         from .profiles import load_profiles
 
@@ -424,8 +449,27 @@ class Window(QWidget):
             "microphone_never": "Never use microphones (comma-separated)",
             "typing_wpm": "Typing speed for time-saved estimate (WPM)",
             "file_speaker_count": "File speaker count (0 = automatic)",
+            "command_confirm": "Confirm before running commands",
+            "ai_custom_prompt_only": "Send custom dictation prompt only",
+            "hide_from_taskbar": "Hide main window from taskbar / app switcher",
+            "show_ai_alerts": "AI processing failure notifications",
+            "sounds_enabled": "Recording sounds",
         }
         help_text = {
+            "ai_custom_prompt_only": (
+                "Off prepends the built-in dictation-cleaning instructions to your custom prompt. "
+                "On sends only your prompt and transcript. Command/Edit prompts are separate."
+            ),
+            "hide_from_taskbar": (
+                "Use a Linux tool-window hint for the main window. Taskbar and app-switcher "
+                "behavior depends on your compositor. Reopen through the tray or mouthkeys gui."
+            ),
+            "command_confirm": (
+                "Every command shows the exact shell command and directory for review. "
+                "Destructive uses upstream's command-text heuristic, not a sandbox. "
+                "No individual confirmation runs model-generated commands as your user; "
+                "continuation remains bounded to 20 steps."
+            ),
             "max_seconds": (
                 "At the limit, recording stops and text is copied without automatic paste."
             ),
@@ -503,6 +547,11 @@ class Window(QWidget):
                 hint.setWordWrap(True)
                 self.settings_rows.append((form.rowCount(), setting_group(key)))
                 form.addRow("", hint)
+        from .regional_ui import RegionalFillerBanner
+
+        self.regional_banner = RegionalFillerBanner(self, on_change=self.refresh_regional_offers)
+        self.settings_rows.append((form.rowCount(), "Text formatting"))
+        form.addRow(self.regional_banner)
         self.fields["engine"].currentTextChanged.connect(self.refresh_model_choices)
         if config["engine"] != "whisper":
             self.refresh_model_choices(config["engine"])
@@ -921,6 +970,12 @@ class Window(QWidget):
         self.fields["filler_words"].setText(words)
         field = self.fields["regional_filler_answered"]
         field.setCurrentIndex(field.findData("on"))
+        self.refresh_regional_offers()
+
+    def refresh_regional_offers(self):
+        self.regional_banner.refresh()
+        if hasattr(self, "setup_page"):
+            self.setup_page.regional_banner.refresh()
 
     def import_dictionary(self):
         from .dictionary import Dictionary
@@ -956,6 +1011,7 @@ class Window(QWidget):
             ("Choose file", self.choose_file),
             ("Transcribe", self.transcribe_file),
             ("Cancel", self.cancel_file),
+            ("Copy result", self.copy_file_result),
             ("Export text", lambda: self.export_file_result("text")),
             ("Export JSON", lambda: self.export_file_result("json")),
         ):
@@ -965,6 +1021,13 @@ class Window(QWidget):
         layout.addLayout(buttons)
         self.file_result = None
         self.file_process = None
+        self.file_progress_label = QLabel("No transcription running")
+        layout.addWidget(self.file_progress_label)
+        self.file_progress = QProgressBar()
+        self.file_progress.setRange(0, 1)
+        self.file_progress.setValue(0)
+        self.file_progress.setFormat("Ready")
+        layout.addWidget(self.file_progress)
         self.file_text = QTextEdit()
         self.file_text.setReadOnly(True)
         self.file_text.setPlaceholderText(
@@ -1075,12 +1138,18 @@ class Window(QWidget):
         self.file_result = None
         self.file_config = Config.load()
         self.file_name = self.file_path.text()
+        self.file_progress_buffer = b""
+        self.file_errors = ""
+        self.update_file_progress({"stage": "decode"})
         self.file_process = QProcess(self)
         self.file_process.setProgram(sys.executable)
         self.file_process.setArguments(
-            python_command("mouthkeys", "transcribe", self.file_path.text(), "--json")[1:]
+            python_command(
+                "mouthkeys", "transcribe", self.file_path.text(), "--json", "--progress"
+            )[1:]
         )
         self.file_text.setPlainText("Transcribing…")
+        self.file_process.readyReadStandardError.connect(self.read_file_progress)
         self.file_process.finished.connect(self.file_finished)
         self.file_process.errorOccurred.connect(self.file_process_error)
         self.file_process.start()
@@ -1090,13 +1159,72 @@ class Window(QWidget):
             self.file_text.setPlainText(self.file_process.errorString())
             self.file_process.deleteLater()
             self.file_process = None
+            self.stop_file_progress("File transcription could not start")
+
+    def update_file_progress(self, event):
+        labels = {
+            "decode": "Decoding audio…",
+            "diarization": "Finding speaker turns…",
+            "transcribe": "Transcribing audio…",
+            "finalize": "Assembling transcript…",
+            "save": "Saving file history…",
+            "export": "Exporting transcript…",
+            "complete": "Transcription complete",
+        }
+        if not isinstance(event, dict) or event.get("stage") not in labels:
+            return
+        text = labels[event["stage"]]
+        if event["stage"] == "complete":
+            self.file_progress.setRange(0, 1)
+            self.file_progress.setValue(1)
+            self.file_progress.setFormat("Complete")
+        elif "total" in event:
+            completed, total = event.get("completed"), event["total"]
+            if not (
+                type(completed) is int
+                and type(total) is int
+                and 0 <= completed <= total <= 1000000
+                and total > 0
+            ):
+                return
+            self.file_progress.setRange(0, total)
+            self.file_progress.setValue(completed)
+            self.file_progress.setFormat("%v / %m chunks")
+            text += f" {completed} / {total} chunks"
+            if event.get("kind") == "uncovered":
+                text += " (uncovered audio)"
+        else:
+            self.file_progress.setRange(0, 0)
+        self.file_progress_label.setText(text)
+
+    def stop_file_progress(self, text):
+        self.file_progress.setRange(0, 1)
+        self.file_progress.setValue(0)
+        self.file_progress.setFormat("Stopped")
+        self.file_progress_label.setText(text)
+
+    def read_file_progress(self):
+        if self.file_process is None:
+            return
+        data = self.file_progress_buffer + bytes(self.file_process.readAllStandardError())
+        lines = data.split(b"\n")
+        self.file_progress_buffer = lines.pop()[-8192:]
+        for line in lines:
+            if line.startswith(b"transcription_progress ") and len(line) <= 8192:
+                try:
+                    self.update_file_progress(json.loads(line.split(b" ", 1)[1]))
+                    continue
+                except (ValueError, TypeError):
+                    pass
+            self.file_errors = (self.file_errors + line.decode(errors="replace") + "\n")[-16384:]
 
     def file_finished(self, code, _):
+        self.read_file_progress()
         process, self.file_process = self.file_process, None
         if process is None:
             return
         output = bytes(process.readAllStandardOutput()).decode(errors="replace")
-        error = bytes(process.readAllStandardError()).decode(errors="replace")
+        error = (self.file_errors + self.file_progress_buffer.decode(errors="replace")).strip()
         process.deleteLater()
         try:
             if code:
@@ -1105,16 +1233,27 @@ class Window(QWidget):
             if self.file_config.save_history == "on" and self.file_config.save_file_history == "on":
                 from .file_history import FileHistory
 
+                self.update_file_progress({"stage": "save"})
                 FileHistory().add(self.file_name, result, self.file_config.file_history_limit)
                 self.refresh_file_history()
             self.show_file_result(result)
+            self.update_file_progress({"stage": "complete"})
         except Exception as exc:
             self.file_result = None
             self.file_text.setPlainText(str(exc))
+            self.stop_file_progress("File transcription cancelled or failed")
 
     def cancel_file(self):
         if self.file_process is not None:
+            self.file_progress_label.setText("Cancelling file transcription…")
             self.file_process.kill()
+
+    def copy_file_result(self):
+        if self.file_result is not None:
+            from .file_transcription import result_text
+
+            QApplication.clipboard().setText(result_text(self.file_result))
+            self.status.setText("Copied file transcription")
 
     def export_file_result(self, kind):
         if self.file_result is None:
@@ -1125,7 +1264,13 @@ class Window(QWidget):
         if path:
             from .file_transcription import export_result
 
-            export_result(self.file_result, path, "json" if kind == "json" else "txt")
+            self.update_file_progress({"stage": "export"})
+            try:
+                export_result(self.file_result, path, "json" if kind == "json" else "txt")
+                self.update_file_progress({"stage": "complete"})
+            except Exception as exc:
+                self.stop_file_progress("File export failed")
+                self.status.setText(str(exc))
 
     def stats_page(self):
         from .stats_view import ActivityChart
@@ -1807,6 +1952,12 @@ class Window(QWidget):
 
                 apply_startup(updated)
             self.apply_theme()
+            self.refresh_regional_offers()
+            if previous.hide_from_taskbar != updated.hide_from_taskbar:
+                visible = self.isVisible()
+                self.setWindowFlag(Qt.WindowType.Tool, updated.hide_from_taskbar == "on")
+                if visible:
+                    self.show()
             self.status.setText(
                 "Saved; recording settings apply next time. Panel visibility applies now; "
                 "audio budget is checked while idle."

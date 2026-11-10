@@ -47,7 +47,7 @@ class Config:
     recording_panel: str = "on"
     engine: str = "whisper"
     remove_filler_words: str = "off"
-    filler_words: str = "um,uh,er"
+    filler_words: str = "um,uh,er,ah,eh,umm,uhh,err,ahh,ehh,hmm,hm,mm,mmm,erm,urm,ugh"
     lowercase_first: str = "off"
     remove_trailing_period: str = "off"
     literal_formatting: str = "off"
@@ -63,6 +63,7 @@ class Config:
     ai_model: str = ""
     ai_key_env: str = "MOUTHKEYS_AI_API_KEY"
     ai_prompt: str = "Clean up dictated text without changing meaning. Return only corrected text."
+    ai_custom_prompt_only: str = "off"
     save_history: str = "on"
     save_audio: str = "off"
     live_preview: str = "on"
@@ -75,6 +76,7 @@ class Config:
     visualizer_sensitivity: int = 100
     overlay_border: str = "on"
     tray: str = "on"
+    hide_from_taskbar: str = "off"
     pause_media: str = "off"
     sound_file: str = ""
     sound_volume: int = 50
@@ -101,6 +103,8 @@ class Config:
     space_between_dictations: str = "off"
     show_microphone_alerts: str = "off"
     show_paste_alerts: str = "off"
+    show_ai_alerts: str = "on"
+    sounds_enabled: str = "on"
     launch_at_startup: str = "off"
     show_window_at_login: str = "off"
     clipboard_restore_delay_ms: int = 500
@@ -141,6 +145,7 @@ class Config:
     ai_streaming: str = "off"
     ai_show_thinking: str = "off"
     command_continue: str = "on"
+    command_confirm: str = "on"
     command_shortcut_key: str = ""
     edit_shortcut_key: str = ""
     edit_profile: str = "default"
@@ -244,8 +249,18 @@ OPTIONAL = {
     "filler_words",
 }
 CHOICES = {
+    "command_confirm": ["on", "destructive", "off"],
     "file_diarization_mode": ["turns", "overlap"],
-    "sound_preset": ["custom", "none", "mouthkeys"],
+    "sound_preset": [
+        "custom",
+        "none",
+        "mouthkeys",
+        "fluid_sfx_0",
+        "fluid_sfx_1",
+        "fluid_sfx_2",
+        "fluid_sfx_3",
+        "fluid_sfx_4",
+    ],
     "shortcut_backend": ["desktop", "x11", "portal"],
     "hotkey_mode": ["toggle", "hold", "automatic"],
     "streaming_latency": ["model", "80", "160", "320", "560", "1120"],
@@ -265,10 +280,14 @@ CHOICES = {
     "ai_provider": ["compatible", "anthropic", "gemini", "ollama"],
 }
 for _name in (
+    "ai_custom_prompt_only",
+    "hide_from_taskbar",
     "regional_filler_answered",
     "ai_streaming",
     "ai_show_thinking",
     "command_continue",
+    "show_ai_alerts",
+    "sounds_enabled",
     "native_streaming",
     "onboarding_complete",
     "automatic_learning",

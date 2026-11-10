@@ -26,7 +26,12 @@ def test_upstream_dictation_template_examples(prompt, transcript, expected):
 
 
 def test_profile_template_is_rendered_once_and_keeps_draft_immutable(monkeypatch):
-    config = Config(ai_enabled="on", ai_model="draft", ai_prompt="Draft ${transcript}")
+    config = Config(
+        ai_enabled="on",
+        ai_model="draft",
+        ai_prompt="Draft ${transcript}",
+        ai_custom_prompt_only="on",
+    )
     values = asdict(replace(config, ai_model="profile-model", ai_prompt="Translate: ${transcript}"))
     profile = {
         "id": str(uuid.uuid4()),
@@ -58,6 +63,25 @@ def test_profile_template_is_rendered_once_and_keeps_draft_immutable(monkeypatch
     assert effective.ai_prompt == ""
     assert options == {"opener": opener, "on_delta": delta, "cancel_event": cancel}
     assert selected.ai_prompt == "Draft ${transcript}"
+
+
+def test_builtin_dictation_prompt_is_configurable_and_never_duplicated(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        postprocess,
+        "request_completion",
+        lambda text, config, **kwargs: calls.append(text) or "Done",
+    )
+    config = Config(ai_enabled="on", ai_prompt="Translate ${transcript}")
+    postprocess.process("Hello", config)
+    assert calls[-1] == postprocess.BASE_DICTATION_PROMPT + "\n\nTranslate Hello"
+    postprocess.process("Hello", replace(config, ai_custom_prompt_only="on"))
+    assert calls[-1] == "Translate Hello"
+    composed = replace(
+        config, ai_prompt=postprocess.BASE_DICTATION_PROMPT + "\n\nTranslate ${transcript}"
+    )
+    postprocess.process("Hello", composed)
+    assert calls[-1].count(postprocess.BASE_DICTATION_PROMPT) == 1
 
 
 def test_blank_dictation_and_disabled_cleanup_never_resolve_profile_or_request(monkeypatch):

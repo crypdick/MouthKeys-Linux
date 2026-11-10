@@ -1,0 +1,46 @@
+{
+  "notice": "Existing local pretrained weights only; public greeting fixture and committed preview continuation, word timing and file workflow. No network, downloads, microphone or desktop actions. Not general accuracy, language coverage, latency or memory benchmarks.",
+  "runs": [
+    {
+      "timestamp_utc": "2026-11-10T02:12:18.173781+00:00",
+      "result": "passed",
+      "engine": "whisper",
+      "model": "models--Systran--faster-whisper-large-v3",
+      "revision": "edaa852ec7e145841d8ffdb056a99866b5f0a478",
+      "fixture_sha256": "d5c3bc5bfa5123ec0cfc68bed9e4bc82b87ee4c3b44a03e2f9fab0238e5a1d30",
+      "expected_greeting": true,
+      "actual_word_count": 3,
+      "committed_stream_segments": 2,
+      "elapsed_seconds": 30.329,
+      "versions": {
+        "faster-whisper": "1.2.1",
+        "ctranslate2": "4.8.4"
+      },
+      "network": "AF_INET/AF_INET6 denied by seccomp; existing weights only",
+      "scope": "Pretrained fixture recognition/timing/optional committed-preview regression; not general accuracy, latency or language coverage"
+    },
+    {
+      "timestamp_utc": "2026-11-10T02:13:57.940287+00:00",
+      "result": "passed",
+      "engine": "whisper",
+      "model": "models--mobiuslabsgmbh--faster-whisper-large-v3-turbo",
+      "revision": "0a363e9161cbc7ed1431c9597a8ceaf0c4f78fcf",
+      "fixture_sha256": "d5c3bc5bfa5123ec0cfc68bed9e4bc82b87ee4c3b44a03e2f9fab0238e5a1d30",
+      "expected_greeting": true,
+      "actual_word_count": 3,
+      "committed_stream_segments": 2,
+      "file_workflow_stages": [
+        "decode",
+        "transcribe",
+        "finalize"
+      ],
+      "elapsed_seconds": 31.313,
+      "versions": {
+        "faster-whisper": "1.2.1",
+        "ctranslate2": "4.8.4"
+      },
+      "network": "AF_INET/AF_INET6 denied by seccomp; existing weights only",
+      "scope": "Pretrained fixture recognition/timing/optional committed-preview regression; not general accuracy, latency or language coverage"
+    }
+  ]
+}

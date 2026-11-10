@@ -147,6 +147,18 @@ def test_failed_shortcut_still_starts_feedback_panel(monkeypatch, capsys):
     assert "Busy (loading)" in capsys.readouterr().err
 
 
+def test_reviewed_edit_cli_preserves_explicit_target_and_focus_choice(monkeypatch, capsys):
+    from mouthkeys import service
+
+    calls = []
+    monkeypatch.setattr(service, "ensure_daemon", lambda: None)
+    monkeypatch.setattr(
+        service, "request", lambda action, **data: calls.append((action, data)) or {}
+    )
+    assert main(["accept-edit", "--id", "captured-job", "--return-to-target"]) == 0
+    assert calls == [("accept_edit", {"id": "captured-job", "return_to_target": True})]
+
+
 def test_socket_errors_persist_feedback_for_panel():
     import threading
 

@@ -76,6 +76,7 @@ class Overlay(QWidget):
         self.notice = None
         self.notice_serial = None
         self.failures = 0
+        self.assistant_window = None
         self.buttons = {}
         for action, tip, x, y in (
             ("history", "Open history", 6, 29),
@@ -97,6 +98,15 @@ class Overlay(QWidget):
         self.mic_button.setToolTip("Choose microphone for next recording")
         self.mic_button.setAccessibleName("Choose microphone")
         self.mic_button.clicked.connect(self.choose_microphone)
+        self.assistant_button = QPushButton("Review AI / chats", self)
+        self.assistant_button.setObjectName("assistant")
+        self.assistant_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.assistant_button.setToolTip(
+            "Open assistant answer, conversations and reviewed actions"
+        )
+        self.assistant_button.setAccessibleName("Open assistant review and conversations")
+        self.assistant_button.clicked.connect(self.open_assistant)
+        self.assistant_button.hide()
         self.apply_settings(self.settings)
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.poll)
@@ -123,11 +133,14 @@ class Overlay(QWidget):
             f"QPushButton:hover {{ border: 1px solid {self.ink}; }}"
             f"QPushButton:pressed {{ background: {self.ink}; color: {self.surface}; }}"
             f"QPushButton:disabled {{ color: {self.dim}; }}"
-            f"QPushButton#microphone {{ font-family: monospace; font-size: 10px; "
+            f"QPushButton#microphone, QPushButton#assistant {{ "
+            f"font-family: monospace; font-size: 10px; "
             f"background: {self.surface}; color: {self.dim}; padding: 0; }}"
         )
         for action, button in self.buttons.items():
             button.setIcon(button_icon(action, self.ink))
+        if self.assistant_window is not None:
+            self.assistant_window.apply_theme()
         self.update()
 
     def apply_settings(self, config):
@@ -154,6 +167,12 @@ class Overlay(QWidget):
             round(185 * self.panel_scale),
             round((74 if compact else 110) * self.panel_scale),
             round(108 * self.panel_scale),
+            round(20 * self.panel_scale),
+        )
+        self.assistant_button.setGeometry(
+            round(54 * self.panel_scale),
+            round((74 if compact else 110) * self.panel_scale),
+            round(125 * self.panel_scale),
             round(20 * self.panel_scale),
         )
         if previous.theme != config.theme:
@@ -252,6 +271,7 @@ class Overlay(QWidget):
                 lambda checked=False, item_id=row["id"]: self.send("reprocess", item_id=item_id)
             )
         menu.addSeparator()
+        menu.addAction("Open assistant / recent chats", self.open_assistant)
         menu.addAction(
             "Open full history / settings",
             lambda: subprocess.Popen(python_command("mouthkeys", "gui"), start_new_session=True),
@@ -259,6 +279,17 @@ class Overlay(QWidget):
         self.history_menu = menu
         origin = self.mapToGlobal(QPoint(round(42 * self.panel_scale), 0))
         menu.popup(origin - QPoint(0, menu.sizeHint().height()))
+
+    def open_assistant(self):
+        # Only this explicit click may open an interactive/focusable surface.
+        if self.assistant_window is None:
+            from .overlay_assistant import OverlayAssistant
+
+            self.assistant_window = OverlayAssistant(self)
+        self.assistant_window.assistant_page.update_status(self.data)
+        self.assistant_window.show()
+        self.assistant_window.raise_()
+        self.assistant_window.activateWindow()
 
     def poll(self):
         if self.pending:
@@ -295,7 +326,13 @@ class Overlay(QWidget):
     def set_status(self, data):
         config = Config.load()
         self.apply_settings(config)
+        if self.assistant_window is not None:
+            self.assistant_window.assistant_page.update_status(data)
+        proposal = data.get("assistant_proposal")
+        assistant = bool(proposal) or data.get("mode") in ("command", "edit")
+        self.assistant_button.setVisible(assistant)
         if config.recording_panel == "off":
+            self.data = data
             self.hide()
             self.active = False
             self.notice_serial = None
@@ -314,6 +351,12 @@ class Overlay(QWidget):
             self.dismiss_at = time.monotonic() + (0.6 if success else 10)
             if message == "Cancelled":
                 self.dismiss_at = 0
+        if proposal and (new_recording or proposal != self.data.get("assistant_proposal")):
+            # Retain the answer until explicit dismissal; never open or focus its review window.
+            self.dismiss_at = None
+            if not self.positioned:
+                self.place()
+            self.show()
         notice = data.get("notice")
         if not notice:
             self.notice = None
@@ -395,6 +438,34 @@ class Overlay(QWidget):
         ):
             self.animation.stop()
 
+    def display_text(self):
+        phase = self.data.get("phase", "idle")
+        stream = self.data.get("assistant_stream")
+        text = (
+            stream.get("text", "")
+            if stream and stream.get("mode") == "edit"
+            else self.data.get("preview", "")
+        )
+        text = text[-self.settings.preview_chars :] if self.settings.live_preview == "on" else ""
+        if phase == "idle":
+            proposal = self.data.get("assistant_proposal")
+            text = (
+                proposal["text"][-self.settings.preview_chars :]
+                if proposal
+                else self.data.get("message", "Ready")
+            )
+        elif phase != "recording":
+            text = (
+                text
+                if self.data.get("mode") == "edit" and text
+                else self.data.get("message", "Working…")
+            )
+        elif not text:
+            text = "Listening…"
+        if self.notice and time.monotonic() < self.notice[1]:
+            text = self.notice[0]
+        return text
+
     def paintEvent(self, event):
         p = QPainter(self)
         p.scale(self.panel_scale, self.panel_scale)
@@ -407,16 +478,7 @@ class Overlay(QWidget):
         if self.settings.overlay_border == "on":
             p.drawRect(42, 6, 339, panel_height - 1)
         phase = self.data.get("phase", "idle")
-        text = self.data.get("preview", "")
-        text = text[-self.settings.preview_chars :] if self.settings.live_preview == "on" else ""
-        if phase == "idle":
-            text = self.data.get("message", "Ready")
-        elif phase != "recording":
-            text = self.data.get("message", "Working…")
-        elif not text:
-            text = "Listening…"
-        if self.notice and time.monotonic() < self.notice[1]:
-            text = self.notice[0]
+        text = self.display_text()
         # Lay out prose into three 16 px lines, keeping the newest words in view.
         font = QFont("sans-serif")
         font.setPixelSize(13)
@@ -466,11 +528,12 @@ class Overlay(QWidget):
         p.setFont(mono)
         p.setPen(QColor(self.dim))
         words, wpm = live_counters(self.data.get("preview", ""), self.seconds)
-        p.drawText(
-            54,
-            88 if compact else 124,
-            f"{words} W / {wpm} WPM" if active_phase(phase) else "MOUTHKEYS",
-        )
+        if not self.assistant_button.isVisible():
+            p.drawText(
+                54,
+                88 if compact else 124,
+                f"{words} W / {wpm} WPM" if active_phase(phase) else "MOUTHKEYS",
+            )
         p.drawText(302, 88 if compact else 124, "WORDS")
         p.end()
 

@@ -100,6 +100,15 @@ def main(argv=None):
         commands.add_parser(action).add_argument(
             "--id", required=action == "delete", help="History entry UUID (required for delete)"
         )
+    accept = commands.add_parser(
+        "accept-edit", help="Replace the unchanged captured Edit selection"
+    )
+    accept.add_argument("--id", required=True, help="Edit recording UUID shown in status")
+    accept.add_argument(
+        "--return-to-target",
+        action="store_true",
+        help="Explicitly return focus to the captured field before replacement",
+    )
     download_parser = commands.add_parser("download", help="Explicitly download a local model")
     download_parser.add_argument("model", nargs="?")
     transcribe_parser = commands.add_parser("transcribe", help="Transcribe a file to stdout only")
@@ -107,6 +116,9 @@ def main(argv=None):
     transcribe_parser.add_argument("--json", action="store_true")
     transcribe_parser.add_argument("--output", type=Path)
     transcribe_parser.add_argument("--save-history", action="store_true")
+    transcribe_parser.add_argument(
+        "--progress", action="store_true", help="Write structured stage progress to stderr"
+    )
     files = commands.add_parser("file-history")
     files.add_argument("--query", default="")
     files = commands.add_parser("delete-file-history")
@@ -176,7 +188,15 @@ def main(argv=None):
             from .file_transcription import export_result, result_text, transcribe_file
 
             config = Config.load()
-            result = transcribe_file(args.file, config)
+
+            def file_progress(event):
+                if args.progress:
+                    print(
+                        "transcription_progress " + json.dumps(event), file=sys.stderr, flush=True
+                    )
+
+            options = {"on_progress": file_progress} if args.progress else {}
+            result = transcribe_file(args.file, config, **options)
             if (
                 args.save_history
                 and config.save_history == "on"
@@ -184,11 +204,14 @@ def main(argv=None):
             ):
                 from .file_history import FileHistory
 
+                file_progress({"stage": "save"})
                 FileHistory().add(args.file.name, result, config.file_history_limit)
             if args.output:
+                file_progress({"stage": "export"})
                 export_result(result, args.output, "json" if args.json else "txt")
             else:
                 print(json.dumps(result, ensure_ascii=False) if args.json else result_text(result))
+            file_progress({"stage": "complete"})
         elif args.command in ("file-history", "delete-file-history"):
             from .file_history import FileHistory
 
@@ -289,6 +312,8 @@ def main(argv=None):
                 data = {"id": args.id} if hasattr(args, "id") and args.id else {}
                 if hasattr(args, "path"):
                     data["path"] = str(args.path.resolve())
+                if args.command == "accept-edit":
+                    data["return_to_target"] = args.return_to_target
                 if hasattr(args, "mode"):
                     data.update(mode=args.mode, selected_text=args.selected_text)
                     if args.label:

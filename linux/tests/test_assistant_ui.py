@@ -1,6 +1,7 @@
 import threading
 import time
 
+import pytest
 from PySide6.QtWidgets import QApplication, QWidget
 
 from mouthkeys.assistant_ui import AssistantPage
@@ -23,12 +24,125 @@ def process_until(app, predicate):
     assert predicate(), "Qt operation exceeded bounded wait"
 
 
+def test_voice_edit_review_button_requires_capture_and_explicit_return(monkeypatch):
+    from PySide6.QtWidgets import QMessageBox
+
+    app, window, assistant = page()
+    sent = []
+    window.send = lambda action, data, callback: (
+        sent.append((action, data)) or callback({"result": {"message": "Edit inserted"}})
+    )
+    assistant.show_proposal({"mode": "edit", "text": "Typed rewrite"})
+    assert not assistant.replace_button.isEnabled()
+    assert not assistant.return_replace_button.isEnabled()
+    assistant.show_proposal(
+        {"mode": "edit", "text": "Voice rewrite", "edit_id": "job", "can_accept_edit": True}
+    )
+    assert assistant.replace_button.isEnabled()
+    monkeypatch.setattr(QMessageBox, "question", lambda *a: QMessageBox.StandardButton.Yes)
+    assistant.accept_edit(True)
+    assert sent == [("accept_edit", {"id": "job", "return_to_target": True})]
+    assert assistant.feedback.text() == "Edit inserted"
+    assert not assistant.replace_button.isEnabled()
+    assistant.accept_edit(False)
+    assert len(sent) == 1
+    window.close()
+
+
+def test_voice_stream_clears_old_actionable_proposal_and_cancels_service():
+    app, window, assistant = page()
+    sent = []
+    window.send = lambda action: sent.append(action)
+    assistant.show_proposal({"mode": "command", "text": "Old result", "command": "old"})
+    assert assistant.run_button.isEnabled()
+    assistant.update_status(
+        {
+            "phase": "transcribing",
+            "assistant_stream": {"id": "new", "mode": "edit", "text": "New partial"},
+        }
+    )
+    assert assistant.proposal is None
+    assert not assistant.run_button.isEnabled()
+    assert assistant.result.toPlainText() == "New partial"
+    assistant.cancel_request()
+    assert sent == ["cancel"]
+    window.close()
+
+
+def test_typed_automatic_chain_freezes_resolved_profile_and_voice_clears_it(monkeypatch):
+    from test_mode_routing import profiles
+
+    from mouthkeys.profiles import load_profiles, save_profiles
+
+    profile_id = profiles()[0]
+    Config(command_profile=profile_id, command_confirm="off", command_continue="on").save()
+    app, window, assistant = page()
+    seen = []
+
+    def propose(instruction, config, mode, selection, **kwargs):
+        seen.append((config.ai_model, kwargs["resolved_config"]))
+        rows = load_profiles()
+        rows[0]["ai_model"] = "changed-model"
+        save_profiles(rows)
+        return {"mode": "command", "text": "Result", "command": "ls" if len(seen) == 1 else ""}
+
+    monkeypatch.setattr("mouthkeys.assistant_ui.propose", propose)
+    monkeypatch.setattr(
+        "mouthkeys.assistant_ui.execute_command",
+        lambda *a, **kw: {
+            "returncode": 0,
+            "output": "Fake",
+            "timed_out": False,
+            "truncated": False,
+        },
+    )
+    assistant.instruction.setText("List files")
+    assistant.generate()
+    process_until(app, lambda: len(seen) == 2 and not assistant.jobs)
+    assert seen == [("model-0", True), ("model-0", True)]
+    assert assistant.chain_config is not None
+    assistant.show_proposal({"mode": "command", "text": "Voice proposal", "command": "review"})
+    assert assistant.chain_config is None
+    assert assistant.proposal_config is None
+    window.close()
+
+
+@pytest.mark.parametrize("policy", ["off", "destructive"])
+def test_typed_automatic_command_respects_policy_without_confirmation(monkeypatch, policy):
+    Config(ai_enabled="on", ai_model="test", command_confirm=policy, command_continue="off").save()
+    app, window, assistant = page()
+    executed = []
+    monkeypatch.setattr(
+        "mouthkeys.assistant_ui.propose",
+        lambda *a, **kw: {"mode": "command", "text": "List files", "command": "ls"},
+    )
+
+    def execute(command, **kwargs):
+        executed.append(command)
+        return {"returncode": 0, "output": "Fake output", "timed_out": False, "truncated": False}
+
+    monkeypatch.setattr("mouthkeys.assistant_ui.execute_command", execute)
+    monkeypatch.setattr(
+        assistant,
+        "confirm_command",
+        lambda _: (_ for _ in ()).throw(AssertionError("Unexpected confirmation")),
+    )
+    assistant.instruction.setText("List files")
+    assistant.generate()
+    process_until(app, lambda: executed and not assistant.jobs)
+    assert executed == ["ls"]
+    assert assistant.pending_result["output"] == "Fake output"
+    assert not assistant.proposal
+    window.close()
+
+
 def test_typed_edit_cancel_signals_worker_and_discards_late_deltas_and_result(monkeypatch):
     app, window, assistant = page()
     entered = threading.Event()
     events = []
 
-    def propose(instruction, config, mode, selection, *, cancel_event, on_delta):
+    def propose(instruction, config, mode, selection, *, cancel_event, on_delta, resolved_config):
+        assert resolved_config is True
         events.append(cancel_event)
         on_delta("Partial")
         entered.set()
@@ -59,7 +173,8 @@ def test_typed_edit_cancel_signals_worker_and_discards_late_deltas_and_result(mo
 def test_typed_edit_streams_successfully_without_cancel_or_direct_desktop_delivery(monkeypatch):
     app, window, assistant = page()
 
-    def propose(instruction, config, mode, selection, *, cancel_event, on_delta):
+    def propose(instruction, config, mode, selection, *, cancel_event, on_delta, resolved_config):
+        assert resolved_config is True
         assert not cancel_event.is_set()
         on_delta("First ")
         on_delta("second")

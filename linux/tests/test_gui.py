@@ -6,6 +6,27 @@ import pytest
 pytest.importorskip("PySide6")
 
 
+def test_taskbar_hint_is_configurable_and_separate_from_tray(monkeypatch):
+    from PySide6.QtCore import Qt
+
+    from mouthkeys.config import Config
+    from mouthkeys.gui import Window
+
+    Config(hide_from_taskbar="on", tray="off").save()
+    monkeypatch.setattr(Window, "poll", lambda self: None)
+    window = Window()
+    window.timer.stop()
+    assert window.windowType() == Qt.WindowType.Tool
+    assert not window.isVisible()
+    field = window.fields["hide_from_taskbar"]
+    field.setCurrentIndex(field.findData("off"))
+    assert window.save()
+    assert window.windowType() == Qt.WindowType.Window
+    assert Config.load().tray == "off"
+    assert not window.isVisible()
+    window.close()
+
+
 def test_model_browser_resident_state_uses_loaded_identity_not_selected_settings(monkeypatch):
     from PySide6.QtCore import Qt
     from PySide6.QtWidgets import QComboBox, QLineEdit, QWidget

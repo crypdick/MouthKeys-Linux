@@ -1,5 +1,6 @@
 """Local replacement and spoken-formatting dictionary; no engine or desktop access."""
 
+import copy
 import json
 import os
 import re
@@ -8,25 +9,106 @@ from pathlib import Path
 
 from .config import config_path, private_dir
 
-DEFAULT_PUNCTUATION = {
-    "comma": ",",
-    "period": ".",
-    "full stop": ".",
-    "question mark": "?",
-    "exclamation mark": "!",
-    "colon": ":",
-    "semicolon": ";",
-    "open parenthesis": "(",
-    "close parenthesis": ")",
-    "dash": "-",
-    "underscore": "_",
-    "slash": "/",
-    "backslash": "\\",
-    "at sign": "@",
-    "hash": "#",
-    "asterisk": "*",
-    "quote": '"',
-}
+# Keep aliases grouped: dot/period, hyphen/dash, and quote variants have different spacing.
+DEFAULT_PUNCTUATION_RULES = [
+    {"aliases": ["comma"], "symbol": ","},
+    {"aliases": ["period", "full stop"], "symbol": "."},
+    {"aliases": ["dot"], "symbol": "."},
+    {"aliases": ["question mark", "questionmark"], "symbol": "?"},
+    {"aliases": ["exclamation mark", "exclamation point", "bang"], "symbol": "!"},
+    {"aliases": ["colon"], "symbol": ":"},
+    {"aliases": ["semicolon", "semi colon"], "symbol": ";"},
+    {"aliases": ["ellipsis", "dot dot dot", "three dots"], "symbol": "..."},
+    {"aliases": ["slash", "forward slash", "forwardslash"], "symbol": "/"},
+    {"aliases": ["backslash", "back slash"], "symbol": "\\"},
+    {"aliases": ["hyphen"], "symbol": "-"},
+    {"aliases": ["dash", "minus sign"], "symbol": "-"},
+    {"aliases": ["em dash", "long dash"], "symbol": "—"},
+    {"aliases": ["en dash"], "symbol": "–"},
+    {
+        "aliases": [
+            "open parenthesis",
+            "open parentheses",
+            "left parenthesis",
+            "left parentheses",
+            "open paren",
+            "left paren",
+        ],
+        "symbol": "(",
+    },
+    {
+        "aliases": [
+            "close parenthesis",
+            "close parentheses",
+            "right parenthesis",
+            "right parentheses",
+            "close paren",
+            "right paren",
+        ],
+        "symbol": ")",
+    },
+    {
+        "aliases": ["open bracket", "left bracket", "open square bracket", "left square bracket"],
+        "symbol": "[",
+    },
+    {
+        "aliases": [
+            "close bracket",
+            "right bracket",
+            "close square bracket",
+            "right square bracket",
+        ],
+        "symbol": "]",
+    },
+    {
+        "aliases": [
+            "open brace",
+            "left brace",
+            "open curly brace",
+            "left curly brace",
+            "open curly bracket",
+            "left curly bracket",
+        ],
+        "symbol": "{",
+    },
+    {
+        "aliases": [
+            "close brace",
+            "right brace",
+            "close curly brace",
+            "right curly brace",
+            "close curly bracket",
+            "right curly bracket",
+        ],
+        "symbol": "}",
+    },
+    {"aliases": ["open angle bracket", "left angle bracket", "less than sign"], "symbol": "<"},
+    {"aliases": ["close angle bracket", "right angle bracket", "greater than sign"], "symbol": ">"},
+    {"aliases": ["quote", "quotes", "quotation mark", "double quote"], "symbol": '"'},
+    {
+        "aliases": ["open quote", "opening quote", "open double quote", "opening double quote"],
+        "symbol": '"',
+    },
+    {
+        "aliases": ["close quote", "closing quote", "close double quote", "closing double quote"],
+        "symbol": '"',
+    },
+    {"aliases": ["single quote"], "symbol": "'"},
+    {"aliases": ["apostrophe"], "symbol": "'"},
+    {"aliases": ["at the rate", "at sign", "commercial at"], "symbol": "@"},
+    {"aliases": ["ampersand", "and sign"], "symbol": "&"},
+    {"aliases": ["plus sign", "plus"], "symbol": "+"},
+    {"aliases": ["equals sign", "equal sign", "equal", "equals"], "symbol": "="},
+    {"aliases": ["percent sign", "percentage sign", "percent"], "symbol": "%"},
+    {"aliases": ["dollar sign", "dollar"], "symbol": "$"},
+    {"aliases": ["hash", "hash sign", "hashtag", "pound sign", "number sign"], "symbol": "#"},
+    {"aliases": ["asterisk", "star symbol"], "symbol": "*"},
+    {"aliases": ["underscore"], "symbol": "_"},
+    {"aliases": ["pipe", "vertical bar"], "symbol": "|"},
+    {"aliases": ["tilde"], "symbol": "~"},
+    {"aliases": ["caret"], "symbol": "^"},
+    {"aliases": ["backtick", "back tick"], "symbol": "`"},
+]
 
 
 def phrase_pattern(phrase):
@@ -42,13 +124,10 @@ class Dictionary:
     def defaults():
         return {
             "replacements": [],
-            "punctuation": [
-                {"aliases": [alias], "symbol": symbol}
-                for alias, symbol in DEFAULT_PUNCTUATION.items()
-            ],
+            "punctuation": copy.deepcopy(DEFAULT_PUNCTUATION_RULES),
             "actions": [
-                {"aliases": ["new line", "newline"], "symbol": "\n"},
-                {"aliases": ["new paragraph"], "symbol": "\n\n"},
+                {"aliases": ["new line", "next line", "newline"], "symbol": "\n"},
+                {"aliases": ["new paragraph", "next paragraph"], "symbol": "\n\n"},
                 {"aliases": ["tab"], "symbol": "\t"},
                 {"aliases": ["space"], "symbol": " "},
             ],

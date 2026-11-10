@@ -145,6 +145,13 @@ class Tray(QSystemTrayIcon):
             self.showMessage("Microphone changed", microphone)
         notice = result.get("notice") or {}
         if (
+            getattr(config, "show_ai_alerts", "off") == "on"
+            and self.observed_status
+            and notice.get("kind") == "ai"
+            and notice.get("serial") != self.last_notice
+        ):
+            self.showMessage("AI processing failed", notice.get("message", ""))
+        if (
             getattr(config, "show_microphone_alerts", "off") == "on"
             and notice.get("serial") != self.last_notice
             and any(word in notice.get("message", "").lower() for word in ("microphone", "source"))

@@ -123,24 +123,33 @@ class Delivery:
         except (OSError, RuntimeError, subprocess.SubprocessError):
             return False
 
-    def replace_selection(self, text, config, target):
+    def replace_selection(self, text, config, target, *, cancel_event=None):
         """Explicit edit: replace only the unchanged selected range, preserving other rich text."""
         self.last_verified = None
+        if cancel_event is not None and cancel_event.is_set():
+            return "cancelled"
         if (
             not isinstance(target, dict)
             or not target.get("field")
             or target["field"].get("terminal")
             or not self.prepare_target(config, target)
         ):
+            if cancel_event is not None and cancel_event.is_set():
+                return "cancelled"
             self.copy(text)
             return "copied"
         return self._deliver_field(
-            text, replace(config, delivery=session(), insertion_mode="direct"), target
+            text,
+            replace(config, delivery=session(), insertion_mode="direct"),
+            target,
+            cancel_event=cancel_event,
         )
 
-    def _native_insert(self, text, config, target):
+    def _native_insert(self, text, config, target, *, cancel_event=None):
         from .accessibility import insert_text
 
+        if cancel_event is not None and cancel_event.is_set():
+            return "cancelled"
         current = insert_text(target["field"], text)
         if current:
             self.last_verified = current
@@ -151,21 +160,27 @@ class Delivery:
         self.copy(text)
         return "insert_requested"
 
-    def _deliver_field(self, text, config, target):
+    def _deliver_field(self, text, config, target, *, cancel_event=None):
         from .accessibility import read_snapshot
         from .atspi_helper import expected_text
 
         self.last_verified = None
+        if cancel_event is not None and cancel_event.is_set():
+            return "cancelled"
         if config.delivery != session() or not self.prepare_target(config, target):
+            if cancel_event is not None and cancel_event.is_set():
+                return "cancelled"
             self.copy(text)
             return "copied"
+        if cancel_event is not None and cancel_event.is_set():
+            return "cancelled"
         field = target["field"]
         if (
             config.insertion_mode == "direct"
             and not self.terminal(target)
             and field["selection_start"] == field["selection_end"]
         ):
-            return self._native_insert(text, config, target)
+            return self._native_insert(text, config, target, cancel_event=cancel_event)
         clipboard = None
         if config.restore_clipboard == "on":
             from .clipboard import ClipboardPaste
@@ -179,11 +194,17 @@ class Delivery:
             except (OSError, RuntimeError, subprocess.SubprocessError):
                 pass
         if clipboard is None:
+            if cancel_event is not None and cancel_event.is_set():
+                return "cancelled"
             self.copy(text)
         if not self._field_current(target, unchanged=True):
             if clipboard:
                 clipboard.finish(False)
             return "copied"
+        if cancel_event is not None and cancel_event.is_set():
+            if clipboard:
+                clipboard.finish(False)
+            return "cancelled"
         try:
             self.paste_key(config)
         except Exception:

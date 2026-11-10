@@ -53,11 +53,45 @@ user-facing contracts with Linux-native alternatives. Further hand-adapted behav
   and private portable data tools.
 
 Native speech integrations use faster-whisper, onnx-asr, builtin Transformers and NeMo classes;
-speaker labeling uses sherpa-onnx. Apple/CoreML APIs remain upstream. Bundled start/stop sound assets
-are adapted from the same upstream tree; GPL attribution and license remain in effect.
+speaker labeling uses sherpa-onnx. Apple/CoreML APIs remain upstream. All five recording-sound
+choices are converted from the same upstream assets, with separate recording-enable/preview controls;
+GPL attribution and license remain in effect.
+
+The fresh settings/reachable-flow audit additionally adapts these baseline contracts explicitly:
+
+- `SettingsStore` default punctuation dictionary: all 40 symbol rows and aliases, generated-symbol
+  spacing/quote state, generated-comma/action-adjacent ASR punctuation cleanup, configurable literal
+  prefix, and existing-user-dictionary preservation.
+- `ASRService+DictationLiteralFormatting`: guarded slash command/path handling, explicit and real
+  chat-app contextual mentions, and app-specific standalone autocomplete spacing. Continuous
+  dictation appends trailing spacing and reads sentence boundaries through closing wrappers.
+- `RegionalFillerOffer` and `VoiceEngineLanguageCatalog`: ordered passive region/timezone detection,
+  one-time inline keep/remove answers in Settings/tryout, Minnesota wording informed by actual
+  tryout text, and explicit language→compatible Linux route selection without automatic downloads.
+- `NotificationService`: configurable AI-failure notifications independent of recoverable raw text.
+- Custom-only dictation prompts: the exact upstream base asset is combined with the effective
+  global/profile body by default, or omitted explicitly with `ai_custom_prompt_only`; composition
+  is shared by normal cleanup and typed/voice playgrounds, without changing Command/Edit prompts.
+- Hide-from-Dock/App-Switcher: Linux exposes `hide_from_taskbar` as the main window's Qt Tool hint,
+  independent of tray visibility; actual taskbar/switcher treatment belongs to the compositor.
+- `CommandModeService` confirmation behavior: upstream tests a destructive-command text heuristic
+  when its confirmation switch is enabled, not a blanket always-confirm restriction. Linux keeps
+  every-command review as default and exposes heuristic-only/automatic policies explicitly, applies
+  policy to typed and voice proposals, bounds continuation to 20 steps, and retains execution receipts
+  independently of next-proposal requests. The heuristic is not a shell parser or sandbox.
+- Command/Edit notch interaction is adapted to an explicitly opened, focusable assistant surface
+  beside the passive Linux panel, with conversations/results/review controls. Reviewed Edit accepts
+  only the unchanged captured selection, supports explicit focus return, and consumes each proposal
+  once before delivery; unsupported/stale destinations remain copyable.
+- File transcription reports actual stage/chunk progress (or indeterminate state), offers explicit
+  result copy, and preserves clean CLI transcript stdout when structured stderr progress is enabled.
 
 [linux/PARITY.md](linux/PARITY.md) is the canonical acceptance ledger; the
 [Linux guide](linux/README.md) documents operation and limits. The objective is to bridge all
 bridgeable gaps, not to label optional features forbidden or to turn mock/tiny-model tests into
 claims of real desktop behavior or pretrained accuracy. Actual tiny native-library smoke summaries
 are retained in [linux/tests/native_smoke_evidence.json](linux/tests/native_smoke_evidence.json).
+Separate [pretrained Whisper fixture evidence](linux/tests/whisper_smoke_evidence.json) uses already
+available large-v3/turbo snapshots with Internet sockets denied: greeting recognition, real word
+offsets and committed-preview continuation; turbo also exercises private file-history and TXT/JSON
+export. This is a scoped public-fixture regression, not a general accuracy/resource/language claim.

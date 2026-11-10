@@ -57,6 +57,7 @@ class DictationJob:
     start_target: object = None
     assistant_session_id: str | None = None
     assistant_memory_session: dict | None = None
+    edit_consumed: bool = False
 
 
 class Controller:
@@ -98,19 +99,21 @@ class Controller:
         self.job = None
         self.jobs = []
         self.assistant_proposal = None
+        self.assistant_stream = None
         self.assistant_memory = {}
         self.learning_stop = threading.Event()
         self.learning_worker = None
         self.learning_generation = 0
         self.learning_proposals = {}
 
-    def report_error(self, message):
+    def report_error(self, message, kind="error"):
         with self.lock:
             self.notice_serial += 1
             self.notice = {
                 "serial": f"{self.notice_token}:{self.notice_serial}",
                 "message": message,
                 "at": time.time(),
+                "kind": kind,
             }
 
     def status(self):
@@ -121,6 +124,8 @@ class Controller:
                 "can_record": self.phase
                 in ("idle", "recording", "transcribing", "queued", "delivering"),
                 "assistant_proposal": self.assistant_proposal,
+                "assistant_stream": self.assistant_stream,
+                "mode": self.job.mode if self.job else "dictation",
                 "loaded_model": copy.deepcopy(getattr(self.transcriber, "loaded_model", None)),
                 "learning_pending": [proposal for _, proposal in self.learning_proposals.values()],
                 "notice": self.notice,
@@ -144,6 +149,8 @@ class Controller:
         return result
 
     def _command(self, action, _focus_gate, **data):
+        if action == "accept_edit":
+            return self._accept_edit(data)
         if action in ("copy", "paste"):
             return self._manual_delivery(action, data)
         if action in ("learning_pending", "learning_accept", "learning_dismiss"):
@@ -263,6 +270,9 @@ class Controller:
                 self.send_disarmed_text = None
                 self.last_voice_at = time.monotonic()
                 self._cancel_learning()
+                if self.job and self.job.done.is_set() and self.job.edit_consumed:
+                    # A new recording supersedes any reviewed edit waiting on desktop work.
+                    self.job.cancel_event.set()
                 for previous in self._pending_jobs():
                     previous.suppress_send = True
                 self.item_id = str(uuid.uuid4())
@@ -312,6 +322,7 @@ class Controller:
                         self.job.done.set()
                         raise
                 self.assistant_proposal = None
+                self.assistant_stream = None
                 self.cancelled = False
                 if self.config.save_history == "on":
                     self.history.begin(self.item_id)
@@ -478,6 +489,63 @@ class Controller:
             and 0 <= start < end <= len(text)
             and text[start:end] == job.selected_text
         )
+
+    def _accept_edit(self, data):
+        if type(data.get("return_to_target", False)) is not bool:
+            raise ValueError("Return to target must be an explicit boolean")
+        with self.lock:
+            job = self.job
+            proposal = self.assistant_proposal
+            if (
+                self.interrupted
+                or self.phase != "idle"
+                or self._pending_jobs()
+                or not job
+                or job.cancelled
+                or job.mode != "edit"
+                or data.get("id") != job.item_id
+                or not proposal
+                or proposal.get("edit_id") != job.item_id
+                or job.edit_consumed
+                or not self._edit_target_matches(job)
+            ):
+                raise ValueError("No current captured Edit selection available for replacement")
+            # Consume before desktop work: even an unverified write must never be replayed.
+            job.edit_consumed = True
+            proposal["can_accept_edit"] = False
+            config = replace(
+                job.config, return_to_start="on" if data.get("return_to_target") else "off"
+            )
+            text = proposal["text"]
+            self.phase, self.message = "queued", "Waiting to replace reviewed selection"
+        try:
+            with self.model_lock:
+                with self.lock:
+                    if self.interrupted or job.cancelled or self.job is not job:
+                        if self.job is job and not self.interrupted:
+                            self._job_status(job, "idle", "Edit cancelled")
+                        return self.status()
+                # Preparing/returning focus is cancellable and does not own the state lock.
+                result = self.delivery.replace_selection(
+                    text, config, job.start_target, cancel_event=job.cancel_event
+                )
+                with self.lock:
+                    self._update(job, result, text)
+                    if self.job is job and not self.interrupted:
+                        self.message = (
+                            "Edit inserted"
+                            if result == "pasted"
+                            else "Edit cancelled"
+                            if result == "cancelled"
+                            else "Edit insertion requested; do not retry automatically"
+                            if result in ("paste_requested", "insert_requested")
+                            else "Edit copied; captured selection changed or unavailable"
+                        )
+        finally:
+            with self.lock:
+                if self.job is job and not self.interrupted:
+                    self.phase = "idle"
+        return self.status()
 
     def _pending_jobs(self):
         return [job for job in self.jobs if not job.done.is_set()]
@@ -725,6 +793,157 @@ class Controller:
             if not self.interrupted:
                 self.phase, self.message = "idle", "Cancelled" if self.cancelled else message
 
+    def _propose_assistant(self, job, config, text):
+        from .assistance import execute_command, propose, requires_confirmation
+        from .assistant_history import (
+            AssistantHistory,
+            append_private_messages,
+            context_messages,
+            pending_executions,
+            record_private_execution,
+        )
+
+        sessions = AssistantHistory() if config.save_history == "on" else None
+        session = (
+            sessions.get(job.assistant_session_id) if sessions else job.assistant_memory_session
+        )
+        executions = 0
+        for step in range(20):
+            if job.cancel_event.is_set() or self.interrupted:
+                raise ValueError("Assistant request cancelled")
+            observed = pending_executions(session)
+            instruction = (
+                text
+                if step == 0
+                else "Assess the observed result; propose the next step or finish."
+            )
+            if observed:
+                instruction = json.dumps(
+                    {"instruction": instruction, "observed_command_results": observed},
+                    ensure_ascii=False,
+                )
+            thoughts = [""]
+            with self.lock:
+                if self.job is job:
+                    self.assistant_stream = {
+                        "id": job.item_id,
+                        "mode": job.mode,
+                        "text": "",
+                        "thinking": "",
+                    }
+
+            def stream(piece, name="text"):
+                with self.lock:
+                    if self.job is job and not job.cancel_event.is_set() and not self.interrupted:
+                        current = self.assistant_stream
+                        if current and current["id"] == job.item_id:
+                            limit = 65536 if name == "thinking" else 131072
+                            current[name] = (
+                                (current[name] + piece).encode()[:limit].decode(errors="ignore")
+                            )
+                            # Control characters and non-ASCII expand on the wire.
+                            while len(json.dumps(current).encode()) > 131072:
+                                current[name] = current[name][: len(current[name]) // 2]
+
+            def thinking(piece, thoughts=thoughts):
+                # Provider-returned reasoning is display only, never an instruction.
+                stream(piece, "thinking")
+                thoughts[0] = (thoughts[0] + piece).encode()[:65536].decode(errors="ignore")
+
+            options = {"resolved_config": True, "cancel_event": job.cancel_event}
+            conversation = context_messages(session["messages"])
+            if conversation:
+                options["history"] = conversation
+            if config.ai_show_thinking == "on":
+                options["on_thinking"] = thinking
+            if config.ai_streaming == "on":
+                options["on_delta"] = stream
+            proposal = propose(instruction, config, job.mode, job.selected_text, **options)
+            if job.cancel_event.is_set() or self.interrupted:
+                raise ValueError("Assistant request cancelled")
+            request = proposal.pop(
+                "request",
+                json.dumps({"instruction": instruction, "selected_text": job.selected_text}),
+            )
+            response = proposal.pop("response", proposal.get("command", proposal["text"]))
+            turns = [
+                {"role": "user", "content": request},
+                {"role": "assistant", "content": response},
+            ]
+            if sessions:
+                sessions.append(session["id"], turns)
+                session = sessions.get(session["id"])
+            else:
+                append_private_messages(session, turns)
+            if thoughts[0]:
+                proposal["thinking"] = thoughts[0]
+            if (
+                job.mode != "command"
+                or requires_confirmation(proposal.get("command", ""), config.command_confirm)
+                or not proposal.get("command")
+            ):
+                break
+            command = proposal["command"]
+            directory = proposal.get("working_directory", "") or str(Path.cwd())
+            with self.lock:
+                if not job.cancel_event.is_set() and not self.interrupted:
+                    self._job_status(job, "transcribing", "Running configured automatic command")
+            result = execute_command(
+                command, working_directory=directory, cancel_event=job.cancel_event
+            )
+            receipt = {"command": command, "working_directory": directory, **result}
+            executions += 1
+            # Save before continuation and even after cancellation: the command may have run.
+            if sessions:
+                sessions.record_execution(session["id"], receipt)
+                session = sessions.get(session["id"])
+            else:
+                record_private_execution(session, receipt)
+            proposal["command"] = ""
+            proposal["text"] = (
+                result["output"] or f"Command finished with exit status {result['returncode']}"
+            )
+            proposal["executed"] = True
+            if job.cancel_event.is_set() or self.interrupted:
+                raise ValueError("Assistant command cancelled; execution receipt retained")
+            if config.command_continue != "on":
+                break
+            if step == 19:
+                proposal["text"] = (
+                    "20-step limit reached; review results before continuing.\n" + proposal["text"]
+                )
+        proposal["session_id"] = session["id"]
+        if executions:
+            proposal["execution_count"] = executions
+        if job.mode == "edit":
+            proposal.update(edit_id=job.item_id, can_accept_edit=self._edit_target_matches(job))
+        if sessions is None:
+            proposal["private_messages"] = context_messages(session["messages"])
+            removed = len(session["messages"]) - len(proposal["private_messages"])
+            proposal["private_executions"] = [
+                {"message_count": event["message_count"] - removed, "result": dict(event["result"])}
+                for event in session.get("executions", [])
+                if event["message_count"] >= removed
+            ]
+
+        def proposal_size():
+            return len(
+                json.dumps({"assistant_proposal": proposal, "preview": proposal["text"]}).encode()
+            )
+
+        while proposal.get("private_executions") and proposal_size() > MAX_MESSAGE - 131072:
+            del proposal["private_executions"][0]
+        while proposal.get("private_messages") and proposal_size() > MAX_MESSAGE - 131072:
+            del proposal["private_messages"][:2]
+            proposal["private_executions"] = [
+                {"message_count": event["message_count"] - 2, "result": event["result"]}
+                for event in proposal.get("private_executions", [])
+                if event["message_count"] >= 2
+            ]
+        if proposal_size() > MAX_MESSAGE - 131072:
+            raise ValueError("Assistant proposal exceeds status limit; request a shorter response")
+        return proposal
+
     def _transcribe(self, target):
         job = self.job
         if job is None or job.item_id != self.item_id or job.done.is_set():
@@ -809,7 +1028,7 @@ class Controller:
                     ai_warning = f"Prompt routing failed ({exc}); using original transcription"
                     config = replace(config, ai_enabled="off")
                     if self.job is job:
-                        self.report_error(ai_warning)
+                        self.report_error(ai_warning, kind="ai")
             if job.mode != "dictation":
                 if job.mode == "training":
                     proposal = {"mode": "training", "text": text}
@@ -821,131 +1040,7 @@ class Controller:
                         enrollment = PronunciationStore.enroll(job.label, path)
                     proposal = {"mode": "pronunciation", "text": job.label, **enrollment}
                 else:
-                    from .assistance import propose
-                    from .assistant_history import (
-                        AssistantHistory,
-                        append_private_messages,
-                        context_messages,
-                        pending_executions,
-                    )
-
-                    if config.save_history == "on":
-                        sessions = AssistantHistory()
-                        session = sessions.get(job.assistant_session_id)
-                    else:
-                        sessions = None
-                        session = job.assistant_memory_session
-                    conversation = context_messages(session["messages"])
-                    observed = pending_executions(session)
-                    instruction = (
-                        json.dumps(
-                            {"instruction": text, "observed_command_results": observed},
-                            ensure_ascii=False,
-                        )
-                        if observed
-                        else text
-                    )
-                    thoughts = []
-                    thought_bytes = 0
-
-                    def thinking(piece):
-                        nonlocal thought_bytes
-                        with self.lock:
-                            if not job.cancelled and not self.interrupted:
-                                # External-provider display only; never enters
-                                # transcript text or retained conversation turns.
-                                bounded = piece.encode("utf-8")[: 65536 - thought_bytes].decode(
-                                    "utf-8", errors="ignore"
-                                )
-                                thought_bytes += len(bounded.encode("utf-8"))
-                                if bounded:
-                                    thoughts.append(bounded)
-
-                    def delta(piece):
-                        with self.lock:
-                            if self.job is job and not job.cancelled and not self.interrupted:
-                                self.preview_text += piece
-
-                    options = {"resolved_config": True, "cancel_event": job.cancel_event}
-                    if conversation:
-                        options["history"] = conversation
-                    if getattr(config, "ai_show_thinking", "off") == "on":
-                        options["on_thinking"] = thinking
-                    if config.ai_streaming == "on" and job.mode == "edit":
-                        options["on_delta"] = delta
-                    proposal = propose(instruction, config, job.mode, job.selected_text, **options)
-                    request = proposal.pop(
-                        "request",
-                        json.dumps(
-                            {"instruction": text, "selected_text": job.selected_text},
-                            ensure_ascii=False,
-                        ),
-                    )
-                    response = proposal.pop("response", proposal.get("command", proposal["text"]))
-                    with self.lock:
-                        if self.interrupted:
-                            return
-                        if job.cancelled:
-                            self._update(job, "cancelled")
-                            path.unlink(missing_ok=True)
-                            self._job_status(job, "idle", "Cancelled")
-                            return
-                        turns = [
-                            {"role": "user", "content": request},
-                            {"role": "assistant", "content": response},
-                        ]
-                        if sessions is not None:
-                            sessions.append(session["id"], turns)
-                        else:
-                            append_private_messages(session, turns)
-                        proposal["session_id"] = session["id"]
-                        if thoughts:
-                            proposal["thinking"] = "".join(thoughts)
-                        if sessions is None:
-                            proposal["private_messages"] = context_messages(session["messages"])
-                            removed = len(session["messages"]) - len(proposal["private_messages"])
-                            proposal["private_executions"] = [
-                                {
-                                    "message_count": event["message_count"] - removed,
-                                    "result": dict(event["result"]),
-                                }
-                                for event in session.get("executions", [])
-                                if event["message_count"] >= removed
-                            ]
-
-                        # The status response repeats preview text and escapes
-                        # Unicode. Bound its actual serialized bytes, not only
-                        # characters, reserving room for the other status fields.
-                        def proposal_size():
-                            return len(
-                                json.dumps(
-                                    {"assistant_proposal": proposal, "preview": proposal["text"]}
-                                ).encode()
-                            )
-
-                        while (
-                            proposal.get("private_executions")
-                            and proposal_size() > MAX_MESSAGE - 131072
-                        ):
-                            del proposal["private_executions"][0]
-                        while (
-                            proposal.get("private_messages")
-                            and proposal_size() > MAX_MESSAGE - 131072
-                        ):
-                            del proposal["private_messages"][:2]
-                            proposal["private_executions"] = [
-                                {
-                                    "message_count": event["message_count"] - 2,
-                                    "result": event["result"],
-                                }
-                                for event in proposal.get("private_executions", [])
-                                if event["message_count"] >= 2
-                            ]
-                        if proposal_size() > MAX_MESSAGE - 131072:
-                            raise ValueError(
-                                "Assistant proposal exceeds status limit; "
-                                "request a shorter response"
-                            )
+                    proposal = self._propose_assistant(job, config, text)
                 with self.lock:
                     if self.interrupted:
                         return
@@ -960,8 +1055,15 @@ class Controller:
                         self.history.prune_audio(job.item_id)
                     if self.job is job:
                         self.assistant_proposal = proposal
+                        self.assistant_stream = None
                         self.preview_text = text
-                    self._job_status(job, "idle", "Recording ready for review; nothing inserted")
+                    self._job_status(
+                        job,
+                        "idle",
+                        "Command finished; execution receipts retained"
+                        if proposal.get("execution_count")
+                        else "Recording ready for review; nothing inserted",
+                    )
                 if (
                     job.mode == "edit"
                     and config.edit_delivery == "replace"
@@ -972,8 +1074,12 @@ class Controller:
                     with self.lock:
                         if job.cancelled or self.interrupted:
                             return
+                        job.edit_consumed = True
+                        proposal["can_accept_edit"] = False
                         self._job_status(job, "delivering", "Replacing captured selection")
-                    result = self.delivery.replace_selection(text, config, job.start_target)
+                    result = self.delivery.replace_selection(
+                        text, config, job.start_target, cancel_event=job.cancel_event
+                    )
                     self._update(job, result, text)
                     self._job_status(
                         job,
@@ -1005,7 +1111,14 @@ class Controller:
                 active=enabled(config, "spoken_send") and target is not None,
                 literal_prefix=config.literal_prefix,
             )
-            text = format_text(plan.text, config, context=job.context)
+            text = format_text(
+                plan.text,
+                config,
+                context=job.context,
+                app_name=job.metadata.get("app", ""),
+                app_id=job.metadata.get("app_id", job.metadata.get("app", "")),
+                window_title=job.metadata.get("window", ""),
+            )
             if enabled(config, "ai_enabled") and text:
                 try:
                     if config.ai_streaming == "on":
@@ -1023,7 +1136,7 @@ class Controller:
                 except Exception as exc:
                     ai_warning = f"AI cleanup failed ({exc}); using original transcription"
                     if self.job is job:
-                        self.report_error(ai_warning)
+                        self.report_error(ai_warning, kind="ai")
             with self.lock:
                 if self.interrupted:
                     return
@@ -1119,6 +1232,8 @@ class Controller:
                 else:
                     if self.job is job:
                         self.preview_text = text
+                        if job.mode in ("command", "edit"):
+                            self.report_error(f"AI {job.mode} request failed: {exc}", kind="ai")
                     self._update(job, "failed", text, str(exc))
                     retained = (
                         "Saved in history; audio retained for reprocessing."
@@ -1136,6 +1251,7 @@ class Controller:
                     if config.save_history == "off":
                         job.audio_path.unlink(missing_ok=True)
                     if self.job is job:
+                        self.assistant_stream = None
                         self.dictation_delivery = False
                         self.phase = "idle"
                     self._prune_budget()

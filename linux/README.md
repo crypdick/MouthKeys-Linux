@@ -43,8 +43,13 @@ mouthkeys gui
 ```
 
 Put `~/.local/bin` on PATH (`uv tool update-shell`). Omit `[gui]` for terminal-only use. Setup guides
-model/microphone selection and provides a non-delivering dictation tryout. Choosing a model or opening
-settings never downloads its weights: use **Download selected model** or `mouthkeys download`.
+language-first model selection, microphone setup, and a non-delivering dictation tryout. Setup filters
+languages by name/code/alias and lists documented compatible Linux model routes. **Apply language +
+model route** saves that route and its language/revision, resets backend precision to its default,
+and updates App Settings; it neither downloads nor loads weights. English includes Parakeet v2/Flash;
+other native routes use their documented language sets. The full supported Whisper language list is
+available; Cantonese selects a v3-vocabulary model. Choosing a model or opening Settings never
+downloads its weights: use **Download selected model** or `mouthkeys download`.
 
 ### Update and check your version
 
@@ -133,7 +138,10 @@ The overlay is a separate optional Qt process, intended not to take focus. It sh
 waveform, timer, words/WPM, microphone, and optional battery. Regular/compact, top/bottom, size,
 offset, preview length, border, sensitivity, and theme are configurable. History offers inline
 copy/reinsert/reprocess; failure recovery offers copy/retry. Drag to move; double-click to reset.
-Compositors control placement/stacking. Disable with `recording_panel=off` if it interferes with focus.
+Compositors control placement/stacking. **Review AI / chats** (also in the panel menu) explicitly opens
+an expanded, focusable assistant window for conversations, follow-up instructions, execution output,
+and review controls. The passive recording panel keeps its no-focus flags; opening the expanded
+window is a separate user action. Disable the panel with `recording_panel=off` if it interferes with focus.
 
 ## Text delivery
 
@@ -241,7 +249,8 @@ For CUDA, use compatible PyTorch/CTranslate2/ONNX Runtime builds and NVIDIA libr
 `device=cuda` cannot supply those system components. Native engines support default/auto/float32/
 float16/bfloat16; cache-aware NeMo streaming requires float32. ONNX supports default/auto/float32/int8.
 Whisper `compute_type=default` follows stored precision with hardware fallback; `auto` chooses a fast
-supported type, and `int8` may reduce CPU memory. Existing precision choices are preserved.
+supported type, and `int8` may reduce CPU memory. Existing precision choices are preserved outside
+an explicit Setup route change, which resets precision to the new backend's default.
 
 ```sh
 mouthkeys config engine onnx
@@ -279,9 +288,12 @@ records system output rather than your microphone. Device selection is resolved 
 an unplugged active device is reported, not silently spliced to a different microphone mid-recording.
 
 `pause_media=on` uses `playerctl`/MPRIS, resuming only players this session paused and only if still
-paused. `sound_preset=none` is silent; `mouthkeys` uses bundled upstream start/stop cues; `custom`
-uses `sound_file`/`sound_stop_file`. Both custom paths default empty, so there are no sounds by default.
-Preview buttons are explicit playback actions. `sound_volume`/`sound_output` choose volume/output.
+paused. `sounds_enabled` independently enables/disables recording cues while retaining the chosen
+preset. `sound_preset=fluid_sfx_0` through `fluid_sfx_4` correspond to upstream Sound 1–5; only Sound 1
+includes an upstream stop cue. `none` is silent; `custom` uses `sound_file`/`sound_stop_file`; legacy
+`mouthkeys` retains the earlier Linux start/stop pair. Custom paths default empty, so default settings
+play nothing. Preview buttons explicitly play the chosen cue even with recording sounds disabled.
+`sound_volume`/`sound_output` choose volume/output.
 
 `mic_battery=on` polls supported Hollyland Lark A1 receiver status only when it is the selected
 capture source. The Linux adapter checks vendor/product and HID status-report descriptor, sends
@@ -290,7 +302,12 @@ Receiver access, firmware behavior, and actual battery readings require hardware
 
 Tray hosting varies by desktop (GNOME may need an AppIndicator extension). `tray=on` enables it;
 Quit tray exits the UI, not the recording daemon. Active GUI workers/file transcription guard quit.
-`show_microphone_alerts`/`show_paste_alerts` control notifications. Theme is system/light/dark.
+`show_microphone_alerts`/`show_paste_alerts` control their notifications. `show_ai_alerts=on` (default)
+notifies when AI cleanup/routing fails and formatted raw text is used; disabling it suppresses that
+notification, not the recoverable status/history. Theme is system/light/dark.
+`hide_from_taskbar=on` applies Qt's Tool-window hint to the main Settings window, requesting exclusion
+from the desktop taskbar/app switcher. Default is off; Save applies a changed hint. This is separate
+from `tray`, and the window manager/compositor decides how to honor it.
 Help includes a bounded diagnostic-log viewer and a prefilled issue draft; it never sends feedback
 without the user submitting it.
 
@@ -332,10 +349,26 @@ mouthkeys shutdown
 Custom Dictionary supports multiple triggers, enable switches, punctuation/action aliases, private
 JSON import/export, and spoken-trigger training. **Train by voice** records the recognizer's actual
 output without delivery, then lets you review a replacement. This differs from acoustic enrollment.
-Formatting supports editable fillers, regional keep-word suggestions based only on local locale/timezone,
-reset controls, literal-prefix punctuation/actions, slash/@ shortcuts, QQ/trailing Q, casing, trailing
-period removal, and spacing. `smart_capitalization`/`space_between_dictations` use actual AT-SPI context;
-unknown context is not guessed. Punctuation/action rows are independently enabled.
+Formatting includes upstream's 40 default punctuation/symbol rows and aliases, editable actions,
+QQ/trailing Q, casing, and trailing-period removal. Existing saved dictionaries are preserved; reset
+controls restore the expanded defaults. `spoken_formatting=on` recognizes the configurable literal
+prefix: `Hello literal comma world` becomes `Hello, world`; `literal next line`/`next paragraph`,
+tab, and space actions share that prefix. Symbol-aware spacing, paired quotes, and action-adjacent
+ASR punctuation cleanup preserve untouched punctuation. Punctuation/action rows are independently enabled.
+
+`literal_formatting=on` normalizes supported slash commands (including `/ plan` → `/plan`) without
+rewriting paths/prose, and explicit `mention Paul`/`at the rate Paul` forms. Relaxed `at Paul` requires
+captured Slack/Discord/Teams application context and a supported lead-in; ordinary `at work` or
+possessives remain prose. Smart capitalization skips closing quotes/brackets when reading the actual
+preceding field text. `space_between_dictations` adds leading spacing when needed and a trailing space;
+app-specific slash/mention autocomplete trims that trailing space only for supported standalone tokens.
+Both context controls require actual AT-SPI context; unknown preceding text is not guessed.
+`remove_trailing_period` removes one final period, including from an ellipsis; it is an explicit toggle.
+
+Editable fillers have reset controls and one-time inline **Keep** / **Keep removing** offers in
+Settings and Setup tryout. Detection uses only local region/timezone; a Minnesota-like tryout changes
+the wording without asserting location from a shared Central timezone. Either answer persists once;
+keeping removes the offered word from the filler list. No location lookup or modal/focus change occurs.
 
 **Learning & Vocabulary** offers three separate controls:
 
@@ -397,8 +430,12 @@ explicit `--profile` > matching application/mode route > mode default. `ai_scope
 normal dictation cleanup to routed apps. `edit_profile`/`command_profile` independently choose
 `default`, `off`, or a profile UUID; default shares global provider but uses the built-in mode prompt
 or `edit_prompt`/`command_prompt`, while a selected profile supplies its own provider and prompt.
-Typed/voice draft-prompt tests show results without desktop insertion. Selected text is data, not an
-instruction override.
+`ai_custom_prompt_only=off` (default) combines the upstream built-in dictation base instructions with
+the effective dictation body, whether global `ai_prompt` or a named profile. On sends that custom body
+alone; a body already containing the full base is not prefixed twice. The same composition is used by
+normal cleanup, typed/voice prompt playgrounds, CLI and API. Command/Edit keep their separate mode
+prompts. Typed/voice draft-prompt tests show results without desktop insertion. Selected text is data,
+not an instruction override.
 
 ### Command/Edit conversations
 
@@ -415,21 +452,32 @@ backups merge saved assistant sessions by UUID; legacy backups without assistant
 leave current sessions intact.
 
 Command Mode proposes an editable shell command, explanation, and optional absolute working
-directory. Execution requires a separate confirmation showing the exact command/directory; a blank
-directory resolves to the GUI process's absolute directory and is shown in confirmation.
-Execution is bounded to 30 seconds/64 KiB output,
-and cancellation stops its child process group. Observed command, working directory, exit status,
-output, timeout/truncation/cancellation outcome are retained as bounded receipts even when automatic
-continuation is off or a later provider request fails. They use private session storage when history
-is on and memory only when it is off; explicit follow-ups can still see the last execution outcome.
-`command_continue=on` sends those results, including command output, to the selected AI provider for
-the next proposal, up to a 20-step review boundary. **Every command still requires its own concrete
-review/confirmation**; continuation never authorizes an execution loop. Turning continuation off
-stops automatic next-proposal requests, not explicit user follow-up instructions.
+directory. `command_confirm` controls execution in both typed and voice flows:
+
+- `on` (default): every generated command needs concrete review of the exact command/directory.
+- `destructive`: upstream's command-text heuristic asks for recognizable destructive commands;
+  other generated commands run automatically. This heuristic is not a shell parser or sandbox.
+- `off`: generated commands run as your user without individual confirmation.
+
+App Settings exposes all three policies. A blank directory resolves to the process's absolute current
+directory. Each command is bounded to 30 seconds/64 KiB output; cancellation stops its child process
+group. Observed command, working directory, exit status, output, timeout/truncation/cancellation are
+retained as bounded receipts even when continuation is off or a later provider request fails.
+Receipts use private session storage with history on and memory with it off; explicit follow-ups
+can still see the execution outcome. `command_continue=on` sends command results, including output,
+to the selected AI provider for another proposal. The confirmation policy applies independently to
+each proposal; automatic chains stop at 20 steps. `command_continue=off` stops after the current
+execution, not explicit user follow-ups, and does not discard execution receipts.
 
 Edit supports typed/captured selected text, generated content, and follow-up instructions applied
 to the previous assistant result unless a new selection is supplied. Default `edit_delivery=review`
-shows output for Copy; opt-in `replace` requires an unchanged captured selection. **Cancel request**
+shows output for Copy and, when a matching captured field selection exists, **Replace captured selection**
+or separately confirmed **Return to captured field + replace**. The ordinary review action never
+activates another window. Acceptance rechecks the exact field/text/selection, consumes the proposal
+before desktop work, and cannot be replayed; changed/unsupported destinations copy instead. CLI:
+`mouthkeys accept-edit --id RECORDING_UUID`, optionally `--return-to-target` for explicit focus return.
+Typed-only text without a captured destination remains Copy-only. Opt-in `edit_delivery=replace`
+allows automatic replacement subject to the same captured-selection checks. **Cancel request**
 is separate from **Cancel recording** and suppresses late results/deltas and stale-chat output.
 Provider-returned thinking display is optional, display-only rather than saved assistant-message
 content, and does not constitute a command authorization.
@@ -449,12 +497,17 @@ mouthkeys assistant-history --id CHAT_UUID --delete --yes
 
 File Transcription accepts picker/drop input, separate persistent search/copy/export/delete history,
 TXT/JSON export, duration and processing time. Available segment log probabilities produce an explicitly
-labeled confidence estimate; unsupported engines leave confidence unknown, not fabricated. Files use
-no microphone/clipboard/key delivery. CLI is stdout/export only unless `--save-history` is requested.
-GUI saving also respects `save_history` and `save_file_history`.
+labeled confidence estimate; unsupported engines leave confidence unknown, not fabricated. Transcription
+uses no microphone or automatic clipboard/key delivery. CLI is stdout/export only unless
+`--save-history` is requested.
+GUI saving also respects `save_history` and `save_file_history`. The GUI shows actual decode,
+diarization, transcription, save/export stages and completed/total chunks when available; otherwise
+it uses an indeterminate stage, not fabricated percentages. **Copy result** explicitly copies the
+completed transcript. CLI `--progress` writes structured `transcription_progress` events to stderr
+without mixing them into transcript stdout.
 
 ```sh
-mouthkeys transcribe recording.wav --json --output transcript.json
+mouthkeys transcribe recording.wav --progress --json --output transcript.json
 mouthkeys transcribe recording.wav --save-history
 mouthkeys file-history --query meeting
 mouthkeys delete-file-history --id RESULT_UUID --yes
@@ -524,13 +577,21 @@ It performs locked Python 3.13 GUI dependency sync, Ruff lint/format checks, off
 `uv build linux`. Tests use fake capture/clipboard/key adapters, isolated XDG directories, bounded
 waits, and no live microphone, clipboard, synthesized keys, visible windows, focus changes, or sounds.
 
-Optional existing-fixture checks, separate from the default headless suite:
+Existing-fixture pretrained checks are separate from the default headless suite and require weights
+already present locally. [Recorded Whisper evidence](tests/whisper_smoke_evidence.json) verifies the
+public greeting fixture with existing large-v3 and large-v3-turbo snapshots: real word timings and
+committed-preview continuation; turbo also exercises file-history save and private TXT/JSON export.
+Internet sockets were denied, with isolated XDG directories and no microphone/desktop effects.
+This is a scoped recognition regression, not broad accuracy, language, latency, or memory validation.
 
 ```sh
-# Explicit small pretrained-model download; never records or pastes:
-uv run --project linux mouthkeys download tiny.en
-uv run --project linux python linux/tests/smoke_transcription.py
+uv run --project linux python linux/tests/smoke_transcription.py \
+  --model /absolute/path/to/existing/snapshot --word-times --stream --file-workflow \
+  --report /tmp/mouthkeys-whisper-acceptance.json
 ```
+
+The script never downloads. If weights are absent, a separate `mouthkeys download MODEL` is an
+explicit download request; model selection alone does not authorize it.
 
 For actual native library inference without downloading a pretrained checkpoint, use an isolated CPU
 environment rather than modifying the installed app:
@@ -586,12 +647,14 @@ configuration before marking a setup verified:
 - Spoken Send: phrase/literal/sentence cases, configured modifier, terminal Return, half-second cancel,
   continued-speech disarm, newer-job suppression, and held-key release/overlapping shortcuts.
 - Panel/tray: no focus theft while typing; light/dark/compact/placement/drag/reset; inline reinsertion,
-  failure recovery, tray close/reopen/quit guards, startup/window preference, and notifications.
+  failure recovery, tray close/reopen/quit guards, startup/window preference, notifications, and
+  taskbar/app-switcher hint off/on independently of tray visibility.
 - Integrated shortcuts: explicit X11 keyboard/mouse grabs or portal consent/denial; multiple chords,
   conflict errors, hold/toggle/automatic, autorepeat, overlapping primary shortcuts, profile binding,
   and terminating/reconfiguring the listener while a gesture remains held.
 - Microphones/media/sounds: reorder/exclude/disconnect devices, output selection, actual meter,
-  pause/resume only players the app paused, user playback changes, start/stop preset/custom cues.
+  pause/resume only players the app paused, user playback changes, all five sound presets, recording
+  sound enable switch, explicit previews while disabled, and custom cue/output routing.
 - Lark A1: confirm receiver-source gating, report-descriptor matching, permissions/unplug/replug,
   actual transmitter/battery values, and no settings/firmware writes beyond the documented heartbeat.
 - Learning: edit a verified insertion, including selecting then replacing a word; test repeat/cooldown,
@@ -602,11 +665,19 @@ configuration before marking a setup verified:
   native vocabulary mechanism. Similarity scores are not proof of recognition accuracy.
 - AI: explicit Verify/Discover only, local then configured cloud provider, reasoning/streaming,
   per-mode/app/shortcut routes, draft tests, typed/voice cancel, failed/truncated response fallback,
-  no desktop output from prompt tryout, and exact shell-command/directory confirmation before execution.
+  no desktop output from prompt tryout, exact shell-command/directory review under `command_confirm=on`,
+  heuristic review under `destructive`, bounded automatic execution only under configured policy,
+  and custom-only/base-composed prompts in normal dictation and both playgrounds.
 - Conversations: new/switch/rename/delete in both modes, typed ↔ voice follow-ups, history-off memory,
   backup/legacy restore, long-context trimming, visible returned-thinking opt-in, cancellation while
-  switching sessions, reviewed command-result continuation, nonzero exits/timeouts, 20-step boundary,
-  and child-process cancellation. Verify no next command executes without another confirmation.
+  switching sessions, command-result continuation, nonzero exits/timeouts, 20-step boundary, and
+  child-process cancellation. With policy `on`, verify each next command needs another confirmation;
+  with automatic policies, verify policy transitions, chain limits, and continuation-off behavior.
+- Setup/formatting: language→compatible route without implicit download/load, stale tryout callbacks,
+  inline regional offers/one-time answers, full symbol/action aliases, preserved prose/paths, actual
+  chat-app mentions, smart capitalization after quoted sentences, and autocomplete spacing.
+- Expanded assistant/Edit: explicitly opening the focusable panel surface, follow-up chats/results,
+  captured-selection review/return controls, stale/new-job refusal, one-shot acceptance and Copy fallback.
 - Files: mixed speakers/overlap/brief turns/missed turns, labels/confidence unknowns, TXT/JSON, persistent
   browser copy/delete/restart, private backup roundtrip, and history-off behavior.
 - Pretrained engines: after authorized download/access, evaluate chosen language/model/revision,

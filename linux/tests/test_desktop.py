@@ -200,6 +200,53 @@ def test_tray_cannot_quit_during_file_transcription():
     assert tips == ["Wait for current settings operation before quitting"]
 
 
+def test_ai_failure_notifications_have_independent_preference_and_deduplication(monkeypatch):
+    from mouthkeys.tray import Tray
+
+    tray = Tray()
+    tray.timer.stop()
+    Config(show_ai_alerts="off").save()
+    notices = []
+    monkeypatch.setattr(tray, "showMessage", lambda *args: notices.append(args))
+    failed = {
+        "phase": "idle",
+        "notice": {"kind": "ai", "serial": "first", "message": "AI failed; raw text retained"},
+    }
+    tray.notify_status(failed)
+    assert not notices
+    Config(show_ai_alerts="on").save()
+    tray.notify_status({**failed, "notice": {**failed["notice"], "serial": "second"}})
+    tray.notify_status({**failed, "notice": {**failed["notice"], "serial": "second"}})
+    assert notices == [("AI processing failed", "AI failed; raw text retained")]
+
+
+def test_five_upstream_sound_presets_and_disabled_sound_preview_are_available(monkeypatch):
+    calls = []
+
+    class Thread:
+        def __init__(self, *, target, args, daemon):
+            calls.append(args[1])
+
+        def start(self):
+            pass
+
+    monkeypatch.setattr(desktop.threading, "Thread", Thread)
+    expected = ["FV_start_0.wav", "FV_start.wav", "FV_start_2.wav", "sfx_3.wav", "sfx_4.wav"]
+    for index, name in enumerate(expected):
+        config = Config(sound_preset=f"fluid_sfx_{index}")
+        desktop.play_sound(config)
+        assert calls[-1].name == name and calls[-1].is_file()
+        before = len(calls)
+        desktop.play_sound(config, stop=True)
+        assert len(calls) == before + (index == 0)
+    config = Config(sound_preset="fluid_sfx_0", sounds_enabled="off")
+    before = len(calls)
+    desktop.play_sound(config)
+    assert len(calls) == before
+    desktop.play_sound(config, preview=True)
+    assert len(calls) == before + 1
+
+
 def test_desktop_default_source_is_resolved_for_actual_microphone_label(monkeypatch):
     monkeypatch.setenv("DISPLAY", ":fake")
     monkeypatch.setattr(desktop, "command", lambda args: "alsa_input.actual_usb\n")

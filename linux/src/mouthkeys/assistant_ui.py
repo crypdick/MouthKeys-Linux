@@ -1,4 +1,4 @@
-"""Explicitly reviewed AI Command/Edit tools; no automatic execution or insertion."""
+"""Command/Edit review, configured automatic commands, and captured-selection acceptance."""
 
 import copy
 import json
@@ -22,7 +22,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from .assistance import execute_command, propose
+from .assistance import execute_command, propose, requires_confirmation
 from .assistant_history import (
     AssistantHistory,
     append_private_messages,
@@ -69,13 +69,15 @@ class AssistantPage(QWidget):
         self.last_selection = None
         self.next_request = None
         self.waiting_voice = False
+        self.chain_config = None
+        self.proposal_config = None
         self.streamed.connect(self.show_delta)
         self.thought_streamed.connect(self.show_thinking)
         layout = QVBoxLayout(self)
         hint = QLabel(
             "Uses the AI provider configured in App Settings. Command proposes a shell command "
-            "for your review; Edit rewrites pasted text or generates new text. Nothing runs "
-            "or gets inserted into another app automatically."
+            "for review unless automatic commands are explicitly enabled; Edit rewrites pasted "
+            "text or generates new text. Captured selections support reviewed replacement."
         )
         hint.setWordWrap(True)
         layout.addWidget(hint)
@@ -160,6 +162,14 @@ class AssistantPage(QWidget):
         self.run_button.setEnabled(False)
         self.run_button.clicked.connect(self.run_command)
         footer.addWidget(self.run_button)
+        self.replace_button = QPushButton("Replace captured selection")
+        self.replace_button.setEnabled(False)
+        self.replace_button.clicked.connect(lambda: self.accept_edit(False))
+        footer.addWidget(self.replace_button)
+        self.return_replace_button = QPushButton("Return to target and replace…")
+        self.return_replace_button.setEnabled(False)
+        self.return_replace_button.clicked.connect(lambda: self.accept_edit(True))
+        footer.addWidget(self.return_replace_button)
         layout.addLayout(footer)
         self.mode.currentIndexChanged.connect(self.mode_changed)
         self.reload_chat()
@@ -222,6 +232,10 @@ class AssistantPage(QWidget):
         self.command.clear()
         self.selection.clear()
         self.run_button.setEnabled(False)
+        self.replace_button.setEnabled(False)
+        self.return_replace_button.setEnabled(False)
+        self.chain_config = None
+        self.proposal_config = None
 
     def new_chat(self):
         if self.jobs:
@@ -268,6 +282,8 @@ class AssistantPage(QWidget):
         self.window.jobs.add(task)
         self.generate_button.setEnabled(False)
         self.run_button.setEnabled(False)
+        self.replace_button.setEnabled(False)
+        self.return_replace_button.setEnabled(False)
         self.mode.setEnabled(False)
         self.chats.setEnabled(False)
 
@@ -276,6 +292,7 @@ class AssistantPage(QWidget):
                 return
             if "error" in response:
                 self.feedback.setText(response["error"])
+                self.request_context = None
             else:
                 callback(response["result"])
 
@@ -286,11 +303,15 @@ class AssistantPage(QWidget):
             self.mode.setEnabled(True)
             self.chats.setEnabled(True)
             self.run_button.setEnabled(bool(self.proposal and self.proposal.get("command")))
+            can_replace = bool(self.proposal and self.proposal.get("can_accept_edit"))
+            self.replace_button.setEnabled(can_replace)
+            self.return_replace_button.setEnabled(can_replace)
             if self.request_task is task:
                 self.request_task = None
                 self.request_id = None
                 self.cancel_request_button.setEnabled(False)
                 if task.cancel_event.is_set():
+                    self.request_context = None
                     self.feedback.setText("Request cancelled")
             continuation, self.next_request = self.next_request, None
             if continuation is not None and not task.cancel_event.is_set():
@@ -318,6 +339,8 @@ class AssistantPage(QWidget):
         )
         self.proposal = None
         self.run_button.setEnabled(False)
+        self.replace_button.setEnabled(False)
+        self.return_replace_button.setEnabled(False)
         self.waiting_voice = True
         self.feedback.setText("Recording instruction; press Stop when finished.")
 
@@ -336,9 +359,16 @@ class AssistantPage(QWidget):
         if self.jobs or self.waiting_voice:
             return
         try:
-            config = Config.load()
-            instruction = self.instruction.text()
             mode = self.mode.currentData()
+            if continuation and self.chain_config:
+                config = self.chain_config
+            else:
+                from .routing import select_prompt
+
+                config = select_prompt(Config.load(), mode=mode, routes=[])
+                self.chain_config = config
+            self.proposal_config = config
+            instruction = self.instruction.text()
             selection = self.current_selection()
             self.reload_chat()
             session = dict(self.session)
@@ -370,7 +400,10 @@ class AssistantPage(QWidget):
         self.request_context = (session, config.save_history == "on", selection)
         cancelled = threading.Event()
         request_id = self.request_id = uuid.uuid4().hex
-        on_delta = (lambda piece: self.streamed.emit(request_id, piece)) if mode == "edit" else None
+
+        def on_delta(piece):
+            self.streamed.emit(request_id, piece)
+
         options = {}
         if history:
             options["history"] = history
@@ -382,6 +415,7 @@ class AssistantPage(QWidget):
                 config,
                 mode,
                 selection,
+                resolved_config=True,
                 cancel_event=cancelled,
                 on_delta=on_delta,
                 **options,
@@ -416,6 +450,11 @@ class AssistantPage(QWidget):
         self.thinking.setTextCursor(cursor)
 
     def cancel_request(self):
+        if self.request_task is None and self.waiting_voice:
+            self.window.send("cancel")
+            self.cancel_request_button.setEnabled(False)
+            self.feedback.setText("Voice request cancelled")
+            return
         if self.request_task is not None:
             self.request_task.cancel_event.set()
             self.request_id = None
@@ -424,6 +463,10 @@ class AssistantPage(QWidget):
 
     def show_proposal(self, proposal):
         proposal = dict(proposal)
+        typed = self.request_context is not None
+        if not typed:
+            self.chain_config = None
+            self.proposal_config = None
         incoming_mode = proposal.get("mode")
         if incoming_mode in ("command", "edit") and incoming_mode != self.mode.currentData():
             self.mode.blockSignals(True)
@@ -473,6 +516,7 @@ class AssistantPage(QWidget):
                 self.reload_chat()
             except ValueError as exc:
                 self.feedback.setText(str(exc))
+        self.request_context = None
         self.proposal = proposal
         if self.session and self.session["messages"]:
             try:
@@ -489,19 +533,55 @@ class AssistantPage(QWidget):
         if proposal.get("thinking") and Config.load().ai_show_thinking == "on":
             self.thinking.setPlainText(proposal["thinking"])
             self.thinking.show()
+        else:
+            self.thinking.hide()
         self.run_button.setEnabled(command_mode and bool(proposal.get("command")))
+        can_replace = bool(not command_mode and proposal.get("can_accept_edit"))
+        self.replace_button.setEnabled(can_replace)
+        self.return_replace_button.setEnabled(can_replace)
         self.feedback.setText(
             "Review command and its effects before running."
+            if command_mode and proposal.get("command")
+            else "Command result ready."
             if command_mode
+            else "Edited text ready. Review before replacing the captured selection."
+            if can_replace
             else "Edited text ready. Copy it when satisfied."
         )
+        if (
+            typed
+            and command_mode
+            and proposal.get("command")
+            and self.proposal_config
+            and not requires_confirmation(proposal["command"], self.proposal_config.command_confirm)
+        ):
+            self.next_request = lambda: self.run_command(automatic=True)
 
     def update_status(self, status):
         if self.jobs:
             return
+        stream = status.get("assistant_stream")
+        if stream and stream.get("mode") in ("edit", "command"):
+            self.proposal = None
+            self.request_context = None
+            self.chain_config = None
+            self.proposal_config = None
+            self.run_button.setEnabled(False)
+            self.replace_button.setEnabled(False)
+            self.return_replace_button.setEnabled(False)
+            self.waiting_voice = True
+            self.cancel_request_button.setEnabled(True)
+            self.result.setPlainText(stream.get("text", ""))
+            self.feedback.setText("Generating voice instruction result…")
+            if stream.get("thinking") and Config.load().ai_show_thinking == "on":
+                self.thinking.setPlainText(stream["thinking"])
+                self.thinking.show()
+            else:
+                self.thinking.hide()
         proposal = status.get("assistant_proposal")
         if status.get("phase") == "idle" and not status.get("pending_jobs"):
             self.waiting_voice = False
+            self.cancel_request_button.setEnabled(False)
         identity = (status.get("id"), proposal)
         if (
             proposal
@@ -510,6 +590,36 @@ class AssistantPage(QWidget):
         ):
             self.last_proposal = identity
             self.show_proposal(proposal)
+
+    def accept_edit(self, return_to_target):
+        if self.jobs or not self.proposal or not self.proposal.get("can_accept_edit"):
+            return
+        if (
+            return_to_target
+            and QMessageBox.question(
+                self,
+                "Return to captured destination?",
+                "Activate the captured destination and replace only its unchanged selected text?",
+            )
+            != QMessageBox.StandardButton.Yes
+        ):
+            return
+        edit_id = self.proposal.get("edit_id")
+        self.proposal["can_accept_edit"] = False
+        self.replace_button.setEnabled(False)
+        self.return_replace_button.setEnabled(False)
+        self.feedback.setText("Replacing reviewed selection…")
+
+        def complete(response):
+            if "error" in response:
+                self.feedback.setText(response["error"])
+            else:
+                status = response.get("result", {})
+                self.feedback.setText(status.get("message", "Edit replacement finished"))
+
+        self.window.send(
+            "accept_edit", {"id": edit_id, "return_to_target": return_to_target}, callback=complete
+        )
 
     def copy_result(self):
         text = self.result.toPlainText()
@@ -529,7 +639,7 @@ class AssistantPage(QWidget):
         dialog.setDefaultButton(QMessageBox.StandardButton.No)
         return dialog.exec() == QMessageBox.StandardButton.Yes
 
-    def run_command(self):
+    def run_command(self, checked=False, *, automatic=False):
         if (
             self.jobs
             or self.waiting_voice
@@ -544,16 +654,21 @@ class AssistantPage(QWidget):
             reviewed = f"Working directory: {directory}\n\n{command}"
         else:
             reviewed = command
-        if not command or not self.confirm_command(reviewed):
+        config = self.proposal_config or Config.load()
+        if not command or (
+            not (automatic and not requires_confirmation(command, config.command_confirm))
+            and not self.confirm_command(reviewed)
+        ):
             return
-        config = Config.load()
         execution_session = self.session
         persistent = config.save_history == "on" and execution_session and execution_session["id"]
         if execution_session and not persistent:
             execution_session = copy.deepcopy(execution_session)
             execution_session.update(id=None, title="Private chat")
             self.session = self.memory_sessions[execution_session["mode"]] = execution_session
-        self.feedback.setText("Running reviewed command…")
+        self.feedback.setText(
+            "Running configured automatic command…" if automatic else "Running reviewed command…"
+        )
 
         def complete(result):
             self.command_steps += 1
@@ -585,7 +700,7 @@ class AssistantPage(QWidget):
             if (
                 saved
                 and not cancelled.is_set()
-                and Config.load().command_continue == "on"
+                and config.command_continue == "on"
                 and self.command_steps < 20
             ):
                 self.next_request = lambda: self.generate(continuation=True)

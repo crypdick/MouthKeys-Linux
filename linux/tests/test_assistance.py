@@ -34,6 +34,9 @@ def test_command_is_a_proposal_not_execution(monkeypatch):
         "instruction": "List files",
         "command": "ls -l",
         "text": "List files; no changes.",
+        "working_directory": "",
+        "request": json.dumps({"instruction": "List files", "selected_text": ""}),
+        "response": json.dumps({"command": "ls -l", "explanation": "List files; no changes."}),
     }
     assert calls[0][0] == {"instruction": "List files", "selected_text": ""}
     assert "Never claim the command has run" in calls[0][1].ai_prompt
@@ -122,7 +125,41 @@ def test_executor_timeout_is_bounded_and_kills_children(monkeypatch):
     assert result["returncode"] == -9
 
 
+def test_command_cancellation_kills_group_and_records_truthful_outcome(monkeypatch):
+    import threading
+
+    cancelled = threading.Event()
+    process = FakeProcess(hanging=True)
+    monkeypatch.setattr(assistance, "_kill_group", lambda p: p.kill())
+
+    def launch(*args, **kwargs):
+        cancelled.set()
+        return process
+
+    result = assistance.execute_command("example", popen=launch, cancel_event=cancelled)
+    assert result["cancelled"] is True
+    assert result["returncode"] == -9
+    assert result["timed_out"] is False
+
+
+def test_command_working_directory_validated_before_launch(tmp_path):
+    calls = []
+
+    def launch(args, **kwargs):
+        calls.append(kwargs)
+        return FakeProcess(b"OK")
+
+    for invalid in ("relative/path", str(tmp_path / "missing")):
+        with pytest.raises(ValueError, match="directory"):
+            assistance.execute_command("example", working_directory=invalid, popen=launch)
+    assert calls == []
+    assistance.execute_command("example", working_directory=str(tmp_path), popen=launch)
+    assert calls[0]["cwd"] == str(tmp_path)
+
+
 def test_assistant_ui_requires_review_of_exact_command(monkeypatch):
+    from pathlib import Path
+
     pytest.importorskip("PySide6")
     from PySide6.QtWidgets import QApplication, QWidget
 
@@ -142,12 +179,14 @@ def test_assistant_ui_requires_review_of_exact_command(monkeypatch):
     monkeypatch.setattr(
         page, "confirm_command", lambda command: confirmations.append(command) or False
     )
-    monkeypatch.setattr(page, "_task", lambda function, callback: tasks.append(function))
+    monkeypatch.setattr(
+        page, "_task", lambda function, callback, *args, **kwargs: tasks.append(function)
+    )
     page.run_command()
-    assert confirmations == ["ls -la /reviewed"]
+    assert confirmations == [f"Working directory: {Path.cwd()}\n\nls -la /reviewed"]
     assert tasks == []
     monkeypatch.setattr(page, "confirm_command", lambda command: True)
-    monkeypatch.setattr(assistant_ui, "execute_command", lambda command: command)
+    monkeypatch.setattr(assistant_ui, "execute_command", lambda command, **kwargs: command)
     page.run_command()
     assert len(tasks) == 1
     assert tasks[0]() == "ls -la /reviewed"

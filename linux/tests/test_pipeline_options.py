@@ -185,7 +185,7 @@ def test_assistant_mode_returns_proposal_without_executing_or_inserting(monkeypa
     app = controller("List files")
     calls = []
 
-    def propose(text, config, mode, selected_text):
+    def propose(text, config, mode, selected_text, **kwargs):
         calls.append((text, mode, selected_text))
         return {"mode": mode, "instruction": text, "text": "ls -la", "command": "ls -la"}
 
@@ -290,3 +290,49 @@ def test_destination_metadata_is_persisted_without_enabling_clipboard_paste():
     assert app.delivery.calls[0][2] is None
     assert app.history.rows()[0]["app"] == "Editor"
     assert app.history.rows()[0]["window"] == "Project"
+
+
+def test_cancel_during_final_send_probe_prevents_key_dispatch():
+    Config(delivery="x11", spoken_send="on").save()
+    app = controller("Hello send it")
+    app.delivery.deliver = lambda *_: "paste_requested"
+    app.delivery.send_key_guarded = True
+    entered, release = threading.Event(), threading.Event()
+    sent = []
+
+    def send(config, target, *, before_send, allow_without_insert):
+        assert not allow_without_insert
+        entered.set()
+        assert release.wait(2)
+        if before_send():
+            sent.append(True)
+            return True
+        return False
+
+    app.delivery.send_key = send
+    app.command("start")
+    app.command("stop")
+    assert entered.wait(2)
+    assert app.command("cancel")["phase"] != "error"
+    release.set()
+    finish(app)
+    assert sent == []
+    assert app.history.rows()[0]["text"] == "Hello"
+
+
+def test_queued_recording_preview_preserves_predecessor_native_cache():
+    Config().save()
+    app = controller()
+    app.command("start")
+    previous = threading.Event()
+    app.job.predecessors = (previous,)
+    calls = []
+    app.transcriber.preview = lambda *_: calls.append(True) or "Preview"
+    app._preview(app.item_id, Config())
+    assert calls == []
+    previous.set()
+    app._preview(app.item_id, Config())
+    assert calls == [True]
+    assert app.preview_text == "Preview"
+    app.command("cancel")
+    finish(app)

@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QMessageBox,
+    QProgressBar,
     QPushButton,
     QScrollArea,
     QSpinBox,
@@ -32,7 +33,7 @@ from PySide6.QtWidgets import (
 )
 
 from . import __version__
-from .config import CHOICES, RANGES, Config, state_dir
+from .config import CHOICES, RANGES, Config, config_path, state_dir
 from .processes import python_command
 from .service import ensure_daemon, ensure_overlay, request
 
@@ -127,6 +128,22 @@ def field_value(field):
 
 
 def setting_group(key):
+    if "shortcut" in key or key in ("hotkey_mode", "shortcut_backend"):
+        return "Desktop"
+    if key in ("edit_profile", "command_profile", "edit_prompt", "command_prompt"):
+        return "AI cleanup"
+    if key in ("native_timeout_seconds", "file_diarization_mode"):
+        return "Speech"
+    if key == "mic_battery":
+        return "Microphone & media"
+    if key == "file_history_limit":
+        return "History & stats"
+    if key.startswith("learning_") or key in (
+        "automatic_learning",
+        "pronunciation_matching",
+        "vocabulary_boosting",
+    ):
+        return "Dictionary & learning"
     if key.startswith("api_"):
         return "Local API"
     if key.startswith("ai_"):
@@ -140,6 +157,10 @@ def setting_group(key):
         "insertion_mode",
         "restore_clipboard",
         "copy_to_clipboard",
+        "target_policy",
+        "return_to_start",
+        "verify_paste",
+        "edit_delivery",
     ):
         return "Text delivery"
     if key.startswith("overlay_") or key in (
@@ -158,6 +179,7 @@ def setting_group(key):
         "show_window_at_login",
         "show_microphone_alerts",
         "show_paste_alerts",
+        "onboarding_complete",
     ):
         return "Desktop"
     if key in (
@@ -171,6 +193,11 @@ def setting_group(key):
         "queue_limit",
         "file_speaker_labels",
         "file_speaker_count",
+        "model_revision",
+        "native_streaming",
+        "streaming_latency",
+        "preview_interval_ms",
+        "asr_max_tokens",
     ):
         return "Speech"
     return "Text formatting"
@@ -241,6 +268,9 @@ class Window(QWidget):
                 "Help & Diagnostics",
                 "AI Prompts",
                 "Command / Edit",
+                "Getting Started",
+                "Learning & Vocabulary",
+                "Microphone",
             ]
         )
         navigation.addWidget(self.nav)
@@ -348,6 +378,7 @@ class Window(QWidget):
                 "History & stats",
                 "Desktop",
                 "Local API",
+                "Dictionary & learning",
             ]
         )
         form.addRow("Category", self.settings_category)
@@ -373,6 +404,10 @@ class Window(QWidget):
         choices["ai_profile"] = [("Default settings", "")] + [
             (profile["name"], profile["id"]) for profile in load_profiles()
         ]
+        for key in ("edit_profile", "command_profile"):
+            choices[key] = [("Sync to global provider", "default"), ("Off", "off")] + [
+                (profile["name"], profile["id"]) for profile in load_profiles()
+            ]
         labels = {
             "max_seconds": "Maximum recording length",
             "audio_budget_mb": "Audio storage budget",
@@ -498,10 +533,31 @@ class Window(QWidget):
         save = QPushButton("Save settings")
         save.clicked.connect(self.save)
         form.addRow(save)
+        for label, action, category in (
+            ("Verify AI connection", lambda: self.provider_action("verify"), "AI cleanup"),
+            ("Discover AI models", lambda: self.provider_action("models"), "AI cleanup"),
+            ("Preview recording sound", lambda: self.preview_sound(False), "Microphone & media"),
+            ("Preview stop sound", lambda: self.preview_sound(True), "Microphone & media"),
+            ("Start configured shortcut listener", self.start_hotkeys, "Desktop"),
+            ("Capture keyboard shortcut", self.capture_shortcut, "Desktop"),
+            ("Reset filler words to upstream defaults", self.reset_fillers, "Text formatting"),
+            ("Regional filler suggestion", self.offer_regional_filler, "Text formatting"),
+        ):
+            button = QPushButton(label)
+            button.clicked.connect(action)
+            self.settings_rows.append((form.rowCount(), category))
+            form.addRow(button)
         self.download_button = QPushButton("Download selected model")
         self.download_button.clicked.connect(self.download_model)
         self.settings_rows.append((form.rowCount(), "Speech"))
         form.addRow(self.download_button)
+        self.download_progress = QProgressBar()
+        self.download_progress.setRange(0, 100)
+        self.download_progress.setValue(0)
+        self.settings_rows.append((form.rowCount(), "Speech"))
+        form.addRow(self.download_progress)
+        self.download_output = ""
+        self.download_partial = ""
         for label, handler in (
             ("Cancel model download", self.cancel_download),
             ("Delete selected cached model", self.delete_model),
@@ -531,6 +587,21 @@ class Window(QWidget):
 
         self.assistant_page = AssistantPage(self)
         tabs.addWidget(self.assistant_page)
+        from .onboarding import SetupPage
+
+        self.setup_page = SetupPage(self)
+        tabs.addWidget(self.setup_page)
+        from .learning_ui import LearningPage
+
+        self.learning_page = LearningPage(self)
+        learning_scroll = QScrollArea()
+        learning_scroll.setWidgetResizable(True)
+        learning_scroll.setWidget(self.learning_page)
+        tabs.addWidget(learning_scroll)
+        from .microphone_ui import MicrophonePage
+
+        self.microphone_page = MicrophonePage(self)
+        tabs.addWidget(self.microphone_page)
         self.nav.setCurrentRow(0)
         self.apply_theme()
         QApplication.styleHints().colorSchemeChanged.connect(self.apply_theme)
@@ -580,16 +651,10 @@ class Window(QWidget):
         field.setCurrentIndex(field.findData(current))
 
     def inspect_models(self):
-        from .engines import model_catalog
+        from .models_ui import ModelBrowser
 
         try:
-            catalog = model_catalog(field_value(self.fields["engine"]))
-            lines = [
-                f"{entry['name']} · {entry['languages']} · "
-                f"{'Installed' if entry['installed'] else 'Not downloaded'}"
-                for entry in catalog
-            ]
-            QMessageBox.information(self, "Speech models", "\n".join(lines))
+            ModelBrowser(self).exec()
         except Exception as exc:
             self.status.setText(str(exc))
 
@@ -684,6 +749,8 @@ class Window(QWidget):
             ("Save", self.save_dictionary),
             ("Import", self.import_dictionary),
             ("Export", self.export_dictionary),
+            ("Reload", self.reload_dictionary),
+            ("Reset spoken formatting", self.reset_spoken_formatting),
         ):
             button = QPushButton(text)
             button.clicked.connect(handler)
@@ -727,6 +794,7 @@ class Window(QWidget):
         self.status.setText("Training captured. Review recognized phrase and Save dictionary.")
 
     def fill_dictionary(self, data):
+        self.dictionary_baseline = json.loads(json.dumps(data))
         for name, table in self.dictionary_tables.items():
             table.setRowCount(0)
             for entry in data[name]:
@@ -760,6 +828,10 @@ class Window(QWidget):
         from .dictionary import Dictionary
 
         try:
+            if Dictionary.load() != self.dictionary_baseline:
+                raise ValueError(
+                    "Dictionary changed (possibly a learned correction). Reload before saving."
+                )
             data = {}
             for name, table in self.dictionary_tables.items():
                 entries = []
@@ -788,11 +860,67 @@ class Window(QWidget):
                     )
                 data[name] = entries
             Dictionary.save(data)
+            self.dictionary_baseline = data
             self.status.setText("Dictionary saved")
             return True
         except Exception as exc:
             self.status.setText(str(exc))
             return False
+
+    def reload_dictionary(self):
+        from .dictionary import Dictionary
+
+        self.fill_dictionary(Dictionary.load())
+
+    def reset_spoken_formatting(self):
+        from .dictionary import Dictionary
+
+        if (
+            QMessageBox.question(
+                self,
+                "Reset spoken formatting",
+                "Restore default punctuation/action rules? Unsaved edits will be discarded.",
+            )
+            != QMessageBox.StandardButton.Yes
+        ):
+            return
+        data = Dictionary.load()
+        defaults = Dictionary.defaults()
+        data.update(punctuation=defaults["punctuation"], actions=defaults["actions"])
+        Dictionary.save(data)
+        self.fill_dictionary(data)
+
+    def reset_fillers(self):
+        from .regional import UPSTREAM_FILLERS
+
+        self.fields["filler_words"].setText(UPSTREAM_FILLERS)
+        self.status.setText("Upstream filler list restored in editor; Save settings to apply")
+
+    def offer_regional_filler(self):
+        from dataclasses import replace
+
+        from .regional import region_offer
+
+        config = Config.load()
+        offer = region_offer(config)
+        if not offer:
+            self.status.setText(
+                "No unanswered regional filler suggestion applies to current settings"
+            )
+            return
+        keep = (
+            QMessageBox.question(self, "Regional filler", offer["message"])
+            == QMessageBox.StandardButton.Yes
+        )
+        words = config.filler_words
+        if keep:
+            words = ",".join(
+                word for word in words.split(",") if word.strip().casefold() != offer["word"]
+            )
+        replace(config, filler_words=words, regional_filler_answered="on").save()
+        self.fields["filler_words"].setText(words)
+        field = self.fields["regional_filler_answered"]
+        field.setCurrentIndex(field.findData("on"))
 
     def import_dictionary(self):
         from .dictionary import Dictionary
@@ -844,9 +972,83 @@ class Window(QWidget):
             "and expected count are configured in App Settings. Models must be"
             " downloaded explicitly."
         )
-        layout.addWidget(self.file_text)
+        split = QHBoxLayout()
+        browser = QWidget()
+        history_layout = QVBoxLayout(browser)
+        self.file_history_search = QLineEdit()
+        self.file_history_search.setPlaceholderText("Search file history")
+        self.file_history_search.textChanged.connect(self.refresh_file_history)
+        history_layout.addWidget(self.file_history_search)
+        self.file_history_list = QListWidget()
+        self.file_history_list.currentRowChanged.connect(self.select_file_history)
+        history_layout.addWidget(self.file_history_list)
+        for text, handler in (
+            ("Delete selected result", self.delete_file_history),
+            ("Clear file history", self.clear_file_history),
+        ):
+            button = QPushButton(text)
+            button.clicked.connect(handler)
+            history_layout.addWidget(button)
+        split.addWidget(browser, 1)
+        split.addWidget(self.file_text, 2)
+        layout.addLayout(split)
+        self.refresh_file_history()
         self.setAcceptDrops(True)
         return page
+
+    def refresh_file_history(self, *_):
+        from .file_history import FileHistory
+
+        self.file_rows = FileHistory().rows(self.file_history_search.text())
+        self.file_history_list.clear()
+        for row in self.file_rows:
+            when = datetime.fromtimestamp(row["created"]).strftime("%m-%d %H:%M")
+            self.file_history_list.addItem(f"{when} · {row['name']}\n{row['result']['text'][:70]}")
+
+    def select_file_history(self, index):
+        if 0 <= index < len(self.file_rows):
+            self.show_file_result(self.file_rows[index]["result"])
+
+    def show_file_result(self, result):
+        from .file_transcription import result_text
+
+        self.file_result = result
+        self.file_text.setPlainText(result_text(result))
+        self.status.setText(
+            f"{result['duration']:.1f}s audio · {result['processing_seconds']:.1f}s processing"
+            + (
+                f" · {result['duration'] / result['processing_seconds']:.1f}× realtime"
+                if result["processing_seconds"] > 0
+                else ""
+            )
+            + (
+                f" · {result['confidence']:.0%} model likelihood (not calibrated confidence)"
+                if result.get("confidence") is not None
+                else ""
+            )
+        )
+
+    def delete_file_history(self):
+        from .file_history import FileHistory
+
+        index = self.file_history_list.currentRow()
+        if (
+            0 <= index < len(self.file_rows)
+            and QMessageBox.question(self, "Delete file result", "Delete selected saved result?")
+            == QMessageBox.StandardButton.Yes
+        ):
+            FileHistory().delete(self.file_rows[index]["id"])
+            self.refresh_file_history()
+
+    def clear_file_history(self):
+        from .file_history import FileHistory
+
+        if (
+            QMessageBox.question(self, "Clear file history", "Delete all saved file results?")
+            == QMessageBox.StandardButton.Yes
+        ):
+            FileHistory().clear()
+            self.refresh_file_history()
 
     def dragEnterEvent(self, event):
         if event.mimeData().hasUrls() and any(u.isLocalFile() for u in event.mimeData().urls()):
@@ -871,6 +1073,8 @@ class Window(QWidget):
             self.status.setText("Choose an existing audio file")
             return
         self.file_result = None
+        self.file_config = Config.load()
+        self.file_name = self.file_path.text()
         self.file_process = QProcess(self)
         self.file_process.setProgram(sys.executable)
         self.file_process.setArguments(
@@ -897,17 +1101,13 @@ class Window(QWidget):
         try:
             if code:
                 raise ValueError(error or "File transcription cancelled or failed")
-            self.file_result = json.loads(output)
-            result = self.file_result
-            segments = result.get("segments", [])
-            lines = [
-                f"{s['start']:.1f}–{s['end']:.1f}  {s.get('speaker', '')}  {s['text']}"
-                for s in segments
-            ]
-            self.file_text.setPlainText(result["text"] + "\n\n" + "\n".join(lines))
-            self.status.setText(
-                f"{result['duration']:.1f}s audio · {result['processing_seconds']:.1f}s processing"
-            )
+            result = json.loads(output)
+            if self.file_config.save_history == "on" and self.file_config.save_file_history == "on":
+                from .file_history import FileHistory
+
+                FileHistory().add(self.file_name, result, self.file_config.file_history_limit)
+                self.refresh_file_history()
+            self.show_file_result(result)
         except Exception as exc:
             self.file_result = None
             self.file_text.setPlainText(str(exc))
@@ -928,11 +1128,24 @@ class Window(QWidget):
             export_result(self.file_result, path, "json" if kind == "json" else "txt")
 
     def stats_page(self):
+        from .stats_view import ActivityChart
+
         page = QWidget()
         layout = QVBoxLayout(page)
         refresh = QPushButton("Refresh stats")
         refresh.clicked.connect(self.refresh_stats)
         layout.addWidget(refresh)
+        self.chart_range = QComboBox()
+        self.chart_range.addItem("Last 7 days", 7)
+        self.chart_range.addItem("Last 30 days", 30)
+        layout.addWidget(self.chart_range)
+        self.activity_chart = ActivityChart()
+        self.chart_range.currentIndexChanged.connect(
+            lambda _: self.activity_chart.set_values(
+                self.activity_chart.values, self.chart_range.currentData()
+            )
+        )
+        layout.addWidget(self.activity_chart)
         self.stats_text = QTextEdit()
         self.stats_text.setReadOnly(True)
         self.stats_text.setPlaceholderText(
@@ -947,6 +1160,7 @@ class Window(QWidget):
             if "result" not in response:
                 return
             result = response["result"]
+            self.activity_chart.set_values(result["daily_words"], self.chart_range.currentData())
             lines = [
                 f"{result['words']:,} words  ·  {result['transcriptions']:,} dictations",
                 f"{result['current_streak']} day streak  ·  "
@@ -971,6 +1185,16 @@ class Window(QWidget):
             lines.extend(
                 ["", f"Top apps: {result['top_apps']}", f"Peak hours: {result['peak_hour']}"]
             )
+            lines.append(f"Best streak: {result.get('best_streak', 0)} days")
+            for label, milestones in result.get("milestones", {}).items():
+                lines.append(
+                    label
+                    + " milestones: "
+                    + " · ".join(
+                        f"{item['target']:,}{' achieved' if item['achieved'] else ''}"
+                        for item in milestones
+                    )
+                )
             self.stats_text.setPlainText("\n".join(lines))
 
         self.send("stats", callback=update)
@@ -1125,7 +1349,11 @@ class Window(QWidget):
             == QMessageBox.StandardButton.Yes
         ):
             try:
-                delete_model(model, field_value(self.fields["engine"]))
+                delete_model(
+                    model,
+                    field_value(self.fields["engine"]),
+                    revision=field_value(self.fields["model_revision"]),
+                )
                 self.status.setText("Cached model deleted")
             except Exception as exc:
                 self.status.setText(str(exc))
@@ -1165,6 +1393,9 @@ class Window(QWidget):
         form = QFormLayout()
         self.profile_name = QLineEdit()
         form.addRow("Name", self.profile_name)
+        self.profile_shortcut = QLineEdit()
+        self.profile_shortcut.setPlaceholderText("Optional chord, e.g. super+alt+1")
+        form.addRow("Shortcut", self.profile_shortcut)
         self.profile_fields = {}
         defaults = asdict(Config.load())
         for name in PROFILE_FIELDS:
@@ -1199,10 +1430,152 @@ class Window(QWidget):
         layout.addLayout(buttons)
         self.profile_picker.currentIndexChanged.connect(self.select_profile)
         self.refresh_profiles()
+        layout.addWidget(QLabel("Prompt test — no desktop insertion"))
+        self.prompt_test_raw = QTextEdit()
+        self.prompt_test_raw.setPlaceholderText("Type test text, or record a prompt tryout")
+        self.prompt_test_raw.setMinimumHeight(80)
+        self.prompt_test_raw.setMaximumHeight(120)
+        layout.addWidget(self.prompt_test_raw)
+        self.prompt_test_output = QTextEdit()
+        self.prompt_test_output.setReadOnly(True)
+        self.prompt_test_output.setMinimumHeight(80)
+        self.prompt_test_output.setMaximumHeight(120)
+        layout.addWidget(self.prompt_test_output)
+        self.prompt_test_id = None
+        self.prompt_test_config = None
+        test_actions = QHBoxLayout()
+        for title, handler in (
+            ("Test draft prompt", self.run_prompt_test),
+            ("Record test text", self.record_prompt_test),
+            ("Stop test recording", lambda: self.send("stop")),
+        ):
+            button = QPushButton(title)
+            button.clicked.connect(handler)
+            test_actions.addWidget(button)
+        layout.addLayout(test_actions)
+        layout.addWidget(QLabel("Application prompt overrides (exact application identity)"))
+        self.routing_table = QTableWidget(0, 3)
+        self.routing_table.setHorizontalHeaderLabels(["Application", "Prompt", "Mode"])
+        self.routing_table.horizontalHeader().setStretchLastSection(True)
+        self.routing_table.setMinimumHeight(160)
+        layout.addWidget(self.routing_table)
+        route_buttons = QHBoxLayout()
+        for text, handler in (
+            ("Add application", self.add_prompt_route),
+            ("Remove application", self.remove_prompt_route),
+            ("Save app overrides", self.save_prompt_routes),
+        ):
+            button = QPushButton(text)
+            button.clicked.connect(handler)
+            route_buttons.addWidget(button)
+        layout.addLayout(route_buttons)
+        from .routing import load_routes
+
+        for rule in load_routes():
+            self.add_prompt_route(rule=rule)
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setWidget(page)
         return scroll
+
+    def draft_prompt_config(self):
+        from dataclasses import replace
+
+        values = {
+            name: field.toPlainText() if isinstance(field, QTextEdit) else field_value(field)
+            for name, field in self.profile_fields.items()
+        }
+        return replace(Config.load(), ai_profile="", ai_enabled="on", **values).validate()
+
+    def record_prompt_test(self):
+        try:
+            self.prompt_test_config = self.draft_prompt_config()
+        except Exception as exc:
+            self.status.setText(str(exc))
+            return
+
+        def started(response):
+            if "result" in response:
+                self.prompt_test_id = response["result"]["id"]
+                self.prompt_test_output.setPlainText("Recording test; Stop when finished")
+
+        self.send("start", {"mode": "training"}, callback=started)
+
+    def update_prompt_test(self, result):
+        if self.prompt_test_id and result.get("id") == self.prompt_test_id:
+            proposal = result.get("assistant_proposal")
+            if proposal and proposal.get("mode") == "training":
+                self.prompt_test_id = None
+                self.prompt_test_raw.setPlainText(proposal["text"])
+                self.run_prompt_test(config=self.prompt_test_config)
+            elif result.get("phase") == "idle":
+                self.prompt_test_id = None
+
+    def run_prompt_test(self, _checked=False, config=None):
+        from .assistant_ui import AssistantTask
+        from .postprocess import process
+
+        try:
+            config = config or self.draft_prompt_config()
+            text = self.prompt_test_raw.toPlainText()
+            if not text.strip():
+                raise ValueError("Provide test text first")
+        except Exception as exc:
+            self.prompt_test_output.setPlainText(str(exc))
+            return
+        task = AssistantTask(lambda: process(text, config), self)
+        self.jobs.add(task)
+        task.done.connect(
+            lambda response: self.prompt_test_output.setPlainText(
+                response.get("error", response.get("result", ""))
+            )
+        )
+        task.finished.connect(lambda: self.jobs.discard(task))
+        task.finished.connect(task.deleteLater)
+        task.start()
+        self.prompt_test_output.setPlainText("Testing draft prompt…")
+
+    def add_prompt_route(self, _checked=False, rule=None):
+        from .profiles import load_profiles
+
+        rule = rule or {"app": "", "profile": "default"}
+        row = self.routing_table.rowCount()
+        self.routing_table.insertRow(row)
+        self.routing_table.setItem(row, 0, QTableWidgetItem(rule["app"]))
+        field = QComboBox()
+        field.addItem("Default prompt", "default")
+        field.addItem("Off — no AI cleanup", "off")
+        for profile in load_profiles():
+            field.addItem(profile["name"], profile["id"])
+        field.setCurrentIndex(field.findData(rule["profile"]))
+        self.routing_table.setCellWidget(row, 1, field)
+        mode = QComboBox()
+        for name in ("dictation", "edit", "command"):
+            mode.addItem(name, name)
+        mode.setCurrentIndex(mode.findData(rule.get("mode", "dictation")))
+        self.routing_table.setCellWidget(row, 2, mode)
+
+    def remove_prompt_route(self):
+        row = self.routing_table.currentRow()
+        if row >= 0:
+            self.routing_table.removeRow(row)
+
+    def save_prompt_routes(self):
+        from .routing import save_routes
+
+        try:
+            routes = [
+                {
+                    "app": self.routing_table.item(row, 0).text(),
+                    "profile": self.routing_table.cellWidget(row, 1).currentData(),
+                    "mode": self.routing_table.cellWidget(row, 2).currentData(),
+                }
+                for row in range(self.routing_table.rowCount())
+            ]
+            save_routes(routes)
+            self.status.setText("Application prompt overrides saved")
+        except Exception as exc:
+            self.status.setText(str(exc))
 
     def refresh_profiles(self, selected=None):
         from .profiles import load_profiles
@@ -1231,6 +1604,7 @@ class Window(QWidget):
         selected = self.profile_picker.currentData()
         profile = next((p for p in load_profiles() if p["id"] == selected), None)
         self.profile_name.setText(profile["name"] if profile else "")
+        self.profile_shortcut.setText(profile.get("shortcut", "") if profile else "")
         values = profile or asdict(Config.load())
         for name, field in self.profile_fields.items():
             value = values[name]
@@ -1260,7 +1634,12 @@ class Window(QWidget):
                 name: field.toPlainText() if isinstance(field, QTextEdit) else field_value(field)
                 for name, field in self.profile_fields.items()
             }
-            profile = {"id": item_id, "name": self.profile_name.text(), **values}
+            profile = {
+                "id": item_id,
+                "name": self.profile_name.text(),
+                "shortcut": self.profile_shortcut.text(),
+                **values,
+            }
             profiles = [p for p in load_profiles() if p["id"] != item_id]
             save_profiles([*profiles, profile])
             self.refresh_profiles(item_id)
@@ -1270,8 +1649,14 @@ class Window(QWidget):
 
     def delete_profile(self):
         from .profiles import load_profiles, save_profiles
+        from .routing import load_routes
 
         selected = self.profile_picker.currentData()
+        if selected and any(rule["profile"] == selected for rule in load_routes()):
+            self.status.setText(
+                "Remove application overrides using this profile before deleting it"
+            )
+            return
         if selected and selected == Config.load().ai_profile:
             self.status.setText("Choose and save another active profile before deleting this one")
             return
@@ -1338,6 +1723,7 @@ class Window(QWidget):
             self.polling = False
             if "result" in response:
                 result = response["result"]
+                self.loaded_model = result.get("loaded_model")
                 service_version = result["version"]
                 version_text = service_version
                 if service_version != __version__:
@@ -1350,9 +1736,14 @@ class Window(QWidget):
                     or result.get("can_record", result["phase"] == "idle")
                 )
                 self.assistant_page.update_status(result)
+                self.setup_page.update_status(result)
+                self.learning_page.update_status(result)
+                self.microphone_page.update_status(result)
+                self.update_prompt_test(result)
                 self.update_training(result)
                 self.refresh_history()
             else:
+                self.loaded_model = None
                 self.service_version.setText("Unavailable")
 
         self.send("status", callback=update)
@@ -1425,6 +1816,73 @@ class Window(QWidget):
             self.status.setText(str(exc))
             return False
 
+    def provider_action(self, action):
+        if not self.save():
+            return
+        from .assistant_ui import AssistantTask
+        from .provider_tools import list_models, verify
+
+        config = Config.load()
+        function = (lambda: verify(config)) if action == "verify" else (lambda: list_models(config))
+        task = AssistantTask(function, self)
+        self.jobs.add(task)
+
+        def received(response):
+            if "error" in response:
+                self.status.setText(response["error"])
+            elif action == "verify":
+                self.status.setText("Provider connection verified")
+            else:
+                from PySide6.QtWidgets import QInputDialog
+
+                models = response["result"]
+                if not models:
+                    self.status.setText("Provider returned no models")
+                    return
+                model, accepted = QInputDialog.getItem(
+                    self, "AI models", "Choose a model", models, editable=False
+                )
+                if accepted:
+                    self.fields["ai_model"].setText(model)
+                    self.status.setText("Model selected; Save settings to apply")
+
+        task.done.connect(received)
+        task.finished.connect(lambda: self.jobs.discard(task))
+        task.finished.connect(task.deleteLater)
+        task.start()
+        self.status.setText("Checking provider…")
+
+    def preview_sound(self, stop):
+        if self.save():
+            from .desktop import play_sound
+
+            play_sound(Config.load(), stop=stop, preview=True)
+
+    def start_hotkeys(self):
+        if not self.save():
+            return
+        import subprocess
+
+        from .config import state_dir
+
+        with (state_dir() / "hotkeys.log").open("a") as output:
+            import os
+
+            os.chmod(output.name, 0o600)
+            subprocess.Popen(
+                python_command("mouthkeys", "hotkeys"),
+                stdin=subprocess.DEVNULL,
+                stdout=output,
+                stderr=output,
+                start_new_session=True,
+            )
+        self.status.setText("Shortcut listener requested; portal setup may ask for desktop consent")
+
+    def capture_shortcut(self):
+        from .shortcut_capture import ShortcutCapture
+
+        ShortcutCapture(self).exec()
+
     def download_model(self):
         if not self.save() or self.download is not None:
             return
@@ -1434,13 +1892,20 @@ class Window(QWidget):
         self.download.setArguments(python_command("mouthkeys", "download")[1:])
         self.download_button.setEnabled(False)
         self.download_button.setText("Downloading…")
+        self.download_progress.setRange(0, 0)
+        self.download_output = ""
+        self.download_partial = ""
+        self.download.readyReadStandardOutput.connect(self.read_download_progress)
 
         def finished(code, _):
-            output = bytes(self.download.readAllStandardOutput()).decode(errors="replace")
+            self.read_download_progress()
+            output = self.download_output
             self.download.deleteLater()
             self.download = None
             self.download_button.setEnabled(True)
             self.download_button.setText("Download selected model")
+            self.download_progress.setRange(0, 100)
+            self.download_progress.setValue(100 if code == 0 else 0)
             if code == 0:
                 self.send("warmup")
             QMessageBox.information(
@@ -1451,6 +1916,30 @@ class Window(QWidget):
         self.download.errorOccurred.connect(self.download_error)
         self.download.start()
 
+    def read_download_progress(self):
+        if self.download is None:
+            return
+        chunk = bytes(self.download.readAllStandardOutput()).decode(errors="replace")
+        self.download_output = (self.download_output + chunk)[-100000:]
+        self.download_partial += chunk
+        lines = self.download_partial.split("\n")
+        self.download_partial = lines.pop()
+        for line in lines:
+            try:
+                event = json.loads(line)["download_progress"]
+                total, completed = event.get("total"), event.get("completed", 0)
+                if total:
+                    self.download_progress.setRange(0, 1000)
+                    self.download_progress.setValue(min(1000, round(completed * 1000 / total)))
+                else:
+                    self.download_progress.setRange(0, 0)
+                self.download_progress.setFormat(
+                    f"{event.get('phase', 'Downloading')} · {completed}/{total or '?'} "
+                    f"{event.get('unit', '')}"
+                )
+            except (ValueError, TypeError, KeyError):
+                continue
+
     def download_error(self, error):
         if error == QProcess.ProcessError.FailedToStart and self.download is not None:
             message = self.download.errorString()
@@ -1459,6 +1948,8 @@ class Window(QWidget):
             self.download_button.setEnabled(True)
             self.download_button.setText("Download selected model")
             self.status.setText(message)
+            self.download_progress.setRange(0, 100)
+            self.download_progress.setValue(0)
 
     def closeEvent(self, event):
         if self.jobs or self.download is not None or self.file_process is not None:
@@ -1469,11 +1960,17 @@ class Window(QWidget):
 
 
 def launch():
+    first_launch = not config_path().exists()
     ensure_daemon()
     ensure_overlay()
+    from .hotkeys import ensure_hotkeys
+
+    ensure_hotkeys()
     app = QApplication(sys.argv)
     app.setApplicationName("MouthKeys")
     window = Window()
+    if first_launch:
+        window.nav.setCurrentRow(9)
     from .tray import create_tray
 
     tray = create_tray(window)

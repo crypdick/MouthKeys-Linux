@@ -1,5 +1,6 @@
 """Optional Linux desktop affordances; no global grabs or privileged services."""
 
+import os
 import subprocess
 import threading
 from pathlib import Path
@@ -31,6 +32,11 @@ def choose_source(config):
     preferred = source_list(config.microphone_preferred)
     fallback = source_list(config.microphone_fallback)
     if not (preferred or fallback or never):
+        if os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"):
+            try:
+                return command(["pactl", "get-default-source"]).strip() or "default"
+            except (OSError, subprocess.SubprocessError):
+                pass
         return "default"
     available = source_names()
     for name in preferred:
@@ -79,15 +85,22 @@ class MediaSession:
                 continue
 
 
-def play_sound(config):
+def play_sound(config, stop=False, preview=False):
     """Opt-in local file only. Never download cues or block microphone lifecycle."""
-    if not config.sound_file:
+    preset = getattr(config, "sound_preset", "custom")
+    if preset == "none":
         return
-    threading.Thread(target=_play_sound, args=(config,), daemon=True).start()
+    if preset == "mouthkeys":
+        path = Path(__file__).parent / "assets/sounds" / ("FV_end.wav" if stop else "FV_start.wav")
+    else:
+        path = getattr(config, "sound_stop_file", "") if stop else config.sound_file
+    if not path:
+        return
+    threading.Thread(target=_play_sound, args=(config, path), daemon=True).start()
 
 
-def _play_sound(config):
-    path = Path(config.sound_file).expanduser()
+def _play_sound(config, path=None):
+    path = Path(path or config.sound_file).expanduser()
     if not path.is_file():
         return
     args = ["paplay", "--volume", str(round(config.sound_volume / 100 * 65536))]

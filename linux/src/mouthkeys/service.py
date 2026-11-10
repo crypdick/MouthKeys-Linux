@@ -1,3 +1,4 @@
+import copy
 import fcntl
 import json
 import os
@@ -14,13 +15,16 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from . import __version__
+from .accessibility import read_snapshot
 from .audio import Recorder, check_audio, live_meter
 from .config import Config, private_dir, runtime_dir, state_dir
 from .delivery import Delivery
 from .desktop import MediaSession, choose_source, play_sound
 from .formatting import enabled, format_text, parse_send
+from .learning import CorrectionLearner
 from .postprocess import process
 from .processes import python_command
+from .pronunciation import PronunciationStore
 from .storage import History
 from .transcribe import Transcriber
 
@@ -35,14 +39,24 @@ class DictationJob:
     audio_path: Path
     mode: str = "dictation"
     selected_text: str = ""
+    label: str = ""
     done: threading.Event = field(default_factory=threading.Event)
+    cancel_event: threading.Event = field(default_factory=threading.Event)
+    held_activation: bool = False
     cancelled: bool = False
     duration: float = 0
     phase: str = "recording"
     send_pending: bool = False
+    send_dispatched: bool = False
     context: str | None = None
     suppress_send: bool = False
     metadata: dict = field(default_factory=dict)
+    prompt_override: str | None = None
+    profiles: list = field(default_factory=list)
+    routes: list = field(default_factory=list)
+    start_target: object = None
+    assistant_session_id: str | None = None
+    assistant_memory_session: dict | None = None
 
 
 class Controller:
@@ -84,6 +98,11 @@ class Controller:
         self.job = None
         self.jobs = []
         self.assistant_proposal = None
+        self.assistant_memory = {}
+        self.learning_stop = threading.Event()
+        self.learning_worker = None
+        self.learning_generation = 0
+        self.learning_proposals = {}
 
     def report_error(self, message):
         with self.lock:
@@ -102,6 +121,8 @@ class Controller:
                 "can_record": self.phase
                 in ("idle", "recording", "transcribing", "queued", "delivering"),
                 "assistant_proposal": self.assistant_proposal,
+                "loaded_model": copy.deepcopy(getattr(self.transcriber, "loaded_model", None)),
+                "learning_pending": [proposal for _, proposal in self.learning_proposals.values()],
                 "notice": self.notice,
                 "preview": self.preview_text,
                 "meter": self.meter if self.phase == "recording" else {},
@@ -125,8 +146,14 @@ class Controller:
     def _command(self, action, _focus_gate, **data):
         if action in ("copy", "paste"):
             return self._manual_delivery(action, data)
+        if action in ("learning_pending", "learning_accept", "learning_dismiss"):
+            return self._learning_command(action, data)
         with self.lock:
             if action == "status":
+                return self.status()
+            if action == "release_hold":
+                if self.job and self.phase == "recording" and data.get("id") == self.job.item_id:
+                    self.job.held_activation = False
                 return self.status()
             from .operations import handle_action
 
@@ -143,9 +170,13 @@ class Controller:
             if self.interrupted:
                 raise ValueError("Service is shutting down")
             if action == "cancel":
+                self._cancel_learning()
                 if self.phase == "delivering" and self.job and self.job.send_pending:
+                    if self.job.send_dispatched:
+                        raise ValueError("Send already dispatched; cannot withdraw the key")
                     self.cancelled = True
                     self.job.cancelled = True
+                    self.job.cancel_event.set()
                     self.message = "Send cancelled; text already inserted"
                     return self.status()
                 if self.phase == "delivering":
@@ -156,12 +187,15 @@ class Controller:
                 self.cancelled = True
                 if self.job:
                     self.job.cancelled = True
+                    self.job.cancel_event.set()
                 if self.phase == "recording":
                     self._stop(None)
                 elif self.phase in ("stopping", "transcribing", "queued", "loading"):
                     self.message = "Cancelling; waiting for capture/model to finish"
                 return self.status()
             if action == "stop":
+                if data.get("id") is not None and (not self.job or data["id"] != self.job.item_id):
+                    return self.status()
                 if self.phase != "recording":
                     raise ValueError("Not recording")
                 target = (
@@ -178,26 +212,105 @@ class Controller:
             if action != "start" and self._pending_jobs():
                 raise ValueError(f"Busy (queued); wait or cancel before {action}")
             if action == "start":
+                from .profiles import load_profiles
+                from .routing import load_routes
+
                 mode = data.get("mode", "dictation")
                 selected_text = data.get("selected_text", "")
-                if mode not in ("dictation", "command", "edit", "training"):
+                if mode not in ("dictation", "command", "edit", "training", "pronunciation"):
                     raise ValueError("Unknown recording mode")
                 if not isinstance(selected_text, str) or len(selected_text) > 100000:
                     raise ValueError("Selected text exceeds 100000 characters")
+                label = data.get("label", "")
+                if mode == "pronunciation" and (
+                    not isinstance(label, str)
+                    or not label.strip()
+                    or len(label) > 128
+                    or len(label.split()) > 5
+                    or not all(character.isprintable() for character in label)
+                ):
+                    raise ValueError(
+                        "Pronunciation label must contain 1–5 words, up to 128 characters"
+                    )
+                config = Config.load()
+                assistant_context = None
+                assistant_executions = None
+                if "assistant_history" in data:
+                    from .ai_providers import validate_history
+
+                    assistant_context = validate_history(data["assistant_history"])
+                    if mode not in ("command", "edit") or config.save_history != "off":
+                        raise ValueError(
+                            "Inline assistant history requires private Command/Edit mode"
+                        )
+                    from .assistant_history import validate_executions
+
+                    assistant_executions = validate_executions(
+                        data.get("assistant_executions", []), len(assistant_context)
+                    )
+                elif "assistant_executions" in data:
+                    raise ValueError("Execution context requires inline assistant history")
+                if len(self._pending_jobs()) >= config.queue_limit:
+                    raise ValueError("Dictation queue is full; wait for earlier recordings")
+                config = replace(config, audio_source=choose_source(config))
+                profiles = load_profiles()
+                routes = load_routes(profiles)
                 self.meter = {}
                 self.preview_text = ""
                 self.preview_at = time.monotonic()
-                self.config = Config.load()
-                self.config = replace(self.config, audio_source=choose_source(self.config))
+                self.config = config
                 self.send_armed_at = None
                 self.send_disarmed_text = None
                 self.last_voice_at = time.monotonic()
-                if len(self._pending_jobs()) >= getattr(self.config, "queue_limit", 8):
-                    raise ValueError("Dictation queue is full; wait for earlier recordings")
+                self._cancel_learning()
                 for previous in self._pending_jobs():
                     previous.suppress_send = True
                 self.item_id = str(uuid.uuid4())
-                self._new_job(mode, selected_text)
+                self._new_job(
+                    mode,
+                    selected_text,
+                    profiles=profiles,
+                    routes=routes,
+                    assistant_context=assistant_context,
+                    assistant_executions=assistant_executions,
+                )
+                self.job.held_activation = data.get("held") is True
+                self.job.label = label.strip() if mode == "pronunciation" else ""
+                if (
+                    self.config.target_policy == "start"
+                    or self.config.return_to_start == "on"
+                    or mode == "edit"
+                ) and hasattr(self.delivery, "capture_target"):
+                    try:
+                        self.job.start_target = self.delivery.capture_target(self.config)
+                    except Exception:
+                        self.job.start_target = None  # Optional desktop probing fails closed.
+                    if (
+                        mode == "edit"
+                        and not selected_text
+                        and isinstance(self.job.start_target, dict)
+                    ):
+                        captured = self.job.start_target.get("field", {})
+                        begin, end = (
+                            captured.get("selection_start", 0),
+                            captured.get("selection_end", 0),
+                        )
+                        if captured.get("complete") is not False:
+                            self.job.selected_text = captured.get("text", "")[begin:end]
+                self.job.prompt_override = data.get("profile")
+                if self.job.prompt_override is not None:
+                    from .routing import select_prompt
+
+                    try:
+                        self.job.config = select_prompt(
+                            self.config,
+                            override=self.job.prompt_override,
+                            mode=mode if mode in ("dictation", "edit", "command") else "dictation",
+                            profiles=self.job.profiles,
+                        )
+                    except Exception:
+                        self.job.done.set()
+                        raise
                 self.assistant_proposal = None
                 self.cancelled = False
                 if self.config.save_history == "on":
@@ -251,6 +364,8 @@ class Controller:
                 self.worker.start()
                 return self.status()
             if action == "clear":
+                self._cancel_learning()
+                self.learning_proposals.clear()
                 self.preview_text = ""
                 self.last_text = ""
                 self.assistant_proposal = None
@@ -260,10 +375,149 @@ class Controller:
                 return self.status()
             raise ValueError(f"Unknown command: {action}")
 
+    def _cancel_learning(self):
+        self.learning_stop.set()
+        self.learning_generation += 1
+
+    def _learning_command(self, action, data):
+        with self.lock:
+            if action == "learning_pending":
+                return [proposal for _, proposal in self.learning_proposals.values()]
+            if self.interrupted:
+                raise ValueError("Service is shutting down")
+            proposal_id = data.get("id")
+            if proposal_id not in self.learning_proposals:
+                raise ValueError("Learning suggestion no longer exists")
+            learner, proposal = self.learning_proposals[proposal_id]
+        # Dictionary writes never hold the controller state lock.
+        if action == "learning_accept":
+            learner.accept(proposal_id)
+        else:
+            learner.dismiss(proposal_id)
+        with self.lock:
+            self.learning_proposals.pop(proposal_id, None)
+        return proposal
+
+    def _start_learning(self, job, text):
+        initial = getattr(self.delivery, "last_verified", None)
+        if not isinstance(initial, dict):
+            return
+        with self.lock:
+            if self.interrupted or job.cancelled or self.job is not job:
+                return
+            self._cancel_learning()
+            stop = self.learning_stop = threading.Event()
+            generation = self.learning_generation
+            # Keep the final mutation behind the generation check even in automatic mode.
+            learner = CorrectionLearner(replace(job.config, learning_confirmation="on"))
+            if not learner.begin(text, initial):
+                return
+            self.learning_worker = threading.Thread(
+                target=self._observe_learning,
+                args=(job, learner, dict(initial), generation, stop),
+                daemon=True,
+            )
+            self.learning_worker.start()
+
+    def _observe_learning(self, job, learner, target, generation, stop):
+        deadline = time.monotonic() + job.config.learning_observe_seconds
+        try:
+            while not stop.wait(0.5) and time.monotonic() < deadline:
+                if Config.load().automatic_learning != "on":
+                    return
+                # The helper itself has a bounded timeout; no desktop calls under state lock.
+                snapshot = read_snapshot(target)
+                if stop.is_set():
+                    return
+                proposal = learner.observe(snapshot)
+                if proposal:
+                    with self.lock:
+                        if (
+                            stop.is_set()
+                            or self.interrupted
+                            or job.cancelled
+                            or self.job is not job
+                            or generation != self.learning_generation
+                        ):
+                            return
+                        if job.config.learning_confirmation == "off":
+                            learner.accept(proposal["id"])
+                        else:
+                            self.learning_proposals[proposal["id"]] = (learner, proposal)
+                            while len(self.learning_proposals) > 200:
+                                self.learning_proposals.pop(next(iter(self.learning_proposals)))
+                    return
+                if learner.observation is None:
+                    return
+        except Exception as exc:
+            if not stop.is_set():
+                self.report_error(f"Correction learning unavailable: {exc}")
+        finally:
+            learner.cancel()
+
+    @staticmethod
+    def _edit_target_matches(job):
+        if not isinstance(job.start_target, dict) or not job.selected_text:
+            return False
+        captured = job.start_target.get("field")
+        if (
+            not isinstance(captured, dict)
+            or not captured.get("field_id")
+            or captured.get("protected") is not False
+            or captured.get("complete") is False
+            or captured.get("editable") is not True
+            or captured.get("terminal")
+        ):
+            return False
+        start, end = captured.get("selection_start"), captured.get("selection_end")
+        text = captured.get("text")
+        return (
+            isinstance(text, str)
+            and type(start) is int
+            and type(end) is int
+            and 0 <= start < end <= len(text)
+            and text[start:end] == job.selected_text
+        )
+
     def _pending_jobs(self):
         return [job for job in self.jobs if not job.done.is_set()]
 
-    def _new_job(self, mode="dictation", selected_text=""):
+    def _new_job(
+        self,
+        mode="dictation",
+        selected_text="",
+        profiles=None,
+        routes=None,
+        assistant_context=None,
+        assistant_executions=None,
+    ):
+        from .profiles import load_profiles
+        from .routing import load_routes
+
+        profiles = load_profiles() if profiles is None else profiles
+        routes = load_routes(profiles) if routes is None else routes
+        assistant_session = None
+        if mode in ("command", "edit"):
+            if self.config.save_history == "on":
+                from .assistant_history import AssistantHistory
+
+                assistant_session = AssistantHistory().current(mode)
+            else:
+                previous = self.assistant_memory.get(mode)
+                if assistant_context is not None and (
+                    previous is None
+                    or previous["messages"] != assistant_context
+                    or previous.get("executions", []) != assistant_executions
+                ):
+                    self.assistant_memory[mode] = {
+                        "id": uuid.uuid4().hex,
+                        "messages": assistant_context,
+                        "executions": assistant_executions or [],
+                    }
+                assistant_session = self.assistant_memory.setdefault(
+                    mode, {"id": uuid.uuid4().hex, "messages": []}
+                )
+
         pending = self._pending_jobs()
         audio_path = self.history.recording(self.item_id)
         if self.config.save_history == "off":
@@ -277,6 +531,12 @@ class Controller:
             selected_text=selected_text,
         )
         self.jobs = [*pending, self.job]
+        self.job.profiles = profiles
+        self.job.routes = routes
+        if assistant_session is not None:
+            self.job.assistant_session_id = assistant_session["id"]
+            if self.config.save_history == "off":
+                self.job.assistant_memory_session = assistant_session
         return self.job
 
     def _update(self, job, status, text="", error="", **metadata):
@@ -303,10 +563,12 @@ class Controller:
         """Stop on logout without interpreting it as the user's discard command."""
         with self.lock:
             self.interrupted = True
+            self._cancel_learning()
             self.cancelled = True
             recorder, self.recorder = self.recorder, None
             for job in self._pending_jobs():
                 job.cancelled = True
+                job.cancel_event.set()
                 rows = self.history.rows(limit=10000)
                 row = next((r for r in rows if r["id"] == job.item_id), {})
                 if job.config.save_history == "off":
@@ -348,17 +610,31 @@ class Controller:
         try:
             if target == "capture-focus":
                 try:
-                    target = self.delivery.focus()
+                    if job.config.target_policy == "start" or job.config.return_to_start == "on":
+                        target = job.start_target
+                    elif hasattr(self.delivery, "capture_target"):
+                        target = self.delivery.capture_target(job.config)
+                    else:
+                        target = self.delivery.focus()
                 except Exception:
                     target = None
             metadata_target = target
-            if (
+            needs_metadata = (
                 job.config.save_history == "on"
+                or job.config.ai_enabled == "on"
+                or job.mode in ("edit", "command")
+            )
+            if (
+                needs_metadata
                 and metadata_target is None
                 and hasattr(self.delivery, "target_metadata")
             ):
                 try:
-                    metadata_target = self.delivery.focus()
+                    metadata_target = (
+                        self.delivery.capture_target(job.config)
+                        if hasattr(self.delivery, "capture_target")
+                        else self.delivery.focus()
+                    )
                 except Exception:
                     metadata_target = None
             if enabled(job.config, "smart_capitalization") or enabled(
@@ -377,7 +653,8 @@ class Controller:
             finally:
                 self.stop_done.set()
                 self.media.resume()
-            if job.config.save_history == "on" and hasattr(self.delivery, "target_metadata"):
+                play_sound(job.config, stop=True)
+            if needs_metadata and hasattr(self.delivery, "target_metadata"):
                 try:
                     job.metadata = self.delivery.target_metadata(metadata_target)
                 except Exception:
@@ -396,15 +673,10 @@ class Controller:
                 job.done.set()
                 return
             if job.cancelled:
-                job.audio_path.unlink(missing_ok=True)
-                self._update(job, "cancelled")
-                self._job_status(job, "idle", "Cancelled")
-                if job.config.save_history == "off":
-                    job.audio_path.unlink(missing_ok=True)
-                job.done.set()
-                return
-            self._job_status(job, "queued", "Waiting for earlier dictation")
-            self._update(job, "transcribing")
+                self._job_status(job, "queued", "Cancelling; waiting for model cleanup")
+            else:
+                self._job_status(job, "queued", "Waiting for earlier dictation")
+                self._update(job, "transcribing")
         if focus_gate and not focus_gate["valid"]:
             target = None
         self._finish(job, target)
@@ -465,11 +737,18 @@ class Controller:
 
     def _finish(self, job, target):
         text = ""
+        alignment = None
+        pronunciation_warning = ""
         ai_warning = ""
         send_warning = ""
         config = job.config
         path = job.audio_path
         try:
+            if job.cancelled:
+                self._update(job, "cancelled")
+                path.unlink(missing_ok=True)
+                self._job_status(job, "idle", "Cancelled")
+                return
             if not self._wait_for_predecessors(job):
                 return
             with self.lock:
@@ -484,6 +763,8 @@ class Controller:
             with self.model_lock:
                 if not job.cancelled and not self.interrupted:
                     text = self.transcriber.transcribe(path, config)
+                    if config.pronunciation_matching == "on":
+                        alignment = copy.deepcopy(getattr(self.transcriber, "last_alignment", None))
             with self.lock:
                 if self.interrupted:
                     return
@@ -513,13 +794,158 @@ class Controller:
                     model=config.model,
                     language=config.language,
                 )
+            if job.prompt_override is None and job.mode in ("dictation", "edit", "command"):
+                try:
+                    from .routing import select_prompt
+
+                    config = select_prompt(
+                        config,
+                        job.metadata.get("app", ""),
+                        mode=job.mode,
+                        profiles=job.profiles,
+                        routes=job.routes,
+                    )
+                except Exception as exc:
+                    ai_warning = f"Prompt routing failed ({exc}); using original transcription"
+                    config = replace(config, ai_enabled="off")
+                    if self.job is job:
+                        self.report_error(ai_warning)
             if job.mode != "dictation":
                 if job.mode == "training":
                     proposal = {"mode": "training", "text": text}
+                elif job.mode == "pronunciation":
+                    with self.lock:
+                        if self.interrupted or job.cancelled:
+                            return
+                        # Serialize this small feature-store update with cancellation.
+                        enrollment = PronunciationStore.enroll(job.label, path)
+                    proposal = {"mode": "pronunciation", "text": job.label, **enrollment}
                 else:
                     from .assistance import propose
+                    from .assistant_history import (
+                        AssistantHistory,
+                        append_private_messages,
+                        context_messages,
+                        pending_executions,
+                    )
 
-                    proposal = propose(text, config, job.mode, job.selected_text)
+                    if config.save_history == "on":
+                        sessions = AssistantHistory()
+                        session = sessions.get(job.assistant_session_id)
+                    else:
+                        sessions = None
+                        session = job.assistant_memory_session
+                    conversation = context_messages(session["messages"])
+                    observed = pending_executions(session)
+                    instruction = (
+                        json.dumps(
+                            {"instruction": text, "observed_command_results": observed},
+                            ensure_ascii=False,
+                        )
+                        if observed
+                        else text
+                    )
+                    thoughts = []
+                    thought_bytes = 0
+
+                    def thinking(piece):
+                        nonlocal thought_bytes
+                        with self.lock:
+                            if not job.cancelled and not self.interrupted:
+                                # External-provider display only; never enters
+                                # transcript text or retained conversation turns.
+                                bounded = piece.encode("utf-8")[: 65536 - thought_bytes].decode(
+                                    "utf-8", errors="ignore"
+                                )
+                                thought_bytes += len(bounded.encode("utf-8"))
+                                if bounded:
+                                    thoughts.append(bounded)
+
+                    def delta(piece):
+                        with self.lock:
+                            if self.job is job and not job.cancelled and not self.interrupted:
+                                self.preview_text += piece
+
+                    options = {"resolved_config": True, "cancel_event": job.cancel_event}
+                    if conversation:
+                        options["history"] = conversation
+                    if getattr(config, "ai_show_thinking", "off") == "on":
+                        options["on_thinking"] = thinking
+                    if config.ai_streaming == "on" and job.mode == "edit":
+                        options["on_delta"] = delta
+                    proposal = propose(instruction, config, job.mode, job.selected_text, **options)
+                    request = proposal.pop(
+                        "request",
+                        json.dumps(
+                            {"instruction": text, "selected_text": job.selected_text},
+                            ensure_ascii=False,
+                        ),
+                    )
+                    response = proposal.pop("response", proposal.get("command", proposal["text"]))
+                    with self.lock:
+                        if self.interrupted:
+                            return
+                        if job.cancelled:
+                            self._update(job, "cancelled")
+                            path.unlink(missing_ok=True)
+                            self._job_status(job, "idle", "Cancelled")
+                            return
+                        turns = [
+                            {"role": "user", "content": request},
+                            {"role": "assistant", "content": response},
+                        ]
+                        if sessions is not None:
+                            sessions.append(session["id"], turns)
+                        else:
+                            append_private_messages(session, turns)
+                        proposal["session_id"] = session["id"]
+                        if thoughts:
+                            proposal["thinking"] = "".join(thoughts)
+                        if sessions is None:
+                            proposal["private_messages"] = context_messages(session["messages"])
+                            removed = len(session["messages"]) - len(proposal["private_messages"])
+                            proposal["private_executions"] = [
+                                {
+                                    "message_count": event["message_count"] - removed,
+                                    "result": dict(event["result"]),
+                                }
+                                for event in session.get("executions", [])
+                                if event["message_count"] >= removed
+                            ]
+
+                        # The status response repeats preview text and escapes
+                        # Unicode. Bound its actual serialized bytes, not only
+                        # characters, reserving room for the other status fields.
+                        def proposal_size():
+                            return len(
+                                json.dumps(
+                                    {"assistant_proposal": proposal, "preview": proposal["text"]}
+                                ).encode()
+                            )
+
+                        while (
+                            proposal.get("private_executions")
+                            and proposal_size() > MAX_MESSAGE - 131072
+                        ):
+                            del proposal["private_executions"][0]
+                        while (
+                            proposal.get("private_messages")
+                            and proposal_size() > MAX_MESSAGE - 131072
+                        ):
+                            del proposal["private_messages"][:2]
+                            proposal["private_executions"] = [
+                                {
+                                    "message_count": event["message_count"] - 2,
+                                    "result": event["result"],
+                                }
+                                for event in proposal.get("private_executions", [])
+                                if event["message_count"] >= 2
+                            ]
+                        if proposal_size() > MAX_MESSAGE - 131072:
+                            raise ValueError(
+                                "Assistant proposal exceeds status limit; "
+                                "request a shorter response"
+                            )
                 with self.lock:
                     if self.interrupted:
                         return
@@ -536,7 +962,43 @@ class Controller:
                         self.assistant_proposal = proposal
                         self.preview_text = text
                     self._job_status(job, "idle", "Recording ready for review; nothing inserted")
+                if (
+                    job.mode == "edit"
+                    and config.edit_delivery == "replace"
+                    and self._edit_target_matches(job)
+                    and not job.cancelled
+                    and not self.interrupted
+                ):
+                    with self.lock:
+                        if job.cancelled or self.interrupted:
+                            return
+                        self._job_status(job, "delivering", "Replacing captured selection")
+                    result = self.delivery.replace_selection(text, config, job.start_target)
+                    self._update(job, result, text)
+                    self._job_status(
+                        job,
+                        "idle",
+                        "Edit inserted"
+                        if result == "pasted"
+                        else "Edit copied; selection changed or unavailable",
+                    )
                 return
+            if enabled(config, "pronunciation_matching"):
+                if isinstance(alignment, dict) and alignment.get("words"):
+                    correction = PronunciationStore.correct_spans(
+                        text, path, alignment, budget=config.pronunciation_span_budget
+                    )
+                    text = correction["text"]
+                    if correction.get("truncated"):
+                        pronunciation_warning = (
+                            "Pronunciation matching budget reached; unmatched ASR text retained"
+                        )
+                    elif correction.get("skipped_reason"):
+                        pronunciation_warning = (
+                            f"Pronunciation spans skipped: {correction['skipped_reason']}"
+                        )
+                else:
+                    text = PronunciationStore.correct(text, path)
             plan = parse_send(
                 text,
                 config.spoken_send_phrase,
@@ -546,7 +1008,18 @@ class Controller:
             text = format_text(plan.text, config, context=job.context)
             if enabled(config, "ai_enabled") and text:
                 try:
-                    text = process(text, config)
+                    if config.ai_streaming == "on":
+                        streamed = []
+
+                        def delta(piece):
+                            with self.lock:
+                                if self.job is job and not job.cancelled and not self.interrupted:
+                                    streamed.append(piece)
+                                    self.preview_text = "".join(streamed)
+
+                        text = process(text, config, on_delta=delta, cancel_event=job.cancel_event)
+                    else:
+                        text = process(text, config)
                 except Exception as exc:
                     ai_warning = f"AI cleanup failed ({exc}); using original transcription"
                     if self.job is job:
@@ -562,10 +1035,13 @@ class Controller:
                 if self.job is job:
                     self.preview_text = text
                     self.dictation_delivery = True
-                self.last_text = text
+                if text:
+                    self.last_text = text
                 self._update(job, "transcribed", text)
                 self._job_status(job, "delivering", "Delivering transcript")
-            result = self.delivery.deliver(text, config, target) if text else "copied"
+            result = self.delivery.deliver(text, config, target) if text else "transcribed"
+            if result == "pasted" and enabled(config, "automatic_learning"):
+                self._start_learning(job, text)
             if plan.should_send and (
                 not text or result in ("paste_requested", "insert_requested", "pasted")
             ):
@@ -574,11 +1050,32 @@ class Controller:
                     self.send_pending = True
                 try:
                     time.sleep(0.5)
+
+                    def reserve_send():
+                        with self.lock:
+                            if self.interrupted or job.cancelled or job.suppress_send:
+                                return False
+                            job.send_dispatched = True
+                            return True
+
                     with self.lock:
                         send = not self.interrupted and not job.cancelled and not job.suppress_send
                     if send:
-                        if not self.delivery.send_key(config, target):
+                        if getattr(self.delivery, "send_key_guarded", False):
+                            sent = self.delivery.send_key(
+                                config,
+                                target,
+                                before_send=reserve_send,
+                                allow_without_insert=not bool(text),
+                            )
+                        else:
+                            sent = (
+                                self.delivery.send_key(config, target) if reserve_send() else False
+                            )
+                        if not sent:
                             send_warning = "Spoken Send skipped: destination could not be verified"
+                        elif not text:
+                            result = "send_requested"
                     elif job.suppress_send:
                         send_warning = "Spoken Send skipped: a newer recording started"
                 finally:
@@ -592,7 +1089,11 @@ class Controller:
                 if config.save_audio == "off" and config.save_history == "on":
                     self.history.prune_audio(job.item_id)
                 message = (
-                    "Copied — paste into your app"
+                    "Send requested — no text inserted"
+                    if result == "send_requested"
+                    else "No text to deliver"
+                    if not text
+                    else "Copied — paste into your app"
                     if result == "copied"
                     else (
                         "Insertion requested — transcript saved in history"
@@ -602,6 +1103,8 @@ class Controller:
                 )
                 if ai_warning:
                     message += f". {ai_warning}"
+                if pronunciation_warning:
+                    message += f". {pronunciation_warning}"
                 if send_warning:
                     message += f". {send_warning}"
                 self._job_status(job, "idle", message)
@@ -624,6 +1127,10 @@ class Controller:
                     )
                     self._job_status(job, "idle", f"{exc}. {retained}")
         finally:
+            key = getattr(self.transcriber, "stream_key", None)
+            if job.cancelled and key and key[0] == job.audio_path:
+                with self.model_lock:
+                    self._reset_stream_if_owned(job)
             with self.lock:
                 if not self.interrupted:
                     if config.save_history == "off":
@@ -640,8 +1147,13 @@ class Controller:
                 with self.lock:
                     if self.phase != "recording" or self.item_id != item_id:
                         return
+                    if any(not done.is_set() for done in self.job.predecessors):
+                        return  # Preserve earlier native stream caches until ordered finalization.
                     path = self.job.audio_path
+                    preview_job = self.job
                 text = self.transcriber.preview(path, config)
+                if preview_job.cancelled or self.interrupted:
+                    self._reset_stream_if_owned(preview_job)
             with self.lock:
                 if self.phase != "recording" or self.item_id != item_id or self.cancelled:
                     return
@@ -663,6 +1175,12 @@ class Controller:
             with self.lock:
                 if self.item_id == item_id:
                     self.preview_at = time.monotonic()
+
+    def _reset_stream_if_owned(self, job):
+        """Caller owns model_lock; never clear a newer recording's native caches."""
+        key = getattr(self.transcriber, "stream_key", None)
+        if key and key[0] == job.audio_path and hasattr(self.transcriber, "reset_stream"):
+            self.transcriber.reset_stream()
 
     def _prune_budget(self):
         try:
@@ -694,7 +1212,7 @@ class Controller:
             if (
                 self.phase == "recording"
                 and (self.config.live_preview == "on" or self.config.send_after_pause == "on")
-                and time.monotonic() - self.preview_at >= 2
+                and time.monotonic() - self.preview_at >= self.config.preview_interval_ms / 1000
                 and (self.preview_worker is None or not self.preview_worker.is_alive())
                 and hasattr(self.transcriber, "preview")
             ):
@@ -706,6 +1224,7 @@ class Controller:
                 self.phase == "recording"
                 and self.send_armed_at is not None
                 and enabled(self.config, "send_after_pause")
+                and not self.job.held_activation
                 and enabled(self.config, "spoken_send")
                 and time.monotonic() - self.send_armed_at >= 0.5
                 and time.monotonic() - self.last_voice_at >= 0.5

@@ -102,11 +102,54 @@ class Handler(BaseHTTPRequestHandler):
                 self.answer(200, statistics(controller.history))
             elif path.path in ("/v1/dictionary/replacements", "/v1/dictionary/custom-words"):
                 if path.path.endswith("custom-words"):
-                    self.answer(501, {"error": "Engine vocabulary boosting is not available"})
+                    from .vocabulary import VocabularyStore
+
+                    entries = VocabularyStore.entries()
+                    if self.command == "POST":
+                        mode = data.get("mode", "append")
+                        if mode not in ("append", "replace"):
+                            raise ValueError("Invalid vocabulary write mode")
+                        incoming = data.get("entries", [data] if "text" in data else [])
+                        incoming = VocabularyStore.validate_entries(incoming)
+                        keys = {item["text"].casefold() for item in incoming}
+                        entries = incoming + (
+                            []
+                            if mode == "replace"
+                            else [item for item in entries if item["text"].casefold() not in keys]
+                        )
+                        VocabularyStore.save_entries(entries)
+                    self.answer(200, {"count": len(entries), "items": entries})
                     return
                 dictionary = Dictionary.load()
                 if self.command == "POST":
-                    dictionary["replacements"] = data["replacements"]
+                    if "replacements" in data:
+                        dictionary["replacements"] = data["replacements"]
+                    else:
+                        mode = data.get("mode", "append")
+                        if mode not in ("append", "replace"):
+                            raise ValueError("Invalid replacement write mode")
+                        incoming = data.get(
+                            "entries",
+                            [{"triggers": data["triggers"], "replacement": data["replacement"]}]
+                            if "triggers" in data
+                            else [],
+                        )
+                        incoming = [
+                            {"triggers": item["triggers"], "replacement": item["replacement"]}
+                            for item in incoming
+                        ]
+                        checked = {**dictionary, "replacements": incoming}
+                        Dictionary.validate(checked)
+                        keys = {item["replacement"].casefold() for item in incoming}
+                        dictionary["replacements"] = incoming + (
+                            []
+                            if mode == "replace"
+                            else [
+                                item
+                                for item in dictionary["replacements"]
+                                if item["replacement"].casefold() not in keys
+                            ]
+                        )
                     Dictionary.save(dictionary)
                 self.answer(200, dictionary["replacements"])
             elif path.path == "/v1/postprocess" and self.command == "POST":
@@ -126,6 +169,12 @@ class Handler(BaseHTTPRequestHandler):
             elif path.path == "/v1/transcribe" and self.command == "POST":
                 from .file_transcription import transcribe_file
 
+                with controller.lock:
+                    busy = bool(controller._pending_jobs())
+                if busy:
+                    self.answer(409, {"error": "Recording or dictation inference is active"})
+                    return
+
                 audio = base64.b64decode(data["audio_base64"], validate=True)
                 if not audio:
                     raise ValueError("Empty audio")
@@ -137,6 +186,13 @@ class Handler(BaseHTTPRequestHandler):
                         file.write(audio)
                         file.flush()
                         with controller.model_lock:
+                            with controller.lock:
+                                busy = bool(controller._pending_jobs())
+                            if busy:
+                                self.answer(
+                                    409, {"error": "Recording or dictation inference is active"}
+                                )
+                                return
                             result = transcribe_file(
                                 Path(file.name),
                                 Config.load(),

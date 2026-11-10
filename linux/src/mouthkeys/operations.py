@@ -56,6 +56,28 @@ def statistics(history, config=None, today=None):
         cursor -= timedelta(days=1)
     words = sum(days.values())
     duration = sum(float(r.get("duration", 0)) for r in rows)
+    best_streak = run = 0
+    previous = None
+    for day in sorted(days):
+        gap = (day - previous).days if previous else 0
+        connected = gap == 1 or (
+            previous is not None
+            and config.weekends_break_streak == "off"
+            and gap <= 3
+            and all((previous + timedelta(days=step)).weekday() >= 5 for step in range(1, gap))
+        )
+        run = run + 1 if connected else 1
+        best_streak = max(best_streak, run)
+        previous = day
+    milestones = {}
+    for label, reached, targets in (
+        ("Words", words, (1000, 10000, 50000, 100000, 500000, 1000000)),
+        ("Dictations", len(rows), (50, 100, 500, 1000, 5000, 10000)),
+        ("Streak", best_streak, (7, 14, 30, 60, 100, 365)),
+    ):
+        milestones[label] = [
+            {"target": target, "achieved": reached >= target} for target in targets
+        ]
     windows = {}
     for label, seconds in (
         ("6 hours", 21600),
@@ -75,6 +97,8 @@ def statistics(history, config=None, today=None):
         "recording_seconds": duration,
         "time_saved_seconds": max(0, words / config.typing_wpm * 60 - duration),
         "current_streak": streak,
+        "best_streak": best_streak,
+        "milestones": milestones,
         "windows": windows,
         "daily_words": {str(k): v for k, v in sorted(days.items())},
         "top_apps": apps.most_common(5),
@@ -106,8 +130,13 @@ def export_audio(history, path, item_id=None):
 
 
 def backup_export(history, path):
+    from .assistant_history import AssistantHistory
     from .dictionary import Dictionary
+    from .file_history import FileHistory
     from .profiles import load_profiles
+    from .pronunciation import PronunciationStore
+    from .routing import load_routes
+    from .vocabulary import VocabularyStore
 
     return write_private(
         path,
@@ -118,6 +147,11 @@ def backup_export(history, path):
                 "dictionary": Dictionary.load(),
                 "profiles": load_profiles(),
                 "history": history.all_rows(),
+                "file_history": FileHistory().rows(),
+                "assistant_history": AssistantHistory().export(),
+                "prompt_routes": load_routes(),
+                "vocabulary": VocabularyStore.entries(),
+                "pronunciations": PronunciationStore.load(),
             },
             indent=2,
         ).encode(),
@@ -126,7 +160,11 @@ def backup_export(history, path):
 
 def backup_import(history, path):
     from .dictionary import Dictionary
-    from .profiles import save_profiles, validate_profiles
+    from .file_history import FileHistory
+    from .profiles import load_profiles, save_profiles, validate_profiles
+    from .pronunciation import PronunciationStore
+    from .routing import load_routes, save_routes, validate_routes
+    from .vocabulary import VocabularyStore
 
     path = Path(path)
     if path.stat().st_size > 100 * 1024 * 1024:
@@ -134,7 +172,11 @@ def backup_import(history, path):
     data = json.loads(path.read_text())
     if data.get("version") != 1:
         raise ValueError("Unsupported backup version")
-    config = Config(**data["config"]).validate()
+    try:
+        current_config = asdict(Config.load())
+    except (OSError, ValueError, TypeError):
+        current_config = asdict(Config())
+    config = Config(**{**current_config, **data["config"]}).validate()
     rows = data["history"]
     if not isinstance(rows, list) or len(rows) > 1000000:
         raise ValueError("Invalid backup history")
@@ -179,9 +221,34 @@ def backup_import(history, path):
             raise ValueError("Invalid history duration")
     # Validate dictionary before touching current data. Its saver supplies stricter validation.
     dictionary = Dictionary.validate(data["dictionary"])
-    profiles = validate_profiles(data.get("profiles", []))
+    try:
+        current_profiles = load_profiles()
+    except (OSError, ValueError):
+        if "profiles" not in data:
+            raise
+        current_profiles = []
+    imported_profiles = validate_profiles(data.get("profiles", []))
+    by_id = {profile["id"]: profile for profile in current_profiles}
+    by_id.update({profile["id"]: profile for profile in imported_profiles})
+    profiles = validate_profiles(list(by_id.values()))
+    from .assistant_history import AssistantHistory
+
+    file_rows = FileHistory.validate_entries(data.get("file_history", []))
+    assistant_rows = AssistantHistory.validate_entries(data.get("assistant_history", []))
+    routes = validate_routes(
+        data["prompt_routes"] if "prompt_routes" in data else load_routes(), profiles
+    )
+    vocabulary = (
+        VocabularyStore.validate_entries(data["vocabulary"]) if "vocabulary" in data else None
+    )
+    pronunciations = (
+        PronunciationStore.validate(data["pronunciations"]) if "pronunciations" in data else None
+    )
     if config.ai_profile and config.ai_profile not in {profile["id"] for profile in profiles}:
         raise ValueError("Backup selects a missing AI profile")
+    for selection in (config.edit_profile, config.command_profile):
+        if selection not in {"default", "off", *(profile["id"] for profile in profiles)}:
+            raise ValueError("Backup selects a missing mode profile")
     # Merge by UUID, never delete existing recordings or entries during restore.
     with history.connect() as connection:
         for row in rows:
@@ -193,7 +260,17 @@ def backup_import(history, path):
             )
     Dictionary.save(dictionary)
     save_profiles(profiles)
+    save_routes(routes)
     config.save()
+    from .cli import apply_startup
+
+    apply_startup(config)
+    FileHistory().restore(file_rows)
+    AssistantHistory().restore(assistant_rows)
+    if vocabulary is not None:
+        VocabularyStore.save_entries(vocabulary)
+    if pronunciations is not None:
+        PronunciationStore.save(pronunciations)
     return {"imported": len(rows), "mode": "merge"}
 
 

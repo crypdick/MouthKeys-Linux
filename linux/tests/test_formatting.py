@@ -6,7 +6,7 @@ import pytest
 
 from mouthkeys.config import Config
 from mouthkeys.dictionary import Dictionary
-from mouthkeys.formatting import format_text, parse_send
+from mouthkeys.formatting import apply_question_mark_shortcut, format_text, parse_send
 from mouthkeys.postprocess import process
 
 
@@ -83,6 +83,71 @@ def test_custom_send_phrase_and_literal_prefix():
     assert not parse_send("verbatim send send", "send send", True, "verbatim").should_send
 
 
+@pytest.mark.parametrize(
+    "text,expected",
+    [
+        ("Is that right Q", "Is that right?"),
+        ("Is that right Q.", "Is that right?"),
+        ("Is that right, Q?", "Is that right?"),
+        ("Is that right? Q.", "Is that right?"),
+        ("Is that right cue", "Is that right?"),
+        ("Q", "?"),
+        ("Is this OK Q Q and then deploy it", "Is this OK? And then deploy it"),
+        ("Is this OK QQ. Then deploy", "Is this OK? Then deploy"),
+        ("Is this OK queue, queue", "Is this OK?"),
+        ("Is this OK cue cue.", "Is this OK?"),
+        ("Was it fast Q. Q.", "Was it fast?"),
+        ("Does it work Q Q iPhone first", "Does it work? iPhone first"),
+        ("Is it fast Q Q the API is", "Is it fast? The API is"),
+        ("Works Q Q API stays uppercase", "Works? API stays uppercase"),
+        ("Is this OK Q Q\nNext item", "Is this OK?\nNext item"),
+        ("Plan literal Q", "Plan Q"),
+        ("Call it literal Q Q", "Call it Q Q"),
+        ("Literal Q.", "Q."),
+    ],
+)
+def test_question_shortcut_matches_upstream_spoken_send_examples(text, expected):
+    assert format_text(text, Config(question_mark_shortcut="on")) == expected
+    assert format_text(text, Config()) == text
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Add it to the queue",
+        "Add it to the queue.",
+        "The Q3 numbers and IQ tests",
+        "Star Trek's Q is back",
+        "Q&A",
+        "uv run pytest -q",
+        "apt-get install -qq",
+        "cd ~/q",
+        "Make a Q-Q plot",
+        "path/q",
+        r"path\q",
+        "flag=q",
+        "test@qq",
+        "variable_q",
+        "éq",
+        "q’",
+        "#q",
+        "$q",
+        "file.q",
+    ],
+)
+def test_question_shortcut_preserves_words_flags_paths_and_identifiers(text):
+    assert format_text(text, Config(question_mark_shortcut="on")) == text
+
+
+def test_question_shortcut_preserves_newline_spacing_and_custom_literal_prefix_once():
+    assert apply_question_mark_shortcut("Works Q Q\n\t  next") == "Works?\n\t  Next"
+    assert apply_question_mark_shortcut("Plan leave alone Q", "leave alone") == "Plan Q"
+    assert apply_question_mark_shortcut("Call it literal Q Q.") == "Call it Q Q."
+    plan = parse_send("Is that right Q send send", "send send", True)
+    assert plan.should_send
+    assert format_text(plan.text, Config(question_mark_shortcut="on")) == "Is that right?"
+
+
 def test_ai_disabled_does_not_make_any_request():
     def forbidden(*args, **kwargs):
         raise AssertionError("Network called while disabled")
@@ -103,7 +168,7 @@ def test_ai_cleanup_explicit_payload_env_secret_and_bounded_timeout(monkeypatch)
     request, timeout = calls[0]
     assert timeout == 30
     assert request.headers["Authorization"] == "Bearer secret-token"
-    assert json.loads(request.data)["messages"][1]["content"] == "raw text"
+    assert json.loads(request.data)["messages"][-1]["content"] == config.ai_prompt + "\n\nraw text"
     assert "secret-token" not in json.dumps(json.loads(request.data))
 
 

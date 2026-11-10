@@ -42,6 +42,7 @@ def engine(monkeypatch):
 
     model = Model()
     monkeypatch.setattr(faster_whisper, "WhisperModel", lambda *a, **kw: model)
+    monkeypatch.setattr("mouthkeys.engines.resolve_whisper", lambda config: config.model)
     return Transcriber(), model
 
 
@@ -168,3 +169,50 @@ def test_unfinished_wav_reads_from_committed_frame(tmp_path):
     samples = read_audio_from(path, 16000, seconds=1)
     assert len(samples) == 16000
     np.testing.assert_array_equal(samples, np.zeros(16000))
+
+
+def timed_segment(start, end, text):
+    return SimpleNamespace(
+        start=start,
+        end=end,
+        text=text,
+        words=[SimpleNamespace(word=text, start=start, end=end, probability=0.8)],
+    )
+
+
+def test_final_word_alignment_retains_committed_and_offsets_fresh_tail(engine, tmp_path):
+    from dataclasses import replace
+
+    transcriber, model = engine
+    config = replace(Config(), pronunciation_matching="on")
+    path = tmp_path / "words.wav"
+    audio(path, 10)
+    model.results = [[timed_segment(0, 5, " First."), timed_segment(5, 9, " Wrong.")]]
+    transcriber.preview(path, config)
+    audio(path, 12)
+    model.results = [[timed_segment(0, 6, " Correct.")]]
+    assert transcriber.transcribe(path, config) == "First. Correct."
+    assert model.lengths == [10, 7]
+    assert [(w["word"], w["start"], w["end"]) for w in transcriber.words] == [
+        (" First.", 0, 5),
+        (" Correct.", 5, 11),
+    ]
+    assert transcriber.last_alignment["source"] == str(path)
+    assert transcriber.last_alignment["text"] == "First. Correct."
+
+
+def test_final_word_alignment_reuses_pending_and_clears_on_reset(engine, tmp_path):
+    from dataclasses import replace
+
+    transcriber, model = engine
+    config = replace(Config(), pronunciation_matching="on")
+    path = tmp_path / "words.wav"
+    audio(path, 3)
+    model.results = [[timed_segment(0, 2.5, " Word.")]]
+    transcriber.preview(path, config)
+    assert transcriber.transcribe(path, config) == "Word."
+    assert len(transcriber.words) == 1
+    assert model.lengths == [3]
+    transcriber.reset_stream()
+    assert transcriber.words == []
+    assert transcriber.last_alignment is None

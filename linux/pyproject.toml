@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mouthkeys-linux"
-version = "0.1.1"
+version = "0.2.0"
 description = "Local, keyboard-driven dictation for Linux"
 readme = "README.md"
 requires-python = ">=3.11,<3.15"
@@ -21,6 +21,8 @@ Documentation = "https://github.com/crypdick/MouthKeys-Linux/blob/main/linux/REA
 gui = ["PySide6-Essentials>=6.8,<7"]
 onnx = ["onnx-asr[cpu,hub]>=0.12,<0.13"]
 diarization = ["sherpa-onnx>=1.12.20,<2"]
+transformers = ["transformers[torch]>=5.22.2,<5.23", "librosa>=0.10,<1", "soundfile>=0.12,<1"]
+nemo = ["nemo_toolkit[asr]>=3,<4", "torch==2.11.0", "torchaudio==2.11.0"]
 
 [dependency-groups]
 dev = ["pytest>=8,<10", "ruff>=0.12"]

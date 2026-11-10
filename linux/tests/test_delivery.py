@@ -98,7 +98,9 @@ def test_spoken_send_rechecks_focus_and_never_activates_target(monkeypatch, focu
     monkeypatch.setattr(adapter, "terminal", lambda _: False)
     calls = []
     monkeypatch.setattr(delivery, "run", lambda args: calls.append(args))
-    assert adapter.send_key(Config(spoken_send_key="shift+return"), "10") is expected
+    assert (
+        adapter.send_key(Config(spoken_send="on", spoken_send_key="shift+return"), "10") is expected
+    )
     assert calls == ([["xdotool", "key", "--clearmodifiers", "shift+Return"]] if expected else [])
 
 
@@ -109,7 +111,7 @@ def test_spoken_send_terminal_uses_plain_return(monkeypatch):
     monkeypatch.setattr(adapter, "terminal", lambda _: True)
     calls = []
     monkeypatch.setattr(delivery, "run", lambda args: calls.append(args))
-    assert adapter.send_key(Config(spoken_send_key="ctrl+return"), "10")
+    assert adapter.send_key(Config(spoken_send="on", spoken_send_key="ctrl+return"), "10")
     assert calls[0][-1] == "Return"
 
 
@@ -234,3 +236,23 @@ def test_destination_metadata_uses_real_x11_properties_and_not_guesswork(monkeyp
     monkeypatch.setattr(delivery, "session", lambda: "wayland")
     assert delivery.Delivery().target_metadata("42") == {}
     assert len(calls) == 1
+
+
+def test_wayland_container_restore_uses_actual_clipboard_owner_helper_when_supported(monkeypatch):
+    from mouthkeys import clipboard
+
+    monkeypatch.setattr(delivery, "session", lambda: "wayland")
+    monkeypatch.setattr(delivery.time, "sleep", lambda _: None)
+    adapter = delivery.Delivery()
+    monkeypatch.setattr(adapter, "focus", lambda: "sway:77")
+    calls = []
+    monkeypatch.setattr(
+        clipboard,
+        "ClipboardPaste",
+        lambda *a, **kw: SimpleNamespace(finish=lambda value: calls.append(("finish", value))),
+    )
+    monkeypatch.setattr(adapter, "copy", lambda _: pytest.fail("Helper already copied"))
+    monkeypatch.setattr(adapter, "paste_key", lambda _: calls.append("paste"))
+    config = Config(delivery="wayland", paste_backend="wtype", restore_clipboard="on")
+    assert adapter.deliver("hello", config, "sway:77") == "paste_requested"
+    assert calls == ["paste", ("finish", True)]

@@ -140,7 +140,9 @@ def test_speaker_labels_use_overlap_and_preserve_unmatched(monkeypatch):
             SimpleNamespace(start=4, end=5, text="No matching speech turn."),
         ]
     )
-    config = replace(Config(), file_speaker_labels="on", file_speaker_count=2)
+    config = replace(
+        Config(), file_speaker_labels="on", file_speaker_count=2, file_diarization_mode="overlap"
+    )
     result = file_transcription.transcribe_file("input.wav", config, transcriber=model)
     assert [s["speaker"] for s in result["segments"]] == [1, None]
     assert result["speaker_turns"] == turns
@@ -284,3 +286,119 @@ def test_bounded_decoder_real_stereo_resampling_without_desktop(tmp_path):
     assert not np.any(result)
     with pytest.raises(ValueError, match="exceeds 0.5 seconds"):
         file_transcription._decode_bounded(path, 0.5)
+
+
+def test_onnx_revision_download_is_isolated_and_runtime_offline(monkeypatch):
+    calls = []
+
+    def explicit_fetch(model, path, quantization, revision, progress):
+        calls.append(("fetch", revision, quantization))
+        path.mkdir(parents=True)
+
+    def load_model(model, path, **kwargs):
+        calls.append(("load", path, kwargs))
+        path.mkdir(parents=True, exist_ok=True)
+
+    def load_vad(model, path, **kwargs):
+        path.mkdir(parents=True, exist_ok=True)
+
+    monkeypatch.setattr(engines, "_download_onnx_revision", explicit_fetch)
+    monkeypatch.setitem(
+        sys.modules, "onnx_asr", SimpleNamespace(load_model=load_model, load_vad=load_vad)
+    )
+    model = "nemo-parakeet-tdt-0.6b-v3"
+    path = engines.onnx_path(model, "test-commit")
+    assert path != engines.onnx_path(model)
+    assert download(model, "onnx", "int8", revision="test-commit") == str(path)
+    assert calls[0] == ("fetch", "test-commit", "int8")
+    assert calls[1][2]["offline"] is True
+    assert engines.model_catalog("onnx", revision="test-commit")[0]["installed"]
+    engines.delete_model(model, "onnx", revision="test-commit")
+    assert not path.exists()
+
+
+def test_onnx_cancelled_redownload_cannot_keep_ready_marker(monkeypatch):
+    model = "nemo-parakeet-tdt-0.6b-v3"
+    path = engines.onnx_path(model)
+    path.mkdir(parents=True)
+    (path / engines.READY).touch()
+
+    def fail(*args, **kwargs):
+        raise RuntimeError("cancelled")
+
+    monkeypatch.setitem(sys.modules, "onnx_asr", SimpleNamespace(load_model=fail))
+    with pytest.raises(RuntimeError, match="cancelled"):
+        download(model, "onnx")
+    assert not (path / engines.READY).exists()
+
+
+def test_whisper_runtime_forwards_requested_revision(monkeypatch):
+    import faster_whisper
+
+    calls = []
+    monkeypatch.setattr(engines, "resolve_whisper", lambda config: config.model)
+    monkeypatch.setattr(faster_whisper, "WhisperModel", lambda *a, **kw: calls.append(kw))
+    Transcriber().load(replace(Config(), model_revision="exact-commit"))
+    assert calls[0]["revision"] == "exact-commit"
+    assert calls[0]["local_files_only"] is True
+
+
+def test_whisper_catalog_does_not_claim_another_revision_installed(monkeypatch, tmp_path):
+    import huggingface_hub
+    from faster_whisper.utils import _MODELS
+
+    from mouthkeys.config import cache_dir
+
+    (cache_dir() / "models").mkdir(parents=True)
+    name, repository = next(iter(_MODELS.items()))
+    cached = SimpleNamespace(
+        repo_id=repository,
+        repo_path="managed-model",
+        revisions=[SimpleNamespace(commit_hash="abc123", refs={"main"}, snapshot_path=tmp_path)],
+    )
+    monkeypatch.setattr(
+        huggingface_hub, "scan_cache_dir", lambda *a: SimpleNamespace(repos=[cached])
+    )
+
+    def item(revision):
+        return next(
+            row
+            for row in engines.model_catalog("whisper", revision=revision)
+            if row["model"] == name
+        )
+
+    (tmp_path / "tokenizer.json").write_text("{}")
+    assert not item("main")["installed"]
+    for filename in ("model.bin", "config.json", "vocabulary.json"):
+        (tmp_path / filename).write_text("complete")
+    assert item("main")["installed"]
+    assert item("abc123")["installed"]
+    assert not item("different-commit")["installed"]
+
+
+def test_whisper_missing_tokenizer_cannot_reach_library_fallback(monkeypatch, tmp_path):
+    import faster_whisper
+
+    for name in ("model.bin", "config.json", "vocabulary.txt"):
+        (tmp_path / name).write_text("present")
+    monkeypatch.setattr(
+        faster_whisper, "WhisperModel", lambda *a, **kw: pytest.fail("loader called")
+    )
+    with pytest.raises(RuntimeError, match="tokenizer.json"):
+        Transcriber().load(replace(Config(), model=str(tmp_path)))
+
+
+def test_whisper_resolver_queries_cache_only(monkeypatch):
+    import faster_whisper.utils
+
+    calls = []
+
+    def missing(model, **kwargs):
+        calls.append(kwargs)
+        raise ValueError("missing cache")
+
+    monkeypatch.setattr(faster_whisper.utils, "download_model", missing)
+    with pytest.raises(RuntimeError, match="download first"):
+        engines.resolve_whisper(replace(Config(), model_revision="requested-revision"))
+    assert calls[0]["local_files_only"] is True
+    assert calls[0]["revision"] == "requested-revision"

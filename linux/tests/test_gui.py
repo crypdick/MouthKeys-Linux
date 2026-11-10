@@ -6,6 +6,56 @@ import pytest
 pytest.importorskip("PySide6")
 
 
+def test_model_browser_resident_state_uses_loaded_identity_not_selected_settings(monkeypatch):
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QComboBox, QLineEdit, QWidget
+
+    from mouthkeys.models_ui import ModelBrowser
+
+    window = QWidget()
+    engine = QComboBox()
+    engine.addItem("Whisper", "whisper")
+    window.fields = {"engine": engine, "model_revision": QLineEdit("selected-revision")}
+    window.loaded_model = {
+        "engine": "whisper",
+        "model": "resident-model",
+        "revision": "loaded-revision",
+        "device": "cpu",
+        "compute_type": "int8",
+    }
+    monkeypatch.setattr(
+        "mouthkeys.engines.model_catalog",
+        lambda *a, **kw: [
+            {
+                "model": "resident-model",
+                "name": "Resident",
+                "languages": "en",
+                "installed": True,
+                "revision": "loaded-revision",
+            },
+            {
+                "model": "selected-model",
+                "name": "Selected",
+                "languages": "en",
+                "installed": True,
+                "revision": "selected-revision",
+            },
+        ],
+    )
+    browser = ModelBrowser(window)
+    browser.table.sortItems(6, Qt.SortOrder.AscendingOrder)
+    browser.update_resident()
+    states = {
+        browser.table.item(row, 0).text(): browser.table.item(row, 6).text()
+        for row in range(browser.table.rowCount())
+    }
+    assert states == {"Resident": "Yes", "Selected": "No"}
+    window.loaded_model = None
+    browser.update_resident()
+    assert all(browser.table.item(row, 6).text() == "No" for row in range(2))
+    window.close()
+
+
 @pytest.mark.parametrize("success", [True, False])
 def test_download_retries_unavailable_model_only_after_success(monkeypatch, tmp_path, success):
     from types import SimpleNamespace

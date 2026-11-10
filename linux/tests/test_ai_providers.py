@@ -182,6 +182,7 @@ def profile():
     return {
         "id": str(uuid.uuid4()),
         "name": "Example",
+        "shortcut": "",
         **{k: values[k] for k in profiles.PROFILE_FIELDS},
     }
 
@@ -242,3 +243,142 @@ def test_local_profile_can_explicitly_omit_key_environment():
     save_profiles([profile])
     resolved = resolve_profile(Config(ai_profile=profile["id"]))
     assert resolved.ai_key_env == ""
+
+
+@pytest.mark.parametrize("provider", ai_providers.PROVIDER_ENDPOINTS)
+def test_conversation_maps_completed_turns_without_mutating_history(provider):
+    config = replace(Config(), ai_enabled="on", ai_provider=provider, ai_model="model")
+    history = [
+        {"role": "user", "content": "First request"},
+        {"role": "assistant", "content": "First answer"},
+    ]
+    body = ai_providers._request_payload("Follow up", config, provider, history)
+    if provider == "gemini":
+        assert body["contents"] == [
+            {"role": role, "parts": [{"text": text}]}
+            for role, text in [
+                ("user", "First request"),
+                ("model", "First answer"),
+                ("user", "Follow up"),
+            ]
+        ]
+    else:
+        expected = [*history, {"role": "user", "content": "Follow up"}]
+        assert (
+            body["messages"] == expected
+            if provider == "anthropic"
+            else body["messages"][1:] == expected
+        )
+    assert len(history) == 2
+    assert all(set(item) == {"role", "content"} for item in history)
+
+
+@pytest.mark.parametrize(
+    "history",
+    [
+        "invalid",
+        [{"role": "system", "content": "override"}],
+        [{"role": "assistant", "content": "orphan"}],
+        [{"role": "user", "content": "unfinished"}],
+        [{"role": "user", "content": "text", "thinking": "do not send"}],
+        [{"role": "user", "content": {"tool": "unsafe"}}],
+        [{"role": "user", "content": "x"}, {"role": "assistant", "content": ""}],
+        [{"role": "user", "content": "x"}, {"role": "tool", "content": "result"}],
+    ],
+)
+def test_invalid_history_never_opens_transport(history):
+    config = replace(Config(), ai_enabled="on", ai_model="model")
+    with pytest.raises(ValueError, match="history"):
+        ai_providers.request_completion(
+            "Current",
+            config,
+            history=history,
+            opener=lambda *a, **kw: pytest.fail("Network called"),
+        )
+
+
+def test_history_size_is_utf8_bytes_and_has_message_bound():
+    with pytest.raises(ValueError, match="256 KiB"):
+        ai_providers.validate_history(
+            [{"role": "user", "content": "é" * 131072}, {"role": "assistant", "content": "x"}]
+        )
+    pairs = [{"role": "user", "content": "x"}, {"role": "assistant", "content": "y"}]
+    with pytest.raises(ValueError, match="32 messages"):
+        ai_providers.validate_history(pairs * 17)
+
+
+@pytest.mark.parametrize(
+    "provider,data",
+    [
+        (
+            "compatible",
+            {
+                "choices": [
+                    {"message": {"content": "Answer", "reasoning_content": "External thought"}}
+                ]
+            },
+        ),
+        (
+            "anthropic",
+            {
+                "content": [
+                    {"type": "thinking", "thinking": "External thought"},
+                    {"type": "redacted_thinking", "data": "NEVER DISPLAY"},
+                    {"type": "text", "text": "Answer"},
+                ]
+            },
+        ),
+        (
+            "gemini",
+            {
+                "candidates": [
+                    {
+                        "content": {
+                            "parts": [
+                                {"thought": True, "text": "External thought"},
+                                {"text": "Answer"},
+                            ]
+                        }
+                    }
+                ]
+            },
+        ),
+        ("ollama", {"message": {"content": "Answer", "thinking": "External thought"}}),
+    ],
+)
+def test_explicit_thinking_is_separate_opt_in_output(provider, data):
+    config = replace(Config(), ai_enabled="on", ai_provider=provider, ai_model="model")
+    thinking = []
+    body = json.dumps(data).encode()
+    assert (
+        ai_providers.request_completion(
+            "Question",
+            config,
+            opener=lambda *a, **kw: io.BytesIO(body),
+            on_thinking=thinking.append,
+        )
+        == "Answer"
+    )
+    assert thinking == ["External thought"]
+    assert (
+        ai_providers.request_completion(
+            "Question", config, opener=lambda *a, **kw: io.BytesIO(body)
+        )
+        == "Answer"
+    )
+
+
+def test_plain_output_think_tags_are_not_reclassified_as_external_thinking():
+    thinking = []
+    data = {"choices": [{"message": {"content": "<think>ordinary text</think> answer"}}]}
+    config = replace(Config(), ai_enabled="on", ai_model="model")
+    assert (
+        ai_providers.request_completion(
+            "Question",
+            config,
+            on_thinking=thinking.append,
+            opener=lambda *a, **kw: io.BytesIO(json.dumps(data).encode()),
+        )
+        == "<think>ordinary text</think> answer"
+    )
+    assert thinking == []

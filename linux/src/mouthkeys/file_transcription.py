@@ -171,14 +171,58 @@ def transcribe_file(path, config, *, transcriber=None, max_seconds=None):
     if not len(samples):
         raise ValueError("File contains no audio")
     engine = transcriber or Transcriber()
-    segments = [
-        {"start": float(segment.start), "end": float(segment.end), "text": segment.text.strip()}
-        for segment in engine._segments(samples, config)
-    ]
     turns = []
-    if getattr(config, "file_speaker_labels", "off") == "on":
+    confidences = []
+
+    def decode(samples, offset=0, speaker=None, end=None):
+        decoded = []
+        for segment in engine._segments(samples, config):
+            start = max(offset, offset + float(segment.start))
+            finish = offset + float(segment.end)
+            if end is not None:
+                finish = min(end, finish)
+            text = segment.text.strip()
+            if not text or finish < start:
+                continue
+            item = {"start": start, "end": finish, "text": text}
+            if speaker is not None:
+                item["speaker"] = speaker
+            decoded.append(item)
+            logprob = getattr(segment, "avg_logprob", None)
+            if isinstance(logprob, int | float) and math.isfinite(logprob):
+                confidences.append(math.exp(min(0, logprob)))
+        return decoded
+
+    if config.file_speaker_labels == "on":
         turns = diarize(samples, config.file_speaker_count)
-        label_segments(segments, turns)
+    if turns and config.file_diarization_mode == "turns":
+        segments = []
+        duration = len(samples) / 16000
+        covered = 0.0
+        for turn in sorted(turns, key=lambda item: item["start"]):
+            start, end = max(0.0, turn["start"]), min(duration, turn["end"])
+            if not (math.isfinite(start) and math.isfinite(end) and start < end):
+                continue
+            # Decode uncovered intervals too: diarization misses must not silently lose words.
+            if start > covered:
+                segments.extend(
+                    decode(
+                        samples[round(covered * 16000) : round(start * 16000)], covered, end=start
+                    )
+                )
+            segments.extend(
+                decode(
+                    samples[round(start * 16000) : round(end * 16000)], start, turn["speaker"], end
+                )
+            )
+            covered = max(covered, end)
+        if covered < duration:
+            segments.extend(decode(samples[round(covered * 16000) :], covered, end=duration))
+        segments.sort(key=lambda item: item["start"])
+    else:
+        segments = decode(samples)
+        if turns:
+            label_segments(segments, turns)
     return {
         "text": " ".join(segment["text"] for segment in segments).strip(),
         "segments": segments,
@@ -188,6 +232,9 @@ def transcribe_file(path, config, *, transcriber=None, max_seconds=None):
         "language": config.language,
         "engine": getattr(config, "engine", "whisper"),
         "model": config.model,
+        "confidence": sum(confidences) / len(confidences) if confidences else None,
+        "confidence_kind": "mean_segment_token_likelihood" if confidences else "unavailable",
+        "diarization_mode": config.file_diarization_mode if turns else None,
     }
 
 

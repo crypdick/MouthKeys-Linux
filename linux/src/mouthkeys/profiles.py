@@ -18,7 +18,18 @@ PROFILE_FIELDS = (
     "ai_prompt",
     "ai_max_tokens",
     "ai_timeout",
+    "ai_models_endpoint",
+    "ai_reasoning_parameter",
+    "ai_reasoning_value",
+    "ai_streaming",
 )
+
+PROFILE_DEFAULTS = {
+    "ai_models_endpoint": "",
+    "ai_reasoning_parameter": "",
+    "ai_reasoning_value": "",
+    "ai_streaming": "off",
+}
 
 
 def profiles_path():
@@ -28,9 +39,18 @@ def profiles_path():
 def validate_profiles(profiles):
     if not isinstance(profiles, list) or len(profiles) > 100:
         raise ValueError("AI profiles must be a list with at most 100 entries")
+    profiles = [
+        {"shortcut": "", **PROFILE_DEFAULTS, **profile} if isinstance(profile, dict) else profile
+        for profile in profiles
+    ]
     ids = set()
     for profile in profiles:
-        if not isinstance(profile, dict) or set(profile) != {"id", "name", *PROFILE_FIELDS}:
+        if not isinstance(profile, dict) or set(profile) != {
+            "id",
+            "name",
+            "shortcut",
+            *PROFILE_FIELDS,
+        }:
             raise ValueError("AI profile has missing or unknown fields")
         for key in (
             "id",
@@ -50,6 +70,12 @@ def validate_profiles(profiles):
         if profile["id"] in ids:
             raise ValueError("Duplicate AI profile ID")
         ids.add(profile["id"])
+        if (
+            not isinstance(profile["shortcut"], str)
+            or len(profile["shortcut"]) > 128
+            or any(ord(character) < 32 for character in profile["shortcut"])
+        ):
+            raise ValueError("AI profile shortcut must be a printable chord")
         if not profile["name"].strip() or len(profile["name"]) > 100:
             raise ValueError("AI profile name must contain 1–100 characters")
         if profile["ai_provider"] not in PROVIDER_ENDPOINTS:
@@ -59,6 +85,23 @@ def validate_profiles(profiles):
         if len(profile["ai_endpoint"]) > 2048:
             raise ValueError("AI profile endpoint exceeds 2048 characters")
         endpoint_url(profile["ai_endpoint"])
+        for name in PROFILE_DEFAULTS:
+            if not isinstance(profile[name], str):
+                raise ValueError(f"AI profile {name} must be text")
+        if profile["ai_models_endpoint"]:
+            endpoint_url(profile["ai_models_endpoint"])
+            from types import SimpleNamespace
+
+            from .provider_tools import models_endpoint
+
+            models_endpoint(SimpleNamespace(**profile))
+        from types import SimpleNamespace
+
+        from .ai_providers import validate_reasoning
+
+        validate_reasoning(SimpleNamespace(**profile))
+        if profile["ai_streaming"] not in ("on", "off"):
+            raise ValueError("AI profile streaming must be on or off")
         if profile["ai_key_env"] and not re.fullmatch(
             r"[A-Za-z_][A-Za-z0-9_]{0,127}", profile["ai_key_env"]
         ):
@@ -83,7 +126,7 @@ def load_profiles():
 
 
 def save_profiles(profiles):
-    validate_profiles(profiles)
+    profiles = validate_profiles(profiles)
     path = profiles_path()
     private_dir(path.parent)
     temporary = None
@@ -97,10 +140,11 @@ def save_profiles(profiles):
             temporary.unlink(missing_ok=True)
 
 
-def resolve_profile(config):
+def resolve_profile(config, profiles=None):
     if not getattr(config, "ai_profile", ""):
         return config
-    profile = next((p for p in load_profiles() if p["id"] == config.ai_profile), None)
+    available = load_profiles() if profiles is None else profiles
+    profile = next((p for p in available if p["id"] == config.ai_profile), None)
     if profile is None:
         raise ValueError("Selected AI cleanup profile no longer exists")
     return replace(config, **{field: profile[field] for field in PROFILE_FIELDS}).validate()

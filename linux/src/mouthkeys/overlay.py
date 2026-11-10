@@ -15,6 +15,7 @@ from PySide6.QtWidgets import QApplication, QMenu, QPushButton, QWidget
 from .config import Config, runtime_dir
 from .desktop import source_names
 from .gui import Request
+from .lark import BatteryMonitor
 from .processes import python_command
 from .trace import Trace
 
@@ -60,6 +61,7 @@ class Overlay(QWidget):
         self.setFixedSize(424, 146)
         self.settings = Config.load()
         self.panel_scale = 1.0
+        self.battery = BatteryMonitor()
         self.data = {}
         self.trace = Trace()
         self.meter_frame = None
@@ -90,6 +92,7 @@ class Overlay(QWidget):
             button.clicked.connect(lambda checked=False, action=action: self.action(action))
             self.buttons[action] = button
         self.mic_button = QPushButton(self)
+        self.mic_button.setObjectName("microphone")
         self.mic_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.mic_button.setToolTip("Choose microphone for next recording")
         self.mic_button.setAccessibleName("Choose microphone")
@@ -120,6 +123,8 @@ class Overlay(QWidget):
             f"QPushButton:hover {{ border: 1px solid {self.ink}; }}"
             f"QPushButton:pressed {{ background: {self.ink}; color: {self.surface}; }}"
             f"QPushButton:disabled {{ color: {self.dim}; }}"
+            f"QPushButton#microphone {{ font-family: monospace; font-size: 10px; "
+            f"background: {self.surface}; color: {self.dim}; padding: 0; }}"
         )
         for action, button in self.buttons.items():
             button.setIcon(button_icon(action, self.ink))
@@ -129,12 +134,15 @@ class Overlay(QWidget):
         previous = self.settings
         self.settings = config
         self.panel_scale = config.overlay_size / 100
-        self.setFixedSize(round(424 * self.panel_scale), round(146 * self.panel_scale))
+        compact = config.overlay_style == "compact"
+        self.setFixedSize(
+            round(424 * self.panel_scale), round((106 if compact else 146) * self.panel_scale)
+        )
         for action, x, y in (
-            ("history", 6, 29),
-            ("copy", 6, 83),
-            ("cancel", 388, 29),
-            ("reprocess", 388, 83),
+            ("history", 6, 14 if compact else 29),
+            ("copy", 6, 60 if compact else 83),
+            ("cancel", 388, 14 if compact else 29),
+            ("reprocess", 388, 60 if compact else 83),
         ):
             self.buttons[action].setGeometry(
                 round(x * self.panel_scale),
@@ -144,18 +152,25 @@ class Overlay(QWidget):
             )
         self.mic_button.setGeometry(
             round(185 * self.panel_scale),
-            round(110 * self.panel_scale),
+            round((74 if compact else 110) * self.panel_scale),
             round(108 * self.panel_scale),
             round(20 * self.panel_scale),
         )
         if previous.theme != config.theme:
             self.apply_theme()
-        if (previous.overlay_position, previous.overlay_bottom_offset, previous.overlay_size) != (
+        if (
+            previous.overlay_position,
+            previous.overlay_bottom_offset,
+            previous.overlay_size,
+            previous.overlay_style,
+        ) != (
             config.overlay_position,
             config.overlay_bottom_offset,
             config.overlay_size,
+            config.overlay_style,
         ):
             self.positioned = False
+            self.text_cache = None
 
     def choose_microphone(self):
         menu = QMenu(self)
@@ -330,8 +345,29 @@ class Overlay(QWidget):
             self.animation.start(16)
         self.active = active
         self.data = data
-        self.mic_button.setText(data.get("microphone", "default"))
+        microphone = data.get("microphone", "default")
+        battery = self.battery.poll(config, microphone)
+        if battery and battery.get("result") == "ok":
+            values = [
+                str(battery[key]["percent"]) + "%"
+                for key in ("mic1", "mic2")
+                if battery.get(key, {}).get("percent") is not None
+            ]
+            self.mic_button.setText(microphone + (" " + "/".join(values) if values else ""))
+            self.mic_button.setToolTip(
+                "Lark A1 battery · " + (" / ".join(values) or "No linked mic")
+            )
+        else:
+            self.mic_button.setText(microphone)
+            self.mic_button.setToolTip(
+                "Choose microphone · " + (battery.get("result", "") if battery else "")
+            )
         self.mic_button.setEnabled(not active)
+        self.mic_button.setText(
+            self.mic_button.fontMetrics().elidedText(
+                self.mic_button.text(), Qt.TextElideMode.ElideRight, self.mic_button.width() - 6
+            )
+        )
         if data["phase"] == "recording":
             self.seconds = data.get("seconds", 0)
         self.buttons["copy"].setEnabled(not active and bool(data.get("preview")))
@@ -347,7 +383,7 @@ class Overlay(QWidget):
         self.update(
             QRect(
                 round(53 * self.panel_scale),
-                round(68 * self.panel_scale),
+                round((31 if self.settings.overlay_style == "compact" else 68) * self.panel_scale),
                 round(252 * self.panel_scale),
                 round(40 * self.panel_scale),
             )
@@ -362,11 +398,14 @@ class Overlay(QWidget):
     def paintEvent(self, event):
         p = QPainter(self)
         p.scale(self.panel_scale, self.panel_scale)
-        p.fillRect(42, 8, 340, 130, QColor(0, 0, 0, 80))
-        p.fillRect(42, 6, 340, 130, QColor(self.surface))
+        compact = self.settings.overlay_style == "compact"
+        panel_height = 90 if compact else 130
+        baseline = 50 if compact else 87
+        p.fillRect(42, 8, 340, panel_height, QColor(0, 0, 0, 80))
+        p.fillRect(42, 6, 340, panel_height, QColor(self.surface))
         p.setPen(QColor(self.edge))
         if self.settings.overlay_border == "on":
-            p.drawRect(42, 6, 339, 129)
+            p.drawRect(42, 6, 339, panel_height - 1)
         phase = self.data.get("phase", "idle")
         text = self.data.get("preview", "")
         text = text[-self.settings.preview_chars :] if self.settings.live_preview == "on" else ""
@@ -392,43 +431,47 @@ class Overlay(QWidget):
                 line.setLineWidth(316)
                 lines.append(text[line.textStart() : line.textStart() + line.textLength()])
             layout.endLayout()
-            self.text_cache = (text, lines[-3:])
+            self.text_cache = (text, lines[-1:] if compact else lines[-3:])
         p.setFont(font)
         p.setPen(QColor(self.dim if phase == "transcribing" else self.ink))
         for i, part in enumerate(self.text_cache[1]):
             p.drawText(54, 28 + i * 16, part)
         p.setPen(QColor(self.edge))
-        p.drawLine(54, 87, 304, 87)
+        p.drawLine(54, baseline, 304, baseline)
         p.setPen(Qt.PenStyle.NoPen)
         p.save()
-        p.setClipRect(QRectF(54, 70, 250, 34))
+        p.setClipRect(QRectF(54, baseline - 17, 250, 34))
         scale = self.devicePixelRatioF()
         for i, height in enumerate(self.trace.shown):
             x = round((54 + i * 4 - self.trace.fraction * 4) * scale) / scale
-            top = round((87 - height / 2) * scale) / scale
-            bottom = round((87 + height / 2) * scale) / scale
+            top = round((baseline - height / 2) * scale) / scale
+            bottom = round((baseline + height / 2) * scale) / scale
             p.fillRect(QRectF(x, top, 2, bottom - top), QColor(self.ink))
         p.restore()
         if phase == "transcribing":
             x = 54 + (int(time.monotonic() / (1.05 / 55)) % 55) * 4
-            p.fillRect(x, 85, 24, 4, QColor("#ff4f1f"))
+            p.fillRect(x, baseline - 2, 24, 4, QColor("#ff4f1f"))
         p.setPen(QColor("#ff4f1f"))
         if phase == "recording":
-            p.fillRect(316, 84, 6, 6, QColor("#ff4f1f"))
+            p.fillRect(316, baseline - 3, 6, 6, QColor("#ff4f1f"))
         else:
-            p.drawRect(316, 84, 5, 5)
+            p.drawRect(316, baseline - 3, 5, 5)
         mono = QFont("monospace")
         mono.setPixelSize(14)
         p.setFont(mono)
         p.setPen(QColor(self.ink))
         seconds = int(self.seconds)
-        p.drawText(326, 92, f"{seconds // 60}:{seconds % 60:02d}")
+        p.drawText(326, baseline + 5, f"{seconds // 60}:{seconds % 60:02d}")
         mono.setPixelSize(10)
         p.setFont(mono)
         p.setPen(QColor(self.dim))
         words, wpm = live_counters(self.data.get("preview", ""), self.seconds)
-        p.drawText(54, 124, f"{words} W / {wpm} WPM" if active_phase(phase) else "MOUTHKEYS")
-        p.drawText(302, 124, "WORDS")
+        p.drawText(
+            54,
+            88 if compact else 124,
+            f"{words} W / {wpm} WPM" if active_phase(phase) else "MOUTHKEYS",
+        )
+        p.drawText(302, 88 if compact else 124, "WORDS")
         p.end()
 
     def mousePressEvent(self, event):

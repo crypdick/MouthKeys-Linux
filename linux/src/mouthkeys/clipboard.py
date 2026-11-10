@@ -1,4 +1,4 @@
-"""Short-lived Qt clipboard owner for opt-in, multi-format paste restoration.
+"""Isolated Qt clipboard owner for opt-in, multi-format paste restoration.
 
 Separate GUI process keeps Qt out of the daemon and owns restored selections until
 another application copies. No clipboard data is written to disk or diagnostic logs.
@@ -12,6 +12,17 @@ import sys
 from .processes import python_command
 
 MAX_BYTES = 32 * 1024 * 1024
+
+
+def temporary_mime(text, exclude_history):
+    from PySide6.QtCore import QMimeData
+
+    mime = QMimeData()
+    mime.setText(text)
+    if exclude_history:
+        # Advisory standard Linux secret hint; participating managers honor it.
+        mime.setData("x-kde-passwordManagerHint", b"secret")
+    return mime
 
 
 def capture_formats(mime):
@@ -43,7 +54,8 @@ def restore_formats(clipboard, saved):
 
 
 class ClipboardPaste:
-    def __init__(self, text, delay_ms=500):
+    def __init__(self, text, delay_ms=500, exclude_history=False):
+        self.delay_ms = delay_ms
         self.process = subprocess.Popen(
             python_command("mouthkeys.clipboard"),
             stdin=subprocess.PIPE,
@@ -52,7 +64,10 @@ class ClipboardPaste:
         )
         try:
             self.process.stdin.write(
-                json.dumps({"text": text, "delay_ms": delay_ms}).encode() + b"\n"
+                json.dumps(
+                    {"text": text, "delay_ms": delay_ms, "exclude_history": bool(exclude_history)}
+                ).encode()
+                + b"\n"
             )
             self.process.stdin.flush()
             ready, _, _ = select.select([self.process.stdout], [], [], 3)
@@ -67,8 +82,14 @@ class ClipboardPaste:
         try:
             self.process.stdin.write(b"restore\n" if restore else b"keep\n")
             self.process.stdin.flush()
+            if restore:
+                ready, _, _ = select.select([self.process.stdout], [], [], self.delay_ms / 1000 + 2)
+                return bool(
+                    ready and self.process.stdout.readline(128) in (b"restored\n", b"skipped\n")
+                )
+            return True
         except (OSError, ValueError):
-            pass
+            return False
         finally:
             self.process.stdin.close()
             self.process.stdout.close()
@@ -91,32 +112,51 @@ def main():
         saved = capture_formats(clipboard.mimeData())
     except ValueError:
         return 1  # Never silently replace an incomplete multi-format snapshot.
-    clipboard.setText(data["text"])
+    clipboard.setMimeData(temporary_mime(data["text"], data.get("exclude_history", False)))
     app.processEvents()
     if not clipboard.ownsClipboard():
         return 1
     print("ready", flush=True)
     finished = False
     restored = False
+    restore_requested = False
+    acknowledged = False
+
+    def acknowledge(result):
+        nonlocal acknowledged
+        if restore_requested and not acknowledged:
+            acknowledged = True
+            try:
+                print(result, flush=True)
+            except BrokenPipeError:
+                pass
 
     def restore():
         nonlocal restored
         restored = True
-        if not restore_formats(clipboard, saved):
+        success = restore_formats(clipboard, saved)
+        acknowledge("restored" if success else "skipped")
+        if not success:
             app.quit()
 
     def receive(*_):
-        nonlocal finished
+        nonlocal finished, restore_requested
         action = sys.stdin.buffer.readline(16)
         notifier.setEnabled(False)
         finished = True
         if action == b"restore\n":
-            QTimer.singleShot(delay_ms, restore)
+            restore_requested = True
+            if clipboard.ownsClipboard():
+                QTimer.singleShot(delay_ms, restore)
+            else:
+                acknowledge("skipped")
+                app.quit()
         elif not clipboard.ownsClipboard():
             app.quit()
 
     def changed():
         if (finished or restored) and not clipboard.ownsClipboard():
+            acknowledge("skipped")
             app.quit()
 
     notifier = QSocketNotifier(sys.stdin.fileno(), QSocketNotifier.Type.Read)

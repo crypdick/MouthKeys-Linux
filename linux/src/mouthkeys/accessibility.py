@@ -1,80 +1,71 @@
-"""Optional, read-only AT-SPI cursor context. Never used as proof of paste delivery.
+"""Optional AT-SPI field identity, cursor context, and guarded editing.
 
 GI bindings are optional system integration. Isolated helper bounds unresponsive
-application calls and never reads password fields or writes surrounding text to disk.
+application calls, excludes password fields, and never writes surrounding text to disk.
+Read-only snapshots support exact text-before/after paste verification; explicit
+insert/focus requests are separately gated by the delivery controller.
 """
 
 import importlib.util
 import json
+import os
 import subprocess
-import time
 from pathlib import Path
 
 
-def focused_context(atspi):
-    atspi.set_timeout(50, 50)
-    deadline = time.monotonic() + 0.25
-    stack = [(atspi.get_desktop(0), 0)]
-    seen = 0
-    while stack and seen < 400 and time.monotonic() < deadline:
-        node, depth = stack.pop()
-        seen += 1
-        try:
-            state = node.get_state_set()
-            if node.get_role() == atspi.Role.PASSWORD_TEXT:
-                continue
-            if state.contains(atspi.StateType.FOCUSED):
-                if state.contains(atspi.StateType.EDITABLE):
-                    text = node.get_text_iface()
-                    if text:
-                        caret = text.get_caret_offset()
-                        if caret >= 0:
-                            return text.get_text(max(0, caret - 200), caret)
-            if depth < 20:
-                count = min(node.get_child_count(), 400 - seen)
-                for index in reversed(range(count)):
-                    child = node.get_child_at_index(index)
-                    if child:
-                        stack.append((child, depth + 1))
-        except Exception:
-            continue  # Apps may disappear or deny accessibility between any two calls.
-    return None
-
-
-def read_context():
+def _request(action, target=None, text=None):
     from .processes import python_command
 
-    args = python_command("mouthkeys.accessibility")
-    # Distro GI bindings match the distro Python, not uv's managed interpreter.
-    # This helper has no package imports when run directly. -I excludes user code paths.
+    if not (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")):
+        return None
+    args = python_command("mouthkeys.atspi_helper")
     if importlib.util.find_spec("gi") is None and Path("/usr/bin/python3").is_file():
-        args = ["/usr/bin/python3", "-I", str(Path(__file__).resolve())]
+        args = [
+            "/usr/bin/python3",
+            "-I",
+            str(Path(__file__).with_name("atspi_helper.py").resolve()),
+        ]
     try:
         result = subprocess.run(
             args,
+            input=json.dumps(
+                {"action": action, "target": target, "text": text}, ensure_ascii=False
+            ),
             capture_output=True,
             text=True,
             check=True,
-            timeout=1,
+            timeout=2,
         )
-        value = json.loads(result.stdout)
-        return value if isinstance(value, str) and len(value) <= 200 else None
+        if len(result.stdout) > 1024 * 1024:
+            return None
+        return json.loads(result.stdout)
     except (OSError, ValueError, subprocess.SubprocessError):
         return None
 
 
-def main():
-    try:
-        import gi
-
-        gi.require_version("Atspi", "2.0")
-        from gi.repository import Atspi
-
-        value = focused_context(Atspi)
-    except (ImportError, ValueError, RuntimeError):
-        value = None
-    print(json.dumps(value))
+def read_snapshot(target=None):
+    """Exact focused field snapshot, or reread a previously captured D-Bus object."""
+    value = _request("snapshot", target)
+    if not isinstance(value, dict) or value.get("protected") is not False:
+        return None
+    if not isinstance(value.get("text"), str) or len(value["text"]) > 100000:
+        return None
+    return value
 
 
-if __name__ == "__main__":
-    main()
+def focus_target(target):
+    return _request("focus", target) is True
+
+
+def insert_text(target, text):
+    """Insert/replace only an unchanged focused captured editable field, without keys."""
+    value = _request("insert", target, text)
+    return value if isinstance(value, dict) else None
+
+
+def read_context():
+    value = read_snapshot()
+    if not value or value.get("foreground") is not True:
+        return None
+    context = value.get("context")
+    return context if isinstance(context, str) and len(context) <= 200 else None

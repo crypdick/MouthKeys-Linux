@@ -118,33 +118,17 @@ def test_clipboard_snapshot_restores_every_format_but_not_new_user_copy(monkeypa
         clipboard.capture_formats(mime)
 
 
-def test_accessibility_context_ignores_passwords_and_reads_only_before_caret():
-    from types import SimpleNamespace
+def test_context_uses_only_foreground_snapshot_and_skips_unknown_focus(monkeypatch):
+    from mouthkeys import accessibility
 
-    from mouthkeys.accessibility import focused_context
-
-    requested = []
-    text = SimpleNamespace(
-        get_caret_offset=lambda: 500,
-        get_text=lambda start, end: requested.append((start, end)) or "context",
+    monkeypatch.setattr(
+        accessibility, "read_snapshot", lambda: {"foreground": True, "context": "before cursor"}
     )
-    node = SimpleNamespace(
-        get_state_set=lambda: SimpleNamespace(contains=lambda _: True),
-        get_role=lambda: "text",
-        get_text_iface=lambda: text,
+    assert accessibility.read_context() == "before cursor"
+    monkeypatch.setattr(
+        accessibility, "read_snapshot", lambda: {"foreground": False, "context": "inactive window"}
     )
-    atspi = SimpleNamespace(
-        set_timeout=lambda *args: None,
-        get_desktop=lambda _: node,
-        StateType=SimpleNamespace(FOCUSED=1, EDITABLE=2),
-        Role=SimpleNamespace(PASSWORD_TEXT="password"),
-    )
-    assert focused_context(atspi) == "context"
-    assert requested == [(300, 500)]
-    node.get_role = lambda: "password"
-    requested.clear()
-    assert focused_context(atspi) is None
-    assert requested == []
+    assert accessibility.read_context() is None
 
 
 def test_accessibility_uses_isolated_distro_python_when_venv_has_no_gi(monkeypatch):
@@ -152,19 +136,20 @@ def test_accessibility_uses_isolated_distro_python_when_venv_has_no_gi(monkeypat
 
     from mouthkeys import accessibility
 
+    monkeypatch.setenv("DISPLAY", ":fake")
     monkeypatch.setattr(accessibility.importlib.util, "find_spec", lambda _: None)
     monkeypatch.setattr(accessibility.Path, "is_file", lambda self: True)
     calls = []
 
     def run(args, **kwargs):
         calls.append((args, kwargs))
-        return SimpleNamespace(stdout='"before cursor"')
+        return SimpleNamespace(stdout="null")
 
     monkeypatch.setattr(accessibility.subprocess, "run", run)
-    assert accessibility.read_context() == "before cursor"
+    assert accessibility.read_snapshot() is None
     assert calls[0][0][:2] == ["/usr/bin/python3", "-I"]
-    assert calls[0][0][2].endswith("/accessibility.py")
-    assert calls[0][1]["timeout"] == 1
+    assert calls[0][0][2].endswith("/atspi_helper.py")
+    assert calls[0][1]["timeout"] == 2
 
 
 def test_tray_alerts_are_opt_in_deduplicated_and_do_not_claim_verified_paste(monkeypatch):
@@ -213,3 +198,81 @@ def test_tray_cannot_quit_during_file_transcription():
     Tray.request_quit(fake)
     assert not fake.quitting
     assert tips == ["Wait for current settings operation before quitting"]
+
+
+def test_desktop_default_source_is_resolved_for_actual_microphone_label(monkeypatch):
+    monkeypatch.setenv("DISPLAY", ":fake")
+    monkeypatch.setattr(desktop, "command", lambda args: "alsa_input.actual_usb\n")
+    assert desktop.choose_source(Config()) == "alsa_input.actual_usb"
+
+
+def test_preset_start_stop_cues_use_bundled_pcm_files_without_playback(monkeypatch):
+    from mouthkeys import desktop
+
+    calls = []
+
+    class Thread:
+        def __init__(self, *, target, args, daemon):
+            calls.append(args)
+
+        def start(self):
+            pass  # Never play sounds in tests.
+
+    monkeypatch.setattr(desktop.threading, "Thread", Thread)
+    config = Config(sound_preset="mouthkeys")
+    desktop.play_sound(config, preview=True)
+    desktop.play_sound(config, stop=True)
+    assert calls[0][1].name == "FV_start.wav"
+    assert calls[1][1].name == "FV_end.wav"
+    assert calls[0][1].read_bytes()[:4] == b"RIFF"
+
+
+def test_temporary_clipboard_history_hint_does_not_modify_normal_copy_formats():
+    from mouthkeys.clipboard import capture_formats, temporary_mime
+
+    assert capture_formats(temporary_mime("hello", False)) == {"text/plain": b"hello"}
+    hidden = capture_formats(temporary_mime("hello", True))
+    assert hidden["x-kde-passwordManagerHint"] == b"secret"
+    assert hidden["text/plain"] == b"hello"
+
+
+def test_queued_clipboard_transactions_wait_for_restoration_ack_before_next_snapshot(monkeypatch):
+    import json
+
+    from mouthkeys import clipboard
+
+    state = {"clipboard": "original"}
+    snapshots = []
+
+    class Process:
+        def __init__(self, *args, **kwargs):
+            self.original = state["clipboard"]
+            snapshots.append(self.original)
+            self.ready = False
+            self.stdin = self.stdout = self
+
+        def write(self, value):
+            if value.startswith(b"{"):
+                state["clipboard"] = json.loads(value)["text"]
+
+        def flush(self):
+            pass
+
+        def readline(self, size):
+            if not self.ready:
+                self.ready = True
+                return b"ready\n"
+            state["clipboard"] = self.original
+            return b"restored\n"
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(clipboard.subprocess, "Popen", Process)
+    monkeypatch.setattr(clipboard.select, "select", lambda readers, *args: (readers, [], []))
+    first = clipboard.ClipboardPaste("dictation A")
+    assert first.finish(True)
+    second = clipboard.ClipboardPaste("dictation B")
+    assert second.finish(True)
+    assert snapshots == ["original", "original"]
+    assert state["clipboard"] == "original"

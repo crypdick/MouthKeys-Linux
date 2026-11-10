@@ -1,10 +1,12 @@
 """Deterministic dictation formatting, including conservative Spoken Send parsing.
 
 Behavior adapted from BenevolentFutures/MouthKeys d50ad008, by Atin Woodard,
-SpokenSendParser and ASRService spoken/literal formatting. No desktop effects here.
+SpokenSendParser, QuestionMarkShortcut, and ASRService spoken/literal formatting.
+No desktop effects here.
 """
 
 import re
+import unicodedata
 from dataclasses import dataclass
 
 from .dictionary import Dictionary, phrase_pattern
@@ -88,7 +90,67 @@ def parse_send(text, phrase="send it", active=False, literal_prefix="literal"):
     return SendPlan(text)
 
 
+_DOUBLED_Q = re.compile(
+    r"(?<![\w'’\-/\\.@#$=~])(?:qq|(?:q|queue|cue)[\s.,;:!?]+(?:q|queue|cue))(?![\w'’])",
+    re.I,
+)
+_TRAILING_Q = re.compile(r"(?<![\w'’\-/\\.@#$=~])(?:q|cue)[\s.,;:!?]*$", re.I)
+_REPLACED_ENDINGS = set(",.;:!…")
+_NEWLINES = set("\n\r\v\f\u0085\u2028\u2029")
+
+
+def _ending_question(text):
+    end = len(text)
+    while end and (text[end - 1].isspace() or text[end - 1] in _REPLACED_ENDINGS):
+        end -= 1
+    text = text[:end]
+    return text if text.endswith("?") else text + "?"
+
+
+def apply_question_mark_shortcut(text, literal_prefix="literal"):
+    """Upstream's final-text Q shortcut; not idempotent after removing a literal prefix."""
+    words = literal_prefix.split()
+    literal = (
+        re.compile(r"(?<!\w)" + r"\s+".join(map(re.escape, words)) + r"[\s,:;]*$", re.I)
+        if words
+        else None
+    )
+    output, rest, ends_literal = "", text, False
+    while match := _DOUBLED_Q.search(rest):
+        before, after = rest[: match.start()], rest[match.end() :]
+        escaped = literal.search(before) if literal else None
+        if escaped:
+            output += before[: escaped.start()] + match[0]
+            ends_literal = all(
+                c.isspace() or unicodedata.category(c).startswith("P") for c in after
+            )
+            rest = after
+            continue
+        output += _ending_question(before)
+        after = after.lstrip("".join(_REPLACED_ENDINGS | {"?"}))
+        spacing = re.match(r"\s*", after)[0]
+        following = after[len(spacing) :]
+        if not following:
+            rest = ""
+            break
+        output += spacing if any(c in _NEWLINES for c in spacing) else " "
+        word = re.match(r"\S+", following)[0]
+        rest = following[0].upper() + following[1:] if word == word.lower() else following
+    result = output + rest
+    if ends_literal:
+        return result
+    if trailing := _TRAILING_Q.search(result):
+        before = result[: trailing.start()]
+        escaped = literal.search(before) if literal else None
+        return before[: escaped.start()] + trailing[0] if escaped else _ending_question(before)
+    return result
+
+
 def format_text(text, config, dictionary=None, context=None):
+    if enabled(config, "vocabulary_boosting"):
+        from .vocabulary import VocabularyStore
+
+        text = VocabularyStore.apply_aliases(text)
     data = Dictionary.load() if dictionary is None else Dictionary.validate(dictionary)
     text = Dictionary.apply(text, data)
     if enabled(config, "remove_filler_words"):
@@ -121,9 +183,7 @@ def format_text(text, config, dictionary=None, context=None):
         text = re.sub(r"(?i)\b(?:forward\s+slash|slash)\s+([a-z][a-z0-9_-]{1,39})\b", r"/\1", text)
         text = re.sub(r"(?i)\b(?:at\s+sign|mention|tag)\s+([a-z][a-z0-9_.-]*)", r"@\1", text)
     if enabled(config, "question_mark_shortcut"):
-        text = re.sub(r"(?i)(?<!\w)q\s*q(?!\w)[,.!?]*", "?", text)
-        text = re.sub(r"(?i)(?<!\w)q[,.!?]*\s*$", "?", text)
-        text = re.sub(r"[ ]+\?", "?", text)
+        text = apply_question_mark_shortcut(text, config.literal_prefix)
     text = re.sub(r" {2,}", " ", text)
     if text.strip():
         text = text.strip(" ")

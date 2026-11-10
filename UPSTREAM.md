@@ -32,7 +32,32 @@ Linux implementations adapt upstream behavior rather than its Swift/platform API
 - Atin, `8ab26a8f1c6041367050daaabd9eccfbd364ac62`, “Typing: queue concurrent dictations
   instead of dropping, bound AX stalls”: independent queued jobs and ordered delivery.
 
-Dictionary/formatting, history, profiles, file tools, and desktop affordances follow the same
-baseline's user-facing contracts with Linux-native alternatives. Optional inference integrations
-use onnx-asr and sherpa-onnx rather than Apple's frameworks. Current support and outstanding
-gaps have one canonical home: [Linux guide — parity and limits](linux/README.md#parity-and-limits).
+Dictionary/formatting, history, profiles, file tools, and desktop affordances follow that baseline's
+user-facing contracts with Linux-native alternatives. Further hand-adapted behavior includes:
+
+- `AutomaticDictionaryCorrectionTracker` / suggestion policy: anchored actual corrections,
+  repeat/cooldown rules, explicit review, and opt-in automatic acceptance. Linux observes bounded
+  AT-SPI snapshots rather than macOS AX notifications; full field contents are not persisted.
+- `PronunciationDictionaryStore` / FluidAudio acoustic corrections: private multiple-take enrollment
+  and matched word-span replacement. Linux uses cepstral/DTW templates with actual Whisper/NeMo word
+  timings, ambiguity/edge/overlap guards and bounded work, not Apple's model-specific embeddings.
+- `ParakeetVocabularyStore`: editable terms, weights and aliases. NeMo supports real weighted context
+  graphs; Whisper/Qwen use explicitly described context hints, not claimed FST equivalence.
+- `LarkA1Protocol`: Hollyland receiver status/heartbeat adaptation. Original protocol decoding credit
+  also belongs to `pedrozimmermannsoares/vorssaint-utils#2510`; the Linux port checks the status-report
+  descriptor and does not expose firmware/settings writes.
+- `MeetingTranscriptionService`, prompt routing, media/sounds, setup, shortcuts and overlay/history:
+  turn-first speaker transcription, per-mode/application/shortcut profiles, explicit provider tests,
+  cancellable streaming, bounded persistent/private-memory multi-chat follow-ups, reviewed
+  working-directory/tool-result continuation with execution receipts, Linux-native guarded delivery,
+  and private portable data tools.
+
+Native speech integrations use faster-whisper, onnx-asr, builtin Transformers and NeMo classes;
+speaker labeling uses sherpa-onnx. Apple/CoreML APIs remain upstream. Bundled start/stop sound assets
+are adapted from the same upstream tree; GPL attribution and license remain in effect.
+
+[linux/PARITY.md](linux/PARITY.md) is the canonical acceptance ledger; the
+[Linux guide](linux/README.md) documents operation and limits. The objective is to bridge all
+bridgeable gaps, not to label optional features forbidden or to turn mock/tiny-model tests into
+claims of real desktop behavior or pretrained accuracy. Actual tiny native-library smoke summaries
+are retained in [linux/tests/native_smoke_evidence.json](linux/tests/native_smoke_evidence.json).

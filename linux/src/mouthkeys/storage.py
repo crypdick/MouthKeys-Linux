@@ -113,7 +113,7 @@ class History:
             rows = conn.execute(
                 "SELECT id FROM history WHERE status IN "
                 "('copied', 'paste_requested', 'insert_requested', 'pasted', "
-                "'transcribed', 'cancelled')"
+                "'transcribed', 'send_requested', 'cancelled')"
             )
             for row in rows:
                 if row["id"] != keep:

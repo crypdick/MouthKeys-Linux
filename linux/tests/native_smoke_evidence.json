@@ -1,0 +1,63 @@
+{
+  "notice": "Actual CPU functional validation only, random tiny weights and synthetic tokenizers; not pretrained accuracy or latency evidence. Reproduce with smoke_native.py; no network/model download is required.",
+  "runs": [
+    {
+      "timestamp_utc": "2026-11-10T01:26:49.260146+00:00",
+      "result": "passed",
+      "validation": "functional only; NOT accuracy",
+      "engine": "transformers",
+      "artifact_name": "mouthkeys-tiny-qwen",
+      "operations": [
+        "segments"
+      ],
+      "audio_samples": 18524,
+      "fixture_sha256": "d5c3bc5bfa5123ec0cfc68bed9e4bc82b87ee4c3b44a03e2f9fab0238e5a1d30",
+      "versions": {
+        "torch": "2.11.0+cpu",
+        "transformers": "5.22.2",
+        "nemo_toolkit": "3.0.0"
+      },
+      "network": "AF_INET/AF_INET6 denied by seccomp",
+      "word_times": false
+    },
+    {
+      "timestamp_utc": "2026-11-10T01:26:50.065983+00:00",
+      "result": "passed",
+      "validation": "functional only; NOT accuracy",
+      "engine": "transformers",
+      "artifact_name": "mouthkeys-tiny-cohere",
+      "operations": [
+        "segments"
+      ],
+      "audio_samples": 18524,
+      "fixture_sha256": "d5c3bc5bfa5123ec0cfc68bed9e4bc82b87ee4c3b44a03e2f9fab0238e5a1d30",
+      "versions": {
+        "torch": "2.11.0+cpu",
+        "transformers": "5.22.2",
+        "nemo_toolkit": "3.0.0"
+      },
+      "network": "AF_INET/AF_INET6 denied by seccomp",
+      "word_times": false
+    },
+    {
+      "timestamp_utc": "2026-11-10T01:26:53.085564+00:00",
+      "result": "passed",
+      "validation": "functional only; NOT accuracy",
+      "engine": "nemo",
+      "artifact_name": "mouthkeys-tiny-nemo-offline-3",
+      "operations": [
+        "stream",
+        "segments"
+      ],
+      "audio_samples": 18524,
+      "fixture_sha256": "d5c3bc5bfa5123ec0cfc68bed9e4bc82b87ee4c3b44a03e2f9fab0238e5a1d30",
+      "versions": {
+        "torch": "2.11.0+cpu",
+        "transformers": "5.22.2",
+        "nemo_toolkit": "3.0.0"
+      },
+      "network": "AF_INET/AF_INET6 denied by seccomp",
+      "word_times": true
+    }
+  ]
+}

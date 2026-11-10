@@ -1,0 +1,276 @@
+{
+  "notice": "Downloaded pinned public checkpoints, isolated CPU and XDG; no network during inference, desktop interaction, microphone, or app install. Short English fixture recognition, not general accuracy/latency/language coverage.",
+  "runs": [
+    {
+      "engine": "nemo",
+      "model": "nvidia/parakeet_realtime_eou_120m-v1",
+      "revision": "a7e2b4629593dce0ec19f600e00e9904353fda2d",
+      "bytes": 460062720,
+      "device": "cpu",
+      "compute_type": "float32",
+      "fixture_sha256": "d5c3bc5bfa5123ec0cfc68bed9e4bc82b87ee4c3b44a03e2f9fab0238e5a1d30",
+      "fixture_samples": 18524,
+      "sample_rate": 16000,
+      "versions": {
+        "torch": "2.11.0+cpu",
+        "torchaudio": "2.11.0+cpu",
+        "transformers": "5.22.2",
+        "nemo_toolkit": "3.0.0",
+        "faster-whisper": "1.2.1"
+      },
+      "network": "IPv4/IPv6 sockets denied in validation process and native worker",
+      "scope": "Public short English greeting; not general accuracy, latency or language coverage",
+      "load_seconds": 9.721,
+      "file_seconds": 0.243,
+      "file_text": "hello fluid voice",
+      "file_words": [
+        {
+          "word": "hello",
+          "start": 0.32,
+          "end": 0.4
+        },
+        {
+          "word": "fluid",
+          "start": 0.64,
+          "end": 0.88
+        },
+        {
+          "word": "voice",
+          "start": 0.96,
+          "end": 1.15775
+        }
+      ],
+      "stream_preview_text": [
+        "hello fluid voice",
+        "hello fluid voice hello fluid voice",
+        "hello fluid voice hello fluid voice hello fluid voice"
+      ],
+      "stream_preview_seconds": [
+        0.937,
+        0.54,
+        0.615
+      ],
+      "stream_final_text": "hello fluid voice hello fluid voice hello fluid voice",
+      "stream_final_seconds": 0.061,
+      "stream_words": [
+        {
+          "word": "hello",
+          "start": 0.48,
+          "end": 0.56
+        },
+        {
+          "word": "fluid",
+          "start": 0.72,
+          "end": 0.88
+        },
+        {
+          "word": "voice",
+          "start": 0.96,
+          "end": 1.2
+        },
+        {
+          "word": "hello",
+          "start": 1.92,
+          "end": 2.16
+        },
+        {
+          "word": "fluid",
+          "start": 2.24,
+          "end": 2.48
+        },
+        {
+          "word": "voice",
+          "start": 2.56,
+          "end": 2.8000000000000003
+        },
+        {
+          "word": "hello",
+          "start": 3.52,
+          "end": 3.84
+        },
+        {
+          "word": "fluid",
+          "start": 3.92,
+          "end": 4.16
+        },
+        {
+          "word": "voice",
+          "start": 4.24,
+          "end": 4.97325
+        }
+      ],
+      "stream_samples": 79572,
+      "stream_session": "same worker and key across 3 increasing prefixes and final tail",
+      "fresh_session_seconds": 0.678,
+      "result": "passed",
+      "timestamp_utc": "2026-11-10T22:42:56.574337+00:00",
+      "native_cache_evidence": {
+        "repeat_steps": 32,
+        "distinct_increasing_audio_prefixes": [
+          26524,
+          53048,
+          79572
+        ],
+        "starting_encoder_cache_length": [
+          0
+        ],
+        "final_encoder_cache_length": [
+          64
+        ],
+        "encoder_cache_lengths_chained": true,
+        "decoder_hypotheses_reused": true,
+        "advanced_feature_position_every_step": true,
+        "final_tail_steps": 1,
+        "fresh_session_starting_cache_length": [
+          0
+        ]
+      }
+    },
+    {
+      "engine": "transformers",
+      "model": "Qwen/Qwen3-ASR-0.6B-hf",
+      "revision": "7f1569a48a89f3e3f4dc3a5c9d28bddd903bc76c",
+      "bytes": 1576363223,
+      "device": "cpu",
+      "compute_type": "float32",
+      "fixture_sha256": "d5c3bc5bfa5123ec0cfc68bed9e4bc82b87ee4c3b44a03e2f9fab0238e5a1d30",
+      "fixture_samples": 18524,
+      "sample_rate": 16000,
+      "versions": {
+        "torch": "2.11.0+cpu",
+        "torchaudio": "2.11.0+cpu",
+        "transformers": "5.22.2",
+        "nemo_toolkit": "3.0.0",
+        "faster-whisper": "1.2.1"
+      },
+      "network": "IPv4/IPv6 sockets denied in validation process and native worker",
+      "scope": "Public short English greeting; not general accuracy, latency or language coverage",
+      "load_seconds": 6.379,
+      "file_seconds": 1.062,
+      "file_text": "Hello, fluid voice.",
+      "result": "passed",
+      "timestamp_utc": "2026-11-10T22:39:13.584127+00:00"
+    },
+    {
+      "engine": "nemo",
+      "model": "nvidia/nemotron-3.5-asr-streaming-0.6b",
+      "revision": "ea30d66debe3740a08b573244286791d423d6b3e",
+      "bytes": 2368284501,
+      "device": "cpu",
+      "compute_type": "float32",
+      "fixture_sha256": "d5c3bc5bfa5123ec0cfc68bed9e4bc82b87ee4c3b44a03e2f9fab0238e5a1d30",
+      "fixture_samples": 18524,
+      "sample_rate": 16000,
+      "versions": {
+        "torch": "2.11.0+cpu",
+        "torchaudio": "2.11.0+cpu",
+        "transformers": "5.22.2",
+        "nemo_toolkit": "3.0.0",
+        "faster-whisper": "1.2.1"
+      },
+      "network": "IPv4/IPv6 sockets denied in validation process and native worker",
+      "scope": "Public short English greeting; not general accuracy, latency or language coverage",
+      "load_seconds": 67.439,
+      "file_seconds": 0.597,
+      "file_text": "Hello fluid voice.",
+      "file_words": [
+        {
+          "word": "Hello",
+          "start": 0.64,
+          "end": 0.8
+        },
+        {
+          "word": "fluid",
+          "start": 0.96,
+          "end": 1.12
+        },
+        {
+          "word": "voice.",
+          "start": 1.12,
+          "end": 1.15775
+        }
+      ],
+      "stream_preview_text": [
+        "Hello fluid voice",
+        "Hello fluid voice hello fluid voice",
+        "Hello fluid voice hello fluid voice fluid voice"
+      ],
+      "stream_preview_seconds": [
+        2.097,
+        1.248,
+        1.079
+      ],
+      "stream_final_text": "Hello fluid voice hello fluid voice fluid voice.",
+      "stream_final_seconds": 0.255,
+      "stream_words": [
+        {
+          "word": "Hello",
+          "start": 0.64,
+          "end": 0.8
+        },
+        {
+          "word": "fluid",
+          "start": 0.96,
+          "end": 1.2
+        },
+        {
+          "word": "voice",
+          "start": 1.28,
+          "end": 1.52
+        },
+        {
+          "word": "hello",
+          "start": 2.08,
+          "end": 2.24
+        },
+        {
+          "word": "fluid",
+          "start": 2.4,
+          "end": 2.72
+        },
+        {
+          "word": "voice",
+          "start": 2.8000000000000003,
+          "end": 3.04
+        },
+        {
+          "word": "fluid",
+          "start": 4.16,
+          "end": 4.32
+        },
+        {
+          "word": "voice.",
+          "start": 4.48,
+          "end": 4.88
+        }
+      ],
+      "stream_samples": 79572,
+      "stream_session": "same worker and key across 3 increasing prefixes and final tail",
+      "fresh_session_seconds": 2.749,
+      "result": "passed",
+      "timestamp_utc": "2026-11-10T22:43:29.388000+00:00",
+      "native_cache_evidence": {
+        "repeat_steps": 16,
+        "distinct_increasing_audio_prefixes": [
+          26524,
+          53048,
+          79572
+        ],
+        "starting_encoder_cache_length": [
+          0
+        ],
+        "final_encoder_cache_length": [
+          56
+        ],
+        "encoder_cache_lengths_chained": true,
+        "decoder_hypotheses_reused": true,
+        "advanced_feature_position_every_step": true,
+        "final_tail_steps": 1,
+        "fresh_session_starting_cache_length": [
+          0
+        ]
+      },
+      "fix": "Prompt language tags removed from offline transcript and native word timing records after cold reload."
+    }
+  ]
+}

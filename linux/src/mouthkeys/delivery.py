@@ -353,24 +353,26 @@ class Delivery:
             return None
 
     def copy(self, text: str):
-        if session() == "wayland":
+        desktop = session()
+        if desktop == "wayland":
             # wl-copy forks to own the selection; never use --paste-once (XWayland reads twice).
-            run(["wl-copy", "--type", "text/plain;charset=utf-8"], input=text.encode())
-        elif session() == "x11":
-            # xclip's selection owner inherits stdout unless redirected; do not capture it.
-            try:
-                subprocess.run(
-                    ["xclip", "-selection", "clipboard", "-in"],
-                    input=text.encode(),
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                    check=True,
-                    timeout=3,
-                )
-            except FileNotFoundError as exc:
-                raise RuntimeError("Install xclip (see linux/README.md)") from exc
+            args = ["wl-copy", "--type", "text/plain;charset=utf-8"]
+        elif desktop == "x11":
+            args = ["xclip", "-selection", "clipboard", "-in"]
         else:
             raise RuntimeError("No desktop session; transcript saved in history")
+        # The owner outlives the launcher. An inherited pipe can keep run() waiting for EOF.
+        try:
+            subprocess.run(
+                args,
+                input=text.encode(),
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=True,
+                timeout=3,
+            )
+        except FileNotFoundError as exc:
+            raise RuntimeError(f"Install {args[0]} (see linux/README.md)") from exc
 
     def paste_key(self, config: Config):
         backend = config.paste_backend

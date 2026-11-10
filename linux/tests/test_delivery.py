@@ -16,7 +16,6 @@ def test_copy_unicode_uses_stdin_not_shell(monkeypatch, desktop):
         calls.append((args, kwargs))
         return SimpleNamespace(stdout=b"")
 
-    monkeypatch.setattr(delivery, "run", run)
     monkeypatch.setattr(delivery.subprocess, "run", run)
     text = '日本語 café\n$(touch /tmp/never) "hello"'
     delivery.Delivery().copy(text)
@@ -24,6 +23,8 @@ def test_copy_unicode_uses_stdin_not_shell(monkeypatch, desktop):
     assert text not in args
     assert kwargs["input"] == text.encode()
     assert not kwargs.get("shell")
+    # Forked selection owners must not keep the launcher's capture pipes alive.
+    assert kwargs["stdout"] == kwargs["stderr"] == delivery.subprocess.DEVNULL
 
 
 @pytest.mark.parametrize(

@@ -3,11 +3,13 @@ import os
 import signal
 import subprocess
 import tempfile
+import threading
 import time
 import wave
+from dataclasses import replace
 from pathlib import Path
 
-from .config import Config
+from .config import Config, private_dir, runtime_dir
 from .processes import python_command
 
 
@@ -66,8 +68,9 @@ def bluetooth_capture_ready(source):
 
 
 class Recorder:
-    def __init__(self, config: Config, path: Path):
+    def __init__(self, config: Config, path: Path, *, timeout=5, cancelled=None):
         self.errors = tempfile.TemporaryFile()
+        self.last_error = ""
         self.process = None
         try:
             self.process = subprocess.Popen(
@@ -109,8 +112,10 @@ class Recorder:
                 stderr=self.errors,
                 start_new_session=True,
             )
-            deadline = time.monotonic() + 5
+            deadline = time.monotonic() + timeout
             while True:
+                if cancelled and cancelled():
+                    raise RuntimeError("Microphone start cancelled")
                 if self.process.poll() is not None:
                     raise RuntimeError(self.error() or "Microphone capture failed")
                 try:
@@ -122,19 +127,27 @@ class Recorder:
                     pass  # FFmpeg may still be opening the source or writing the WAV header.
                 if time.monotonic() >= deadline:
                     raise RuntimeError(
-                        "Microphone did not produce audio or become ready within 5 seconds"
+                        "Microphone did not produce audio or become ready "
+                        f"within {timeout:g} seconds"
                     )
                 time.sleep(0.02)
         except BaseException:
             if self.process is not None:
                 self.process.stdin.close()
-                self.process.wait(timeout=3)
+                try:
+                    self.process.wait(timeout=3)
+                except subprocess.TimeoutExpired:
+                    os.killpg(self.process.pid, signal.SIGKILL)
+                    self.process.wait(timeout=1)
             self.errors.close()
             raise
 
     def error(self):
+        if self.errors.closed:
+            return self.last_error
         self.errors.seek(0)
-        return self.errors.read(4096).decode(errors="replace").strip()
+        self.last_error = self.errors.read(4096).decode(errors="replace").strip()
+        return self.last_error
 
     def finished(self):
         return self.process.poll() is not None
@@ -153,6 +166,184 @@ class Recorder:
         # FFmpeg returns 255 after a clean SIGINT, and 0 at the duration limit.
         if code not in (0, 255):
             raise RuntimeError(error or f"Microphone capture exited with status {code}")
+
+
+class CaptureTeardownError(RuntimeError):
+    """A source transition must not open another capture after unsafe teardown."""
+
+    def __init__(self, source, error):
+        self.source = source
+        super().__init__(f"Cannot finish microphone {source}: {error}")
+
+
+class CaptureSession:
+    """Append capture segments to one stable WAV across explicit source switches.
+
+    PCM prefix never changes: concurrent preview and native streaming cursors remain
+    valid. Switching has a real microphone restart gap; no silence is invented.
+    One private runtime segment is bounded by the recording limit and removed on
+    stop or the next daemon launch; only canonical audio is retained for recovery.
+    """
+
+    def __init__(self, config, path, *, recorder=Recorder, cancel_event=None, timeout=5):
+        self.path = Path(path)
+        self.factory = recorder
+        self.cancel_event = cancel_event
+        self.stopping = threading.Event()
+        self.lock = threading.RLock()
+        self.capture = None
+        self.segment = None
+        self.frames = 0
+        self.failure = None
+        self.writer = None
+        self.output = None
+        self.closed = False
+        self.config = config
+        try:
+            descriptor = os.open(self.path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            os.fchmod(descriptor, 0o600)
+            self.output = os.fdopen(descriptor, "wb")
+            self.writer = wave.open(self.output, "wb")
+            self.writer.setparams((1, 2, 16000, 0, "NONE", "not compressed"))
+            self.writer.writeframes(b"")
+            self.output.flush()
+            self._open(config, timeout)
+        except BaseException:
+            self._close()
+            raise
+        self.thread = threading.Thread(target=self._relay, daemon=True)
+        self.thread.start()
+
+    def _cancelled(self):
+        return self.stopping.is_set() or bool(self.cancel_event and self.cancel_event.is_set())
+
+    def _open(self, config, timeout):
+        descriptor, name = tempfile.mkstemp(
+            prefix=f"{self.path.stem}-capture-",
+            suffix=".wav",
+            dir=private_dir(runtime_dir() / "private-recordings"),
+        )
+        os.close(descriptor)
+        self.segment, self.frames = Path(name), 0
+        try:
+            self.capture = self.factory(
+                config, self.segment, timeout=timeout, cancelled=self._cancelled
+            )
+            self.config = config
+            self._drain()
+        except BaseException:
+            capture, self.capture = self.capture, None
+            try:
+                if capture:
+                    capture.stop()
+            finally:
+                self.segment.unlink(missing_ok=True)
+                self.segment = None
+            raise
+
+    def _drain(self):
+        if self.segment is None:
+            return
+        with self.segment.open("rb") as stream, wave.open(stream, "rb") as wav:
+            if (wav.getnchannels(), wav.getsampwidth(), wav.getframerate()) != (1, 2, 16000):
+                raise ValueError("Expected mono 16 kHz PCM capture")
+            # FFmpeg's live WAV header has an unfinalized data length.
+            available = max(0, (self.segment.stat().st_size - stream.tell()) // 2)
+            wav.setpos(self.frames)
+            while self.frames < available:
+                raw = wav.readframes(min(16000, available - self.frames))
+                if not raw:
+                    break
+                self.writer.writeframes(raw)
+                self.frames += len(raw) // 2
+            self.output.flush()
+
+    def _end_segment(self, *, tolerate_ended_failure=False):
+        capture = self.capture
+        stop_error = None
+        if capture:
+            try:
+                capture.stop()
+            except Exception as exc:
+                try:
+                    ended = capture.finished()
+                except Exception:
+                    ended = False
+                if not ended:
+                    # Retain ownership for a subsequent stop; never overlap a
+                    # replacement capture with one whose shutdown is unproven.
+                    raise CaptureTeardownError(self.config.audio_source, exc) from exc
+                stop_error = exc
+        self.capture = None
+        try:
+            self._drain()
+        finally:
+            if self.segment:
+                self.segment.unlink(missing_ok=True)
+                self.segment = None
+        if stop_error and not tolerate_ended_failure:
+            raise stop_error
+        return stop_error
+
+    def _relay(self):
+        while not self.stopping.wait(0.02):
+            try:
+                with self.lock:
+                    self._drain()
+            except Exception as exc:
+                self.failure = exc
+                self.stopping.set()
+
+    def switch_source(self, source, *, timeout=5):
+        with self.lock:
+            if self._cancelled():
+                raise RuntimeError("Recording is stopping")
+            try:
+                stop_error = self._end_segment(tolerate_ended_failure=True)
+            except CaptureTeardownError:
+                raise
+            except Exception as exc:
+                raise CaptureTeardownError(self.config.audio_source, exc) from exc
+            if self._cancelled():
+                raise RuntimeError("Recording is stopping")
+            previous_source = self.config.audio_source
+            self._open(replace(self.config, audio_source=source), timeout)
+            if stop_error:
+                return {"failed_source": previous_source, "error": str(stop_error)}
+            return None
+
+    def finished(self):
+        return self.failure is not None or (self.capture is not None and self.capture.finished())
+
+    def _close(self):
+        if self.closed:
+            return
+        try:
+            self._end_segment()
+        finally:
+            if self.capture is None:
+                try:
+                    if self.writer:
+                        self.writer.close()
+                finally:
+                    self.writer = None
+                    if self.output:
+                        self.output.close()
+                        self.output = None
+                    self.closed = True
+
+    def stop(self):
+        self.stopping.set()
+        try:
+            with self.lock:
+                self._close()
+        finally:
+            if hasattr(self, "thread"):
+                self.thread.join(timeout=1)
+                if self.thread.is_alive():
+                    raise RuntimeError("Capture relay did not stop")
+        if self.failure:
+            raise RuntimeError(f"Capture relay failed: {self.failure}") from self.failure
 
 
 def check_audio(path: Path):

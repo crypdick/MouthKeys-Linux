@@ -40,6 +40,7 @@ class Config:
     compute_type: str = "default"
     audio_source: str = "default"
     delivery: str = "clipboard"
+    destination_guard: str = "field"
     paste_backend: str = "auto"
     paste_shortcut: str = "ctrl+shift+v"
     max_seconds: int = 300
@@ -62,6 +63,7 @@ class Config:
     ai_endpoint: str = "http://localhost:11434/v1/chat/completions"
     ai_model: str = ""
     ai_key_env: str = "MOUTHKEYS_AI_API_KEY"
+    ai_credential_source: str = "environment"
     ai_prompt: str = "Clean up dictated text without changing meaning. Return only corrected text."
     ai_custom_prompt_only: str = "off"
     save_history: str = "on"
@@ -249,6 +251,8 @@ OPTIONAL = {
     "filler_words",
 }
 CHOICES = {
+    "destination_guard": ["field", "window"],
+    "ai_credential_source": ["environment", "secret-service"],
     "command_confirm": ["on", "destructive", "off"],
     "file_diarization_mode": ["turns", "overlap"],
     "sound_preset": [

@@ -208,7 +208,11 @@ def test_wayland_verified_field_send_releases_modifiers_and_blocks_later_typing(
     calls = []
     monkeypatch.setattr(delivery, "run", lambda args: calls.append(args))
     config = Config(
-        delivery="wayland", paste_backend="wtype", spoken_send="on", spoken_send_key="shift+return"
+        delivery="wayland",
+        paste_backend="wtype",
+        spoken_send="on",
+        spoken_send_key="shift+return",
+        destination_guard="window",
     )
     assert adapter.send_key(config, target)
     assert calls == [["wtype", "-M", "shift", "-k", "Return", "-m", "shift"]]
@@ -381,7 +385,11 @@ def test_wayland_container_spoken_send_rechecks_native_focus(monkeypatch):
     calls = []
     monkeypatch.setattr(delivery, "run", lambda args: calls.append(args))
     config = Config(
-        delivery="wayland", paste_backend="wtype", spoken_send="on", spoken_send_key="shift+return"
+        delivery="wayland",
+        paste_backend="wtype",
+        spoken_send="on",
+        spoken_send_key="shift+return",
+        destination_guard="window",
     )
     assert adapter.send_key(config, "sway:77")
     assert calls == [["wtype", "-k", "Return"]]

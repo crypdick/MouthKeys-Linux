@@ -37,7 +37,8 @@ class History:
     def begin(self, item_id: str):
         with self.connect() as conn:
             conn.execute(
-                "INSERT INTO history(id, created, status) VALUES (?, ?, 'recording')",
+                "INSERT INTO history(id, created, status, was_ai_processed, ai_processing_error) "
+                "VALUES (?, ?, 'recording', 0, '')",
                 (item_id, time.time()),
             )
 
@@ -164,4 +165,7 @@ METADATA = {
     "language": "TEXT NOT NULL DEFAULT ''",
     "app": "TEXT NOT NULL DEFAULT ''",
     "window": "TEXT NOT NULL DEFAULT ''",
+    # NULL distinguishes legacy entries from a recorded negative/empty outcome.
+    "was_ai_processed": "INTEGER",
+    "ai_processing_error": "TEXT",
 }

@@ -96,6 +96,7 @@ def isolated_environment(tmp_path, monkeypatch):
         "hyprctl",
         "playerctl",
         "paplay",
+        "secret-tool",
     }
 
     def guarded(function):

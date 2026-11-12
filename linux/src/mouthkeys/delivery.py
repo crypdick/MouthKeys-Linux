@@ -400,6 +400,11 @@ class Delivery:
     def deliver(self, text: str, config: Config, target: str | dict | None):
         if isinstance(target, dict):
             return self._deliver_field(text, config, target)
+        if config.destination_guard == "field":
+            # A window ID cannot establish which tab, terminal pane, or field owns input.
+            # Explicit focus-now paste remains available through the manual service action.
+            self.copy(text)
+            return "copied"
         direct = getattr(config, "insertion_mode", "clipboard") == "direct"
         if (
             direct
@@ -505,7 +510,7 @@ class Delivery:
         before_send=None,
         allow_without_insert=False,
     ):
-        """Send only to the same captured destination, with field identity when available."""
+        """Require captured field identity unless weaker window checks were explicitly chosen."""
         if config.spoken_send != "on":
             return False
         if isinstance(target, dict):
@@ -540,6 +545,8 @@ class Delivery:
                 return self._wayland_send(config, terminal=terminal, before_send=before_send)
             if session() == "x11":
                 return self._x11_send(config, terminal=terminal, before_send=before_send)
+            return False
+        if config.destination_guard == "field":
             return False
         if (
             session() == "wayland"

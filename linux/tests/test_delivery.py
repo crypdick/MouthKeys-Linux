@@ -7,6 +7,23 @@ from mouthkeys import delivery
 from mouthkeys.config import Config
 
 
+@pytest.mark.parametrize("desktop,target", [("x11", "10"), ("wayland", "sway:42")])
+def test_default_guard_never_delivers_or_sends_to_window_only_identity(
+    monkeypatch, desktop, target
+):
+    monkeypatch.setattr(delivery, "session", lambda: desktop)
+    adapter = delivery.Delivery()
+    calls = []
+    monkeypatch.setattr(adapter, "copy", lambda text: calls.append(text))
+    monkeypatch.setattr(adapter, "focus", lambda: target)
+    monkeypatch.setattr(adapter, "paste_key", lambda cfg: pytest.fail("Window-only paste"))
+    monkeypatch.setattr(delivery, "run", lambda *a, **kw: pytest.fail("Window-only Send"))
+    config = Config(delivery=desktop, spoken_send="on")
+    assert adapter.deliver("retained", config, target) == "copied"
+    assert not adapter.send_key(config, target, allow_without_insert=True)
+    assert calls == ["retained"]
+
+
 @pytest.mark.parametrize("desktop", ["x11", "wayland"])
 def test_copy_unicode_uses_stdin_not_shell(monkeypatch, desktop):
     monkeypatch.setattr(delivery, "session", lambda: desktop)
@@ -45,7 +62,10 @@ def test_x11_focus_guard(monkeypatch, focuses, target, expected):
     monkeypatch.setattr(adapter, "focus", lambda: next(focus))
     monkeypatch.setattr(adapter, "copy", lambda text: calls.append("copy"))
     monkeypatch.setattr(adapter, "paste_key", lambda _: calls.append("paste"))
-    assert adapter.deliver("hello", Config(delivery="x11"), target) == expected
+    assert (
+        adapter.deliver("hello", Config(destination_guard="window", delivery="x11"), target)
+        == expected
+    )
     assert calls == (["copy", "paste"] if expected == "paste_requested" else ["copy"])
 
 
@@ -57,7 +77,10 @@ def test_wayland_never_auto_pastes_even_with_xwayland_display(monkeypatch):
     calls = []
     monkeypatch.setattr(adapter, "copy", lambda _: calls.append("copy"))
     monkeypatch.setattr(adapter, "paste_key", lambda _: pytest.fail("Unexpected auto paste"))
-    assert adapter.deliver("hello", Config(delivery="x11"), "123") == "copied"
+    assert (
+        adapter.deliver("hello", Config(destination_guard="window", delivery="x11"), "123")
+        == "copied"
+    )
     assert calls == ["copy"]
 
 
@@ -73,14 +96,25 @@ def test_terminal_paste_chords_release_modifiers(monkeypatch, backend, expected)
     monkeypatch.setattr(delivery, "session", lambda: "x11")
     calls = []
     monkeypatch.setattr(delivery, "run", lambda args: calls.append(args))
-    delivery.Delivery().paste_key(replace(Config(), paste_backend=backend))
+    delivery.Delivery().paste_key(
+        replace(
+            Config(
+                destination_guard="window",
+            ),
+            paste_backend=backend,
+        )
+    )
     assert calls == [expected]
 
 
 def test_wayland_auto_backend_requires_explicit_configuration(monkeypatch):
     monkeypatch.setenv("WAYLAND_DISPLAY", "wayland-0")
     with pytest.raises(ValueError, match="Wayland"):
-        delivery.Delivery().paste_key(Config())
+        delivery.Delivery().paste_key(
+            Config(
+                destination_guard="window",
+            )
+        )
 
 
 def test_headless_never_changes_clipboard():
@@ -100,7 +134,11 @@ def test_spoken_send_rechecks_focus_and_never_activates_target(monkeypatch, focu
     calls = []
     monkeypatch.setattr(delivery, "run", lambda args: calls.append(args))
     assert (
-        adapter.send_key(Config(spoken_send="on", spoken_send_key="shift+return"), "10") is expected
+        adapter.send_key(
+            Config(destination_guard="window", spoken_send="on", spoken_send_key="shift+return"),
+            "10",
+        )
+        is expected
     )
     assert calls == ([["xdotool", "key", "--clearmodifiers", "shift+Return"]] if expected else [])
 
@@ -112,7 +150,9 @@ def test_spoken_send_terminal_uses_plain_return(monkeypatch):
     monkeypatch.setattr(adapter, "terminal", lambda _: True)
     calls = []
     monkeypatch.setattr(delivery, "run", lambda args: calls.append(args))
-    assert adapter.send_key(Config(spoken_send="on", spoken_send_key="ctrl+return"), "10")
+    assert adapter.send_key(
+        Config(destination_guard="window", spoken_send="on", spoken_send_key="ctrl+return"), "10"
+    )
     assert calls[0][-1] == "Return"
 
 
@@ -123,7 +163,7 @@ def test_wayland_auto_paste_requires_explicit_delivery_and_stop_target(monkeypat
     calls = []
     monkeypatch.setattr(adapter, "copy", lambda _: calls.append("copy"))
     monkeypatch.setattr(adapter, "paste_key", lambda _: calls.append("paste"))
-    config = Config(delivery="wayland", paste_backend="wtype")
+    config = Config(destination_guard="window", delivery="wayland", paste_backend="wtype")
     assert adapter.deliver("hello", config, None) == "copied"
     assert calls == ["copy"]
     calls.clear()
@@ -183,7 +223,12 @@ def test_clipboard_restores_only_after_paste_request(monkeypatch, changed, resto
     monkeypatch.setattr(adapter, "paste_key", lambda _: calls.append("paste"))
     result = adapter.deliver(
         "hello",
-        Config(delivery="x11", restore_clipboard="on", clipboard_restore_delay_ms=750),
+        Config(
+            destination_guard="window",
+            delivery="x11",
+            restore_clipboard="on",
+            clipboard_restore_delay_ms=750,
+        ),
         "10",
     )
     assert result == ("copied" if changed else "paste_requested")
@@ -200,7 +245,9 @@ def test_direct_insertion_uses_stdin_and_never_types_into_terminals(monkeypatch)
     calls = []
     monkeypatch.setattr(delivery, "run", lambda args, **kw: calls.append((args, kw)))
     monkeypatch.setattr(adapter, "copy", lambda _: calls.append("copy"))
-    config = Config(delivery="x11", insertion_mode="direct", copy_to_clipboard="off")
+    config = Config(
+        destination_guard="window", delivery="x11", insertion_mode="direct", copy_to_clipboard="off"
+    )
     assert adapter.deliver("café $(never)", config, "10") == "insert_requested"
     assert calls[0][1]["input"] == "café $(never)".encode()
     calls.clear()
@@ -254,6 +301,11 @@ def test_wayland_container_restore_uses_actual_clipboard_owner_helper_when_suppo
     )
     monkeypatch.setattr(adapter, "copy", lambda _: pytest.fail("Helper already copied"))
     monkeypatch.setattr(adapter, "paste_key", lambda _: calls.append("paste"))
-    config = Config(delivery="wayland", paste_backend="wtype", restore_clipboard="on")
+    config = Config(
+        destination_guard="window",
+        delivery="wayland",
+        paste_backend="wtype",
+        restore_clipboard="on",
+    )
     assert adapter.deliver("hello", config, "sway:77") == "paste_requested"
     assert calls == ["paste", ("finish", True)]

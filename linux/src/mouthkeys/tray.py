@@ -124,9 +124,18 @@ class Tray(QSystemTrayIcon):
             text = "MouthKeys — " + result.get("message", response.get("error", "Unavailable"))
             self.status_action.setText(text)
             self.setToolTip(text)
-            self.toggle_action.setText("Stop recording" if phase == "recording" else "Record")
+            self.toggle_action.setText(
+                "Cancel microphone start"
+                if phase == "starting"
+                else "Retry microphone stop"
+                if phase == "capture_failed"
+                else "Stop recording"
+                if phase in ("recording", "switching")
+                else "Record"
+            )
             self.toggle_action.setEnabled(
-                result.get("can_record", phase == "idle") or phase == "recording"
+                result.get("can_record", phase == "idle")
+                or phase in ("starting", "recording", "switching", "capture_failed")
             )
             self.notify_status(result)
 

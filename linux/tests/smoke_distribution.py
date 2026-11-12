@@ -150,6 +150,9 @@ try:
         "native_worker",
         "portal_shortcuts",
         "atspi_helper",
+        "credentials",
+        "data_lock",
+        "dictionary_transfer",
     ):
         __import__("mouthkeys." + module)
     assets = Path(mouthkeys.__file__).parent / "assets/sounds"

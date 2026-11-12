@@ -54,6 +54,24 @@ TRANSFORMERS_MODELS = {
     },
 }
 NEMO_MODELS = {
+    # NVIDIA's native TDT archives expose NeMo word timing and weighted graphs.
+    # Their full-context encoders are offline, not cache-aware streaming models.
+    "nvidia/parakeet-tdt-0.6b-v2": {
+        "name": "Parakeet TDT v2 (NeMo, native vocabulary)",
+        "languages": "English",
+        "filename": "parakeet-tdt-0.6b-v2.nemo",
+        "revision": "main",
+        "weight_bytes": 2472222720,
+        "native_streaming": False,
+    },
+    "nvidia/parakeet-tdt-0.6b-v3": {
+        "name": "Parakeet TDT v3 (NeMo, native vocabulary)",
+        "languages": "25 languages (automatic detection)",
+        "filename": "parakeet-tdt-0.6b-v3.nemo",
+        "revision": "main",
+        "weight_bytes": 2509332480,
+        "native_streaming": False,
+    },
     "nvidia/parakeet_realtime_eou_120m-v1": {
         "name": "Parakeet Flash / Realtime EOU 120M",
         "languages": "English",
@@ -75,6 +93,27 @@ FAMILIES = {
     "qwen3_asr": "AutoModelForMultimodalLM",
     "cohere_asr": "CohereAsrForConditionalGeneration",
 }
+
+
+def uses_native_streaming(config):
+    """Full-context Parakeet TDT uses provisional windows, never streaming caches."""
+    return (
+        config.engine == "nemo"
+        and getattr(config, "native_streaming", "on") == "on"
+        and NEMO_MODELS.get(config.model, {}).get("native_streaming", True)
+    )
+
+
+def supports_native_streaming(model):
+    """Cache methods alone do not make a full-context Conformer streaming-safe."""
+    context = getattr(getattr(model, "encoder", None), "att_context_size", None)
+    return bool(
+        callable(getattr(model, "conformer_stream_step", None))
+        and isinstance(context, (list, tuple))
+        and len(context) == 2
+        and type(context[1]) is int
+        and context[1] >= 0
+    )
 
 
 def effective_revision(model, revision="main", engine="transformers"):
@@ -422,12 +461,14 @@ class NemoBackend:
         self.model = module.ASRModel.restore_from(str(path), map_location=device).to(device).eval()
         if dtype != "auto":
             self.model = self.model.to(dtype=dtype)
-        if getattr(config, "native_streaming", "on") == "on":
+        self.supports_native_streaming = supports_native_streaming(self.model)
+        streaming = uses_native_streaming(config) and self.supports_native_streaming
+        if streaming:
             if config.compute_type not in ("default", "auto", "float32"):
                 raise ValueError("NeMo cache-aware streaming requires float32 compute type")
             self.model = self.model.to(dtype=self.torch.float32)
         latency = getattr(config, "streaming_latency", "model")
-        if latency != "model":
+        if latency != "model" and streaming:
             if not hasattr(self.model.encoder, "set_default_att_context_size"):
                 raise ValueError("This model does not support configurable streaming latency")
             right = {"80": 0, "160": 1, "320": 3, "560": 6, "1120": 13}[latency]
@@ -441,7 +482,7 @@ class NemoBackend:
         """Use NeMo's weighted context graph, not textual prompt emulation."""
         from .vocabulary import VocabularyStore
 
-        entries = VocabularyStore.entries() if config.vocabulary_boosting == "on" else []
+        entries = VocabularyStore.effective_entries() if config.vocabulary_boosting == "on" else []
         timed = config.pronunciation_matching == "on"
         state = (tuple((entry["text"], entry["weight"]) for entry in entries), timed)
         if state == self._vocabulary_state or (
@@ -472,7 +513,7 @@ class NemoBackend:
                 raise ValueError("Native vocabulary contains a phrase the tokenizer cannot encode")
             graph.build(
                 token_ids=tokens,
-                scores=[float(entry["weight"]) for entry in entries],
+                scores=[float(entry["weight"] or 1) for entry in entries],
                 phrases=[entry["text"] for entry in entries],
                 uniform_weights=False,
             )
@@ -536,8 +577,10 @@ class NemoBackend:
         if hasattr(self.model, "set_inference_prompt"):
             self.model.set_inference_prompt(nemotron_language(self.model, config.language))
             self.model.decoding.set_strip_lang_tags(True)
-        elif "parakeet_realtime_eou" in config.model and config.language not in ("en", "auto"):
-            raise ValueError("Parakeet Flash / Realtime EOU supports English only")
+        elif (
+            "parakeet_realtime_eou" in config.model or config.model == "nvidia/parakeet-tdt-0.6b-v2"
+        ) and config.language not in ("en", "auto"):
+            raise ValueError("Selected English Parakeet model supports English only")
 
     def stream(self, samples, config, session_key, *, final=False):
         """Advance native encoder/decoder caches; never re-encode committed chunks.

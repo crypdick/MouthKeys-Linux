@@ -229,13 +229,13 @@ def test_weighted_vocabulary_and_aliases_roundtrip_without_losing_metadata():
     assert VocabularyStore.entries() == entries
 
 
-@pytest.mark.parametrize("weight", [0, 6, True, 1.5])
+@pytest.mark.parametrize("weight", [0, -1, True, float("inf"), float("nan"), "2"])
 def test_invalid_prompt_weights_are_rejected(weight):
     with pytest.raises(ValueError, match="weight"):
         VocabularyStore.save_entries([{"text": "term", "weight": weight, "aliases": []}])
 
 
-def test_conflicting_aliases_and_weighted_prompt_overflow_are_rejected():
+def test_conflicting_aliases_rejected_and_textual_hints_bounded_independently():
     with pytest.raises(ValueError, match="alias"):
         VocabularyStore.save_entries(
             [
@@ -243,7 +243,11 @@ def test_conflicting_aliases_and_weighted_prompt_overflow_are_rejected():
                 {"text": "second", "weight": 1, "aliases": ["HEARD"]},
             ]
         )
-    with pytest.raises(ValueError, match="4096"):
-        VocabularyStore.save_entries(
-            [{"text": str(index) + "x" * 100, "weight": 5, "aliases": []} for index in range(10)]
-        )
+    entries = [
+        {"text": str(index) + "x" * 100, "weight": 8.5, "aliases": []} for index in range(100)
+    ]
+    VocabularyStore.save_entries(entries)
+    assert VocabularyStore.entries() == entries
+    cfg = SimpleNamespace(vocabulary_boosting="on")
+    assert len(context_prompt(cfg).encode()) <= 4096
+    assert len(whisper_options(cfg)["hotwords"].encode()) <= 4096

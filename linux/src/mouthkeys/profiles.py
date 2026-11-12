@@ -1,4 +1,4 @@
-"""Named AI cleanup configurations. Credentials stay in environment variables."""
+"""Named AI cleanup configurations. Secrets stay outside settings and backups."""
 
 import json
 import re
@@ -15,6 +15,7 @@ PROFILE_FIELDS = (
     "ai_endpoint",
     "ai_model",
     "ai_key_env",
+    "ai_credential_source",
     "ai_prompt",
     "ai_max_tokens",
     "ai_timeout",
@@ -25,6 +26,7 @@ PROFILE_FIELDS = (
 )
 
 PROFILE_DEFAULTS = {
+    "ai_credential_source": "environment",
     "ai_models_endpoint": "",
     "ai_reasoning_parameter": "",
     "ai_reasoning_value": "",
@@ -102,6 +104,8 @@ def validate_profiles(profiles):
         validate_reasoning(SimpleNamespace(**profile))
         if profile["ai_streaming"] not in ("on", "off"):
             raise ValueError("AI profile streaming must be on or off")
+        if profile["ai_credential_source"] not in ("environment", "secret-service"):
+            raise ValueError("AI credential source must be environment or secret-service")
         if profile["ai_key_env"] and not re.fullmatch(
             r"[A-Za-z_][A-Za-z0-9_]{0,127}", profile["ai_key_env"]
         ):

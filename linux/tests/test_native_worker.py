@@ -182,3 +182,13 @@ def test_unresponsive_worker_input_is_bounded_and_killed(monkeypatch):
     with pytest.raises(RuntimeError, match="input timed out"):
         backend._call({"method": "segments"}, [0] * 100)
     assert backend.process.killed
+
+
+def test_ready_handshake_reports_actual_native_streaming_capability(monkeypatch):
+    monkeypatch.setattr(native_worker.select, "select", lambda read, write, *a: (read, write, []))
+    process = Process([{"result": "ready", "native_streaming": False}])
+    backend = object.__new__(native_worker.NativeWorkerBackend)
+    backend.process = process
+    backend.timeout = 1
+    assert backend._response() == "ready"
+    assert backend.native_streaming is False

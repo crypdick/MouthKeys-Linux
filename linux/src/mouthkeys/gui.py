@@ -165,6 +165,7 @@ def setting_group(key):
         return "Microphone & media"
     if key.startswith(("paste_", "clipboard_")) or key in (
         "delivery",
+        "destination_guard",
         "insertion_mode",
         "restore_clipboard",
         "copy_to_clipboard",
@@ -410,6 +411,10 @@ class Window(QWidget):
             "device": ["cpu", "cuda", "auto"],
             "recording_panel": [("Show panel", "on"), ("Hide panel", "off")],
             "delivery": ["clipboard", "x11", "wayland"],
+            "destination_guard": [
+                ("Field / pane identity (recommended)", "field"),
+                ("Window only (cannot detect tab / pane switches)", "window"),
+            ],
             "paste_backend": ["auto", "xdotool", "wtype", "ydotool"],
             "paste_shortcut": ["ctrl+shift+v", "ctrl+v"],
             "sound_preset": [
@@ -438,6 +443,8 @@ class Window(QWidget):
             "audio_budget_mb": "Audio storage budget",
             "recording_panel": "Recording panel",
             "ai_key_env": "AI API key environment variable",
+            "ai_credential_source": "AI credential source",
+            "destination_guard": "Automatic delivery destination checks",
             "ai_endpoint": "AI cleanup endpoint (full URL)",
             "spoken_send": "Spoken Send",
             "send_after_pause": "Send after a pause",
@@ -496,6 +503,16 @@ class Window(QWidget):
             "ai_key_env": (
                 "Set this variable in the recording service environment; API keys "
                 "are never stored in backups."
+            ),
+            "ai_credential_source": (
+                "Environment uses the named variable. Secret Service uses your desktop keyring "
+                "for this exact provider endpoint; Save API key below. Settings never reads keys."
+            ),
+            "destination_guard": (
+                "Field mode copies instead of inserting or sending when field identity is "
+                "unavailable. Window mode allows only weaker window continuity checks; "
+                "switching tabs or terminal panes inside that window cannot be detected. "
+                "Explicit Paste latest still pastes at current focus."
             ),
             "save_history": (
                 "Off removes completed attempts after delivery; failed raw text is"
@@ -585,6 +602,12 @@ class Window(QWidget):
         for label, action, category in (
             ("Verify AI connection", lambda: self.provider_action("verify"), "AI cleanup"),
             ("Discover AI models", lambda: self.provider_action("models"), "AI cleanup"),
+            ("Save API key in desktop keyring", lambda: self.keyring_action("store"), "AI cleanup"),
+            (
+                "Delete API key from desktop keyring",
+                lambda: self.keyring_action("delete"),
+                "AI cleanup",
+            ),
             ("Preview recording sound", lambda: self.preview_sound(False), "Microphone & media"),
             ("Preview stop sound", lambda: self.preview_sound(True), "Microphone & media"),
             ("Start configured shortcut listener", self.start_hotkeys, "Desktop"),
@@ -858,6 +881,8 @@ class Window(QWidget):
                     (", ".join(aliases), value, "on" if entry.get("enabled", True) else "off")
                 ):
                     table.setItem(row, column, QTableWidgetItem(text))
+                if name == "replacements" and "id" in entry:
+                    table.item(row, 0).setData(Qt.ItemDataRole.UserRole, entry["id"])
 
     def add_dictionary_rule(self):
         table = self.dictionary_tabs.currentWidget()
@@ -898,15 +923,18 @@ class Window(QWidget):
                         value = re.sub(
                             r"\\([\\nt])", lambda m: {"n": "\n", "t": "\t", "\\": "\\"}[m[1]], value
                         )
-                    entries.append(
-                        {
-                            "triggers" if name == "replacements" else "aliases": [
-                                v.strip() for v in values[0].split(",") if v.strip()
-                            ],
-                            "replacement" if name == "replacements" else "symbol": value,
-                            "enabled": values[2] == "on",
-                        }
-                    )
+                    entry = {
+                        "triggers" if name == "replacements" else "aliases": [
+                            v.strip() for v in values[0].split(",") if v.strip()
+                        ],
+                        "replacement" if name == "replacements" else "symbol": value,
+                        "enabled": values[2] == "on",
+                    }
+                    if name == "replacements" and table.item(row, 0):
+                        item_id = table.item(row, 0).data(Qt.ItemDataRole.UserRole)
+                        if item_id:
+                            entry["id"] = item_id
+                    entries.append(entry)
                 data[name] = entries
             Dictionary.save(data)
             self.dictionary_baseline = data
@@ -978,27 +1006,62 @@ class Window(QWidget):
             self.setup_page.regional_banner.refresh()
 
     def import_dictionary(self):
+        from PySide6.QtWidgets import QInputDialog
+
         from .dictionary import Dictionary
 
         path, _ = QFileDialog.getOpenFileName(self, "Import dictionary", "", "JSON (*.json)")
-        if (
-            path
-            and QMessageBox.question(self, "Import dictionary", "Replace current dictionary?")
-            == QMessageBox.StandardButton.Yes
-        ):
-            try:
-                self.fill_dictionary(Dictionary.import_file(path))
-            except Exception as exc:
-                self.status.setText(str(exc))
+        if not path:
+            return
+        mode, accepted = QInputDialog.getItem(
+            self,
+            "Import dictionary",
+            "Import replacements and custom words:",
+            ["Merge with existing data", "Replace supplied sections"],
+            0,
+            False,
+        )
+        if not accepted:
+            return
+        try:
+            self.fill_dictionary(
+                Dictionary.import_file(
+                    path, mode="merge" if mode.startswith("Merge") else "replace"
+                )
+            )
+            self.learning_page.refresh_words()
+            self.status.setText("Dictionary and supplied vocabulary imported")
+        except Exception as exc:
+            self.status.setText(str(exc))
 
     def export_dictionary(self):
+        from PySide6.QtWidgets import QInputDialog
+
         from .dictionary import Dictionary
 
         path, _ = QFileDialog.getSaveFileName(
             self, "Export dictionary", "dictionary.json", "JSON (*.json)"
         )
         if path and self.save_dictionary():
-            Dictionary.export_file(path)
+            selected, accepted = QInputDialog.getItem(
+                self,
+                "Export dictionary",
+                "Export format:",
+                [
+                    "Linux (includes punctuation/actions)",
+                    "Upstream (enabled replacements + custom words)",
+                ],
+                0,
+                False,
+            )
+            if accepted:
+                try:
+                    Dictionary.export_file(
+                        path, format="native" if selected.startswith("Linux") else "upstream"
+                    )
+                    self.status.setText("Dictionary and vocabulary exported")
+                except Exception as exc:
+                    self.status.setText(str(exc))
 
     def file_page(self):
         page = QWidget()
@@ -1529,7 +1592,8 @@ class Window(QWidget):
         layout = QVBoxLayout(page)
         note = QLabel(
             "Save named cleanup prompts and provider settings. Choose active profile in "
-            "App Settings. Enable AI cleanup separately. Secrets stay in environment variables."
+            "App Settings. Enable AI cleanup separately. Secrets stay in environment variables "
+            "or your desktop keyring, never profile files."
         )
         note.setWordWrap(True)
         layout.addWidget(note)
@@ -1568,6 +1632,8 @@ class Window(QWidget):
             ("Use provider endpoint", self.profile_endpoint),
             ("Save profile", self.save_profile),
             ("Delete profile", self.delete_profile),
+            ("Save keyring API key", lambda: self.keyring_action("store", profile=True)),
+            ("Delete keyring API key", lambda: self.keyring_action("delete", profile=True)),
         ):
             button = QPushButton(label)
             button.clicked.connect(handler)
@@ -1877,7 +1943,7 @@ class Window(QWidget):
                 seconds = f"  {result['seconds']:.1f}s" if result["phase"] == "recording" else ""
                 self.status.setText(f"{result['phase'].upper()}{seconds} · {result['message']}")
                 self.toggle.setEnabled(
-                    result["phase"] == "recording"
+                    result["phase"] in ("starting", "recording", "switching", "capture_failed")
                     or result.get("can_record", result["phase"] == "idle")
                 )
                 self.assistant_page.update_status(result)
@@ -1962,10 +2028,84 @@ class Window(QWidget):
                 "Saved; recording settings apply next time. Panel visibility applies now; "
                 "audio budget is checked while idle."
             )
+            if previous.audio_source != updated.audio_source:
+                self.send("select_microphone", {"source": updated.audio_source, "persist": True})
             return True
         except Exception as exc:
             self.status.setText(str(exc))
             return False
+
+    def keyring_action(self, action, *, profile=False):
+        from dataclasses import replace
+
+        from PySide6.QtWidgets import QInputDialog
+
+        from .assistant_ui import AssistantTask
+        from .credentials import delete_key, store_key
+
+        fields = self.profile_fields if profile else self.fields
+        selection = self.profile_picker.currentData() if profile else None
+        try:
+            values = {key: field_value(field) for key, field in fields.items()}
+            config = replace(Config.load(), **values).validate()
+        except (TypeError, ValueError) as exc:
+            self.status.setText(str(exc))
+            return
+        if action == "store":
+            key, accepted = QInputDialog.getText(
+                self,
+                "Save API key",
+                "API key for the configured provider endpoint:",
+                QLineEdit.EchoMode.Password,
+            )
+            if not accepted:
+                return
+
+            def function():
+                return store_key(config, key)
+        else:
+            if (
+                QMessageBox.question(
+                    self, "Delete API key", "Delete the key saved for this provider endpoint?"
+                )
+                != QMessageBox.StandardButton.Yes
+            ):
+                return
+
+            def function():
+                return delete_key(config)
+
+        task = AssistantTask(function, self)
+        self.jobs.add(task)
+
+        def received(response):
+            if "error" in response:
+                self.status.setText(response["error"])
+                return
+            if action == "store":
+                if (
+                    field_value(fields["ai_endpoint"]) != config.ai_endpoint
+                    or field_value(fields["ai_provider"]) != config.ai_provider
+                    or (profile and self.profile_picker.currentData() != selection)
+                ):
+                    self.status.setText(
+                        "API key saved for earlier endpoint; current editor unchanged"
+                    )
+                    return
+                source = fields["ai_credential_source"]
+                source.setCurrentIndex(source.findData("secret-service"))
+                self.status.setText(
+                    "API key saved in desktop keyring. Save profile to use it."
+                    if profile
+                    else "API key saved in desktop keyring. Save settings to use it."
+                )
+            else:
+                self.status.setText("API key deleted from desktop keyring")
+
+        task.done.connect(received)
+        task.finished.connect(lambda: self.jobs.discard(task))
+        task.finished.connect(task.deleteLater)
+        task.start()
 
     def provider_action(self, action):
         if not self.save():

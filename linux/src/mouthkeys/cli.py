@@ -64,6 +64,19 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description="MouthKeys — local Linux dictation")
     parser.add_argument("--version", action="version", version=f"MouthKeys {__version__}")
     commands = parser.add_subparsers(dest="command", required=True)
+    microphone = commands.add_parser(
+        "microphone", help="Select microphone, including during capture"
+    )
+    microphone.add_argument("source", help="PulseAudio source name, or default")
+    microphone.add_argument(
+        "--persist", action="store_true", help="Also save source for future sessions"
+    )
+    credential = commands.add_parser("credential", help="Store/delete an AI key in desktop keyring")
+    credential.add_argument("action", choices=["set", "delete"])
+    credential.add_argument("--profile", help="Use endpoint from this saved profile UUID")
+    credential.add_argument(
+        "--stdin", action="store_true", help="Read key from stdin instead of hidden prompt"
+    )
     for action in (
         "gui",
         "tray",
@@ -148,6 +161,9 @@ def main(argv=None):
         command.add_argument("path", type=Path)
         if action == "dictionary-import":
             command.add_argument("--yes", action="store_true", required=True)
+            command.add_argument("--mode", choices=["merge", "replace"], default="replace")
+        else:
+            command.add_argument("--format", choices=["native", "upstream"], default="native")
     config_parser = commands.add_parser("config", help="Show config, or set one value")
     config_parser.add_argument("key", nargs="?", choices=list(asdict(Config())))
     config_parser.add_argument("value", nargs="?")
@@ -155,7 +171,33 @@ def main(argv=None):
     commands.add_parser("install-desktop").add_argument("--autostart", action="store_true")
     args = parser.parse_args(argv)
     try:
-        if args.command == "config":
+        if args.command == "credential":
+            from .credentials import delete_key, store_key
+            from .profiles import resolve_profile
+
+            config = Config.load()
+            if args.profile is not None:
+                config = replace(config, ai_profile=args.profile)
+            config = resolve_profile(config)
+            if args.action == "set":
+                if args.stdin:
+                    key = sys.stdin.read(4098).removesuffix("\n")
+                else:
+                    import getpass
+
+                    if not sys.stdin.isatty():
+                        raise ValueError(
+                            "Use --stdin to supply a key without an interactive terminal"
+                        )
+                    key = getpass.getpass("API key: ")
+                store_key(config, key)
+                print("API key saved; select secret-service in target settings/profile to use it")
+            else:
+                if args.stdin:
+                    raise ValueError("--stdin is only valid with credential set")
+                delete_key(config)
+                print("API key deleted")
+        elif args.command == "config":
             config = asdict(Config.load())
             if args.key:
                 if args.value is None:
@@ -268,9 +310,9 @@ def main(argv=None):
             from .dictionary import Dictionary
 
             if args.command == "dictionary-import":
-                Dictionary.import_file(args.path)
+                Dictionary.import_file(args.path, mode=args.mode)
             else:
-                Dictionary.export_file(args.path)
+                Dictionary.export_file(args.path, format=args.format)
             print(str(args.path))
         elif args.command == "doctor":
             from .delivery import doctor
@@ -310,6 +352,9 @@ def main(argv=None):
             action = "clear" if args.command == "clear-history" else args.command.replace("-", "_")
             try:
                 data = {"id": args.id} if hasattr(args, "id") and args.id else {}
+                if args.command == "microphone":
+                    action = "select_microphone"
+                    data.update(source=args.source, persist=args.persist)
                 if hasattr(args, "path"):
                     data["path"] = str(args.path.resolve())
                 if args.command == "accept-edit":

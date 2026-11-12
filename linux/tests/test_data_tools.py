@@ -38,8 +38,52 @@ def test_additive_schema_preserves_legacy_history(tmp_path):
         connection.execute("INSERT INTO history VALUES (?, 1, 'original', 'copied', '')", (item,))
     history = History(root)
     assert history.get(item)["text"] == "original"
+    assert history.get(item)["was_ai_processed"] is None
+    assert history.get(item)["ai_processing_error"] is None
     history.update(item, "copied", "edited", model="small.en", duration=3)
     assert History(root).get(item)["duration"] == 3
+
+
+def test_history_records_ai_outcome_and_backup_preserves_legacy_unknowns(tmp_path):
+    history = History()
+    item = entry(history, "AI output")
+    assert history.get(item)["was_ai_processed"] == 0
+    assert history.get(item)["ai_processing_error"] == ""
+    history.update(item, "copied", "AI output", was_ai_processed=True)
+    legacy = entry(history, "old transcript")
+    history.update(
+        legacy, "copied", "old transcript", was_ai_processed=None, ai_processing_error=None
+    )
+    path = tmp_path / "backup.json"
+    backup_export(history, path)
+    history.clear()
+    backup_import(history, path)
+    assert history.get(item)["was_ai_processed"] == 1
+    assert history.get(legacy)["was_ai_processed"] is None
+    assert history.get(legacy)["ai_processing_error"] is None
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("was_ai_processed", 2),
+        ("was_ai_processed", 1.0),
+        ("was_ai_processed", "true"),
+        ("ai_processing_error", []),
+    ],
+)
+def test_backup_rejects_invalid_ai_outcomes_before_mutation(tmp_path, field, value):
+    history = History()
+    item = entry(history, "original")
+    path = tmp_path / "backup.json"
+    backup_export(history, path)
+    data = json.loads(path.read_text())
+    data["history"][0][field] = value
+    data["history"][0]["text"] = "must not be stored"
+    path.write_text(json.dumps(data))
+    with pytest.raises(ValueError):
+        backup_import(history, path)
+    assert history.get(item)["text"] == "original"
 
 
 def test_search_paging_deletion_and_audio_only_cleanup():

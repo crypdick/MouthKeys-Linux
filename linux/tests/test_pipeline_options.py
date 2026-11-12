@@ -41,6 +41,19 @@ def test_clipboard_only_does_not_swallow_send_phrase_or_send_key():
     assert app.history.rows()[0]["text"] == "Hello world send it"
 
 
+def test_copy_fallback_reports_spoken_send_was_not_dispatched():
+    Config(delivery="x11", spoken_send="on").save()
+    app = controller("Hello world send it")
+    app.delivery.send_key = lambda *_: (_ for _ in ()).throw(AssertionError("Unexpected send"))
+    app.command("start")
+    app.command("stop")
+    finish(app)
+    assert "Spoken Send skipped: text copied" in app.message
+    row = app.history.rows()[0]
+    assert row["text"] == "Hello world"
+    assert "Spoken Send skipped" in row["error"]
+
+
 def test_cancel_send_countdown_leaves_inserted_text_without_return():
     Config(delivery="x11", spoken_send="on").save()
     app = controller("Hello world send it")
@@ -73,7 +86,67 @@ def test_ai_failure_falls_back_to_formatted_transcript_without_losing_raw(monkey
     assert app.delivery.calls[0][0] == "hello world"
     assert app.history.rows()[0]["raw_text"] == "Hello world"
     assert "AI cleanup failed" in app.status()["message"]
+    row = app.history.rows()[0]
+    assert row["was_ai_processed"] == 0
+    assert "offline" in row["ai_processing_error"]
     assert "AI cleanup failed" in app.status()["notice"]["message"]
+
+
+def test_ai_history_records_actual_success_even_when_text_unchanged(monkeypatch):
+    Config(ai_enabled="on", ai_model="model").save()
+    app = controller("Unchanged")
+    monkeypatch.setattr("mouthkeys.service.process", lambda text, config: text)
+    app.command("start")
+    app.command("stop")
+    finish(app)
+    row = app.history.rows()[0]
+    assert row["raw_text"] == row["text"] == "Unchanged"
+    assert row["was_ai_processed"] == 1
+    assert row["ai_processing_error"] == ""
+
+
+def test_edit_delivery_failure_is_not_recorded_as_ai_failure(monkeypatch):
+    Config(ai_enabled="on", ai_model="model", edit_delivery="replace").save()
+    app = controller("Edit instruction")
+    monkeypatch.setattr(app, "_propose_assistant", lambda *a: {"mode": "edit", "text": "Edited"})
+    monkeypatch.setattr(app, "_edit_target_matches", lambda job: True)
+
+    def failed_delivery(*args, **kwargs):
+        raise RuntimeError("Desktop helper missing")
+
+    app.delivery.replace_selection = failed_delivery
+    app.command("start", mode="edit")
+    app.command("stop")
+    finish(app)
+    row = app.history.rows()[0]
+    assert row["status"] == "failed"
+    assert row["was_ai_processed"] == 1
+    assert row["ai_processing_error"] == ""
+    assert row["error"] == "Desktop helper missing"
+
+
+def test_cancelled_ai_result_does_not_leave_success_or_raw_transcript(monkeypatch):
+    Config(ai_enabled="on", ai_model="model").save()
+    app = controller("Unchanged")
+    entered, release = threading.Event(), threading.Event()
+
+    def process(text, config):
+        entered.set()
+        assert release.wait(2)
+        return text
+
+    monkeypatch.setattr("mouthkeys.service.process", process)
+    app.command("start")
+    app.command("stop")
+    try:
+        assert entered.wait(1)
+        app.command("cancel")
+    finally:
+        release.set()
+        finish(app)
+    row = app.history.rows()[0]
+    assert row["was_ai_processed"] == 0
+    assert row["ai_processing_error"] == row["raw_text"] == row["text"] == ""
 
 
 def test_cancel_during_ai_suppresses_delivery(monkeypatch):

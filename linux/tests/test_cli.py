@@ -14,6 +14,45 @@ from mouthkeys.config import runtime_dir
 from mouthkeys.service import request
 
 
+def test_microphone_cli_preserves_session_and_persistent_selection(monkeypatch, capsys):
+    from mouthkeys import service
+
+    calls = []
+    monkeypatch.setattr(service, "ensure_daemon", lambda: None)
+    monkeypatch.setattr(
+        service, "request", lambda action, **data: calls.append((action, data)) or {}
+    )
+    assert main(["microphone", "usb"]) == 0
+    assert main(["microphone", "default", "--persist"]) == 0
+    assert calls == [
+        ("select_microphone", {"source": "usb", "persist": False}),
+        ("select_microphone", {"source": "default", "persist": True}),
+    ]
+
+
+def test_dictionary_cli_portable_roundtrip_and_merge(tmp_path, capsys):
+    from mouthkeys.dictionary import Dictionary
+    from mouthkeys.vocabulary import VocabularyStore
+
+    source = tmp_path / "source.json"
+    source.write_text(
+        json.dumps(
+            {
+                "replacements": [{"from": ["heard"], "to": "Written"}],
+                "customWords": [{"text": "Written", "weight": 8.5}],
+            }
+        )
+    )
+    assert main(["dictionary-import", str(source), "--mode", "merge", "--yes"]) == 0
+    assert Dictionary.apply("heard") == "Written"
+    assert VocabularyStore.entries()[0]["weight"] == 8.5
+    output = tmp_path / "portable.json"
+    assert main(["dictionary-export", str(output), "--format", "upstream"]) == 0
+    saved = json.loads(output.read_text())
+    assert saved["replacements"] == [{"from": ["heard"], "to": "Written"}]
+    assert saved["customWords"][0]["weight"] == 8.5
+
+
 def test_cli_reports_version_without_starting_service(monkeypatch, capsys):
     from mouthkeys import service
 

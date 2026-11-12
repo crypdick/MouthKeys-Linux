@@ -366,8 +366,14 @@ def test_nemo_uses_real_weighted_graph_scores_and_restores_disabled_decoder(monk
     )
     config = replace(Config(), engine="nemo", vocabulary_boosting="on")
     backend._vocabulary(config)
-    assert calls[0][1]["scores"] == [1.0, 5.0]
-    assert calls[0][1]["token_ids"] == [[9], [5]]
+    assert dict(zip(calls[0][1]["phrases"], calls[0][1]["scores"], strict=True)) == {
+        "MouthKeys": 1.0,
+        "Linux": 5.0,
+    }
+    assert dict(zip(calls[0][1]["phrases"], calls[0][1]["token_ids"], strict=True)) == {
+        "MouthKeys": [9],
+        "Linux": [5],
+    }
     assert calls[1][1]["use_triton"] is False
     assert calls[2][1]["greedy"]["boosting_tree_alpha"] == 1.0
     assert native_asr.Path(calls[2][1]["greedy"]["boosting_tree"]["model_path"]).is_file()

@@ -4,7 +4,6 @@ import http.client
 import ipaddress
 import json
 import math
-import os
 import re
 import urllib.error
 import urllib.parse
@@ -108,10 +107,10 @@ def _apply_reasoning(body, config):
 
 
 def request_headers(config, provider):
+    from .credentials import api_key
+
     headers = {"Content-Type": "application/json"}
-    key = os.environ.get(config.ai_key_env, "") if config.ai_key_env else ""
-    if len(key) > 4096 or any(not 33 <= ord(character) <= 126 for character in key):
-        raise ValueError("AI API key contains invalid characters")
+    key = api_key(config)
     if provider == "anthropic":
         headers["anthropic-version"] = "2023-06-01"
         if key:

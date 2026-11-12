@@ -323,3 +323,12 @@ def test_queued_clipboard_transactions_wait_for_restoration_ack_before_next_snap
     assert second.finish(True)
     assert snapshots == ["original", "original"]
     assert state["clipboard"] == "original"
+
+
+def test_capture_alternates_respect_priority_quarantine_and_never(monkeypatch):
+    monkeypatch.setattr(
+        desktop, "source_names", lambda: ["usb", "backup", "bad", "other", "x.monitor"]
+    )
+    monkeypatch.setattr(desktop, "command", lambda args: "other\n")
+    config = Config(audio_source="usb", microphone_fallback="backup", microphone_never="bad")
+    assert desktop.source_candidates(config, excluded={"usb"}) == ["other", "backup"]

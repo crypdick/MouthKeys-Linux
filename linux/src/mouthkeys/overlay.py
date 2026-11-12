@@ -6,7 +6,6 @@ import socket
 import subprocess
 import sys
 import time
-from dataclasses import replace
 
 from PySide6.QtCore import QPoint, QRect, QRectF, QSize, QSocketNotifier, Qt, QTimer
 from PySide6.QtGui import QColor, QCursor, QFont, QIcon, QPainter, QPen, QPixmap, QTextLayout
@@ -95,7 +94,7 @@ class Overlay(QWidget):
         self.mic_button = QPushButton(self)
         self.mic_button.setObjectName("microphone")
         self.mic_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        self.mic_button.setToolTip("Choose microphone for next recording")
+        self.mic_button.setToolTip("Choose microphone for this session, switching active recording")
         self.mic_button.setAccessibleName("Choose microphone")
         self.mic_button.clicked.connect(self.choose_microphone)
         self.assistant_button = QPushButton("Review AI / chats", self)
@@ -203,20 +202,24 @@ class Overlay(QWidget):
             if name not in excluded:
                 action = menu.addAction(name)
                 action.triggered.connect(
-                    lambda checked=False, name=name: replace(
-                        Config.load(), audio_source=name
-                    ).save()
+                    lambda checked=False, name=name: self.send(
+                        "select_microphone", data={"source": name, "persist": False}
+                    )
                 )
         menu.exec(self.mic_button.mapToGlobal(self.mic_button.rect().bottomLeft()))
 
-    def send(self, action, callback=None, item_id=None):
+    def send(self, action, callback=None, item_id=None, data=None):
         data = (
-            {"id": item_id}
-            if item_id
+            data
+            if data is not None
             else (
-                {"id": self.data["id"]}
-                if action in ("copy", "reprocess") and self.data.get("id")
-                else {}
+                {"id": item_id}
+                if item_id
+                else (
+                    {"id": self.data["id"]}
+                    if action in ("copy", "reprocess") and self.data.get("id")
+                    else {}
+                )
             )
         )
         job = Request(action, data, parent=self)
@@ -553,7 +556,17 @@ class Overlay(QWidget):
 
 
 def active_phase(phase):
-    return phase in ("recording", "stopping", "queued", "transcribing", "delivering", "loading")
+    return phase in (
+        "starting",
+        "recording",
+        "switching",
+        "capture_failed",
+        "stopping",
+        "queued",
+        "transcribing",
+        "delivering",
+        "loading",
+    )
 
 
 def live_counters(text, seconds):

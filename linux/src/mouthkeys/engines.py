@@ -157,7 +157,7 @@ def load_onnx(config):
     return model.with_vad(vad, max_speech_duration_s=25)
 
 
-def model_catalog(engine="whisper", *, revision="main"):
+def _model_catalog(engine="whisper", *, revision="main"):
     """Local-only catalog; no Hub queries or downloads."""
     if engine == "onnx":
         return [
@@ -169,6 +169,15 @@ def model_catalog(engine="whisper", *, revision="main"):
                 "revision": revision,
                 "installed": (onnx_path(name, revision) / READY).is_file(),
                 "path": str(onnx_path(name, revision)),
+                "native_streaming": False,
+                "vocabulary": False,
+                "vocabulary_method": (
+                    "unavailable; use NeMo TDT for native boosting"
+                    if "parakeet" in name
+                    else "unavailable"
+                ),
+                "word_timing": False,
+                "source": "https://github.com/istupakov/onnx-asr",
             }
             for name, (label, languages) in ONNX_MODELS.items()
         ]
@@ -186,11 +195,10 @@ def model_catalog(engine="whisper", *, revision="main"):
                 "installed": (artifact_path(name, engine, revision) / READY).is_file(),
                 "path": str(artifact_path(name, engine, revision)),
                 "weight_bytes": entry["weight_bytes"],
-                "memory_note": (
-                    "Weights plus inference working memory; CPU default uses full precision"
-                ),
-                "native_streaming": engine == "nemo",
+                "native_streaming": engine == "nemo" and entry.get("native_streaming", True),
                 "vocabulary": engine == "nemo" or entry.get("family") == "qwen3_asr",
+                "word_timing": engine == "nemo",
+                "source": f"https://huggingface.co/{name}",
                 "vocabulary_method": (
                     "weighted context graph"
                     if engine == "nemo"
@@ -231,9 +239,46 @@ def model_catalog(engine="whisper", *, revision="main"):
             "revision": revision,
             "installed": has_revision(repo),
             "path": str(installed[repo].repo_path) if has_revision(repo) else "",
+            "source": f"https://huggingface.co/{repo}",
+            "native_streaming": False,
+            "vocabulary": True,
+            "vocabulary_method": "bounded textual hotword hint",
+            "word_timing": True,
         }
         for name, repo in _MODELS.items()
     ]
+
+
+def model_catalog(engine="whisper", *, revision="main"):
+    """Report capabilities and explicit unknowns, not Apple-hardware ratings.
+
+    Parameter-memory estimates use the nominal model size in publisher names
+    and four bytes per float32 parameter. They exclude inference workspace,
+    activations and caches; archive size is not a runtime RAM measurement.
+    """
+    rows = _model_catalog(engine, revision=revision)
+    for row in rows:
+        row["speed_note"] = "Not benchmarked on this hardware"
+        row["accuracy_note"] = "Not evaluated for your language/audio"
+        if engine in ("transformers", "nemo"):
+            name = row["model"].lower()
+            parameters = next(
+                (
+                    count
+                    for token, count in (("120m", 120), ("0.6b", 600), ("1.7b", 1700))
+                    if token in name
+                ),
+                None,
+            )
+            row["memory_note"] = (
+                f"~{parameters * 4 / 1000:g} GB float32 parameters "
+                "+ workspace/caches; RAM unmeasured"
+                if parameters
+                else "Full-precision CPU weights + workspace/caches; RAM unmeasured"
+            )
+        else:
+            row["memory_note"] = "Precision/model/device dependent; RAM unmeasured"
+    return rows
 
 
 def delete_model(model, engine="whisper", *, revision="main"):

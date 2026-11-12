@@ -192,6 +192,8 @@ def backup_import(history, path):
         "language",
         "app",
         "window",
+        "was_ai_processed",
+        "ai_processing_error",
     }
     for row in rows:
         if (
@@ -210,9 +212,18 @@ def backup_import(history, path):
             datetime.fromtimestamp(row["created"])
         except (ValueError, OverflowError, OSError):
             raise ValueError("History timestamp is out of range") from None
-        for name in fields - {"created", "duration"}:
+        for name in fields - {"created", "duration", "was_ai_processed", "ai_processing_error"}:
             if name in row and not isinstance(row[name], str):
                 raise ValueError("Invalid history text")
+        if row.get("was_ai_processed") is not None and (
+            type(row["was_ai_processed"]) not in (bool, int)
+            or row["was_ai_processed"] not in (0, 1)
+        ):
+            raise ValueError("Invalid history AI outcome")
+        if row.get("ai_processing_error") is not None and not isinstance(
+            row["ai_processing_error"], str
+        ):
+            raise ValueError("Invalid history AI error")
         if "duration" in row and (
             type(row["duration"]) not in (int, float)
             or not math.isfinite(row["duration"])

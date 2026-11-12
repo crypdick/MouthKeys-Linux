@@ -19,7 +19,7 @@ class ModelBrowser(QDialog):
         super().__init__(window)
         self.window = window
         self.setWindowTitle("Speech models")
-        self.resize(900, 550)
+        self.resize(1100, 550)
         layout = QVBoxLayout(self)
         note = QLabel(
             "Inspect without downloading. Sort by clicking a column heading. "
@@ -40,7 +40,7 @@ class ModelBrowser(QDialog):
         self.state.currentTextChanged.connect(self.filter_rows)
         filters.addWidget(self.state)
         layout.addLayout(filters)
-        self.table = QTableWidget(0, 7)
+        self.table = QTableWidget(0, 10)
         self.table.setHorizontalHeaderLabels(
             [
                 "Model",
@@ -50,6 +50,9 @@ class ModelBrowser(QDialog):
                 "Streaming / vocabulary",
                 "Installed",
                 "Resident",
+                "Speed (local)",
+                "Accuracy (local)",
+                "Word timing",
             ]
         )
         self.table.horizontalHeader().setStretchLastSection(True)
@@ -87,9 +90,12 @@ class ModelBrowser(QDialog):
                 model.get("weight_bytes") or 0,
                 model.get("memory_note", "Model/device dependent"),
                 f"streaming: {'yes' if model.get('native_streaming') else 'provisional/offline'}; "
-                f"vocabulary: {'yes' if model.get('vocabulary') else 'backend dependent'}",
+                f"vocabulary: {model.get('vocabulary_method', 'backend dependent')}",
                 "Yes" if model["installed"] else "No",
                 "No",
+                model.get("speed_note", "Not benchmarked on this hardware"),
+                model.get("accuracy_note", "Not evaluated for your language/audio"),
+                "Native" if model.get("word_timing") else "Unavailable",
             ]
             for col, value in enumerate(values):
                 item = QTableWidgetItem()
@@ -98,6 +104,7 @@ class ModelBrowser(QDialog):
                 else:
                     item.setText("Unknown" if col == 2 else str(value))
                 item.setData(Qt.ItemDataRole.UserRole, model)
+                item.setToolTip(model.get("source", "") + "\n" + str(value))
                 self.table.setItem(row, col, item)
         self.table.setSortingEnabled(True)
         self.table.resizeColumnsToContents()

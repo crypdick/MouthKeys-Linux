@@ -159,8 +159,18 @@ def routes(language):
     if language == "en":
         add("Parakeet TDT v2 · ONNX · English", "onnx", "nemo-parakeet-tdt-0.6b-v2")
         add("Parakeet Flash · NeMo · English", "nemo", "nvidia/parakeet_realtime_eou_120m-v1")
+        add(
+            "Parakeet TDT v2 · NeMo · native vocabulary / word times",
+            "nemo",
+            "nvidia/parakeet-tdt-0.6b-v2",
+        )
     if language in PARAKEET_V3:
         add("Parakeet TDT v3 · ONNX · multilingual", "onnx", "nemo-parakeet-tdt-0.6b-v3")
+        add(
+            "Parakeet TDT v3 · NeMo · native vocabulary / word times",
+            "nemo",
+            "nvidia/parakeet-tdt-0.6b-v3",
+        )
     if language in COHERE:
         add(
             "Cohere Transcribe · Transformers · gated download",

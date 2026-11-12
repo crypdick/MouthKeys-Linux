@@ -7,7 +7,6 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QPushButton,
-    QSpinBox,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -75,7 +74,9 @@ class LearningPage(QWidget):
             QLabel("Recognition vocabulary — weight biases native context where supported")
         )
         self.vocabulary = QTableWidget(0, 3)
-        self.vocabulary.setHorizontalHeaderLabels(["Word or phrase", "Weight (1–5)", "Aliases"])
+        self.vocabulary.setHorizontalHeaderLabels(
+            ["Word or phrase", "Weight (blank = default)", "Aliases"]
+        )
         self.vocabulary.horizontalHeader().setStretchLastSection(True)
         self.vocabulary.setMinimumHeight(150)
         layout.addWidget(self.vocabulary)
@@ -105,9 +106,9 @@ class LearningPage(QWidget):
         row = self.vocabulary.rowCount()
         self.vocabulary.insertRow(row)
         self.vocabulary.setItem(row, 0, QTableWidgetItem(entry["text"]))
-        weight = QSpinBox()
-        weight.setRange(1, 5)
-        weight.setValue(entry["weight"])
+        weight = QLineEdit("" if entry["weight"] is None else str(entry["weight"]))
+        weight.setPlaceholderText("Default")
+        weight.setToolTip("Optional positive floating-point weight. Up to 256 vocabulary terms.")
         self.vocabulary.setCellWidget(row, 1, weight)
         self.vocabulary.setItem(row, 2, QTableWidgetItem(", ".join(entry["aliases"])))
 
@@ -127,7 +128,11 @@ class LearningPage(QWidget):
             entries = [
                 {
                     "text": self.vocabulary.item(row, 0).text(),
-                    "weight": self.vocabulary.cellWidget(row, 1).value(),
+                    "weight": (
+                        float(self.vocabulary.cellWidget(row, 1).text())
+                        if self.vocabulary.cellWidget(row, 1).text().strip()
+                        else None
+                    ),
                     "aliases": [
                         word.strip()
                         for word in self.vocabulary.item(row, 2).text().split(",")

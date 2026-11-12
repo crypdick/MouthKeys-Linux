@@ -188,7 +188,13 @@ def worker_main():
         from .native_asr import NemoBackend, TransformersBackend
 
         backend = (NemoBackend if config.engine == "nemo" else TransformersBackend)(config)
-        _write_message(output, {"result": "ready"})
+        _write_message(
+            output,
+            {
+                "result": "ready",
+                "native_streaming": getattr(backend, "supports_native_streaming", False),
+            },
+        )
     except Exception as exc:
         _write_message(output, {"error": str(exc)[:1000]})
         return
@@ -287,6 +293,8 @@ class NativeWorkerBackend:
         if "error" in response:
             raise RuntimeError(response["error"])
         self.words = response.get("words", [])
+        if "native_streaming" in response:
+            self.native_streaming = response["native_streaming"] is True
         return response["result"]
 
     def _call(self, request, samples=None):

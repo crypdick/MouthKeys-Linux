@@ -54,6 +54,38 @@ def choose_source(config):
     raise ValueError("No available microphone outside Never list")
 
 
+def source_candidates(config, *, excluded=()):
+    """Resolve ranked, non-monitor alternate inputs after a capture failure."""
+    excluded = set(excluded) | set(source_list(config.microphone_never))
+    selected = choose_source(config)
+    if not (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")) and not (
+        config.microphone_preferred or config.microphone_fallback
+    ):
+        return [] if selected in excluded else [selected]
+    try:
+        available = source_names()
+        default = command(["pactl", "get-default-source"]).strip()
+    except (OSError, subprocess.SubprocessError):
+        available, default = [], ""
+    fallback = source_list(config.microphone_fallback)
+    ordered = [selected, *source_list(config.microphone_preferred)]
+    if default not in fallback:
+        ordered.append(default)
+    ordered.extend(fallback)
+    ordered.extend(available)
+    result = []
+    for source in ordered:
+        if (
+            source
+            and source not in excluded
+            and source not in result
+            and (source == selected or source in available)
+            and (not source.endswith(".monitor") or source == selected)
+        ):
+            result.append(source)
+    return result
+
+
 class MediaSession:
     """Resume only players this recording actually paused, and only if still paused."""
 

@@ -467,6 +467,55 @@ def test_every_config_is_editable_in_settings_and_new_options_roundtrip(monkeypa
     app.processEvents()
 
 
+def test_settings_source_change_applies_active_service_and_float_vocabulary(monkeypatch):
+    from mouthkeys import gui
+    from mouthkeys.config import Config
+    from mouthkeys.vocabulary import VocabularyStore
+
+    monkeypatch.setattr(gui.Window, "poll", lambda self: None)
+    window = gui.Window()
+    window.timer.stop()
+    calls = []
+    monkeypatch.setattr(
+        window, "send", lambda action, data=None, **kw: calls.append((action, data))
+    )
+    try:
+        window.fields["audio_source"].setEditText("usb-input")
+        assert window.save()
+        assert calls == [("select_microphone", {"source": "usb-input", "persist": True})]
+        assert Config.load().audio_source == "usb-input"
+        page = window.learning_page
+        page.add_word(entry={"text": "MouthKeys", "weight": 8.5, "aliases": []})
+        page.add_word(entry={"text": "Default", "weight": None, "aliases": []})
+        page.save_words()
+        assert VocabularyStore.entries() == [
+            {"text": "MouthKeys", "weight": 8.5, "aliases": []},
+            {"text": "Default", "weight": None, "aliases": []},
+        ]
+    finally:
+        window.close()
+
+
+def test_dictionary_editor_preserves_imported_rule_id_when_editing(monkeypatch):
+    from mouthkeys import gui
+    from mouthkeys.dictionary import Dictionary
+
+    monkeypatch.setattr(gui.Window, "poll", lambda self: None)
+    data = Dictionary.defaults()
+    rule_id = "792b9c60-0a77-4e06-8630-8b1046d789ed"
+    data["replacements"] = [{"id": rule_id, "triggers": ["heard"], "replacement": "Written"}]
+    Dictionary.save(data)
+    window = gui.Window()
+    window.timer.stop()
+    try:
+        window.dictionary_tables["replacements"].item(0, 1).setText("Edited")
+        assert window.save_dictionary()
+        assert Dictionary.load()["replacements"][0]["id"] == rule_id
+        assert Dictionary.apply("heard") == "Edited"
+    finally:
+        window.close()
+
+
 def test_queued_overlay_cancel_reaches_controller(monkeypatch):
     from PySide6.QtWidgets import QApplication
 

@@ -2,6 +2,7 @@ import math
 from pathlib import Path
 
 from .config import Config, cache_dir
+from .native_asr import uses_native_streaming
 
 
 def download(
@@ -122,6 +123,9 @@ class Transcriber:
             "revision": revision,
             "device": config.device,
             "compute_type": config.compute_type,
+            "native_streaming": bool(
+                uses_native_streaming(config) and getattr(self.model, "native_streaming", False)
+            ),
         }
 
     @property
@@ -163,12 +167,17 @@ class Transcriber:
             getattr(config, "pronunciation_matching", "off"),
         )
 
+    def _uses_native_streaming(self, config):
+        if not uses_native_streaming(config):
+            return False
+        self.load(config)
+        return getattr(self.model, "native_streaming", True)
+
     def preview(self, path: Path, config: Config):
         """Keep completed segments; revise only the uncommitted audio prefix."""
         from .audio import read_audio_from
 
-        if config.engine == "nemo" and getattr(config, "native_streaming", "on") == "on":
-            self.load(config)
+        if self._uses_native_streaming(config):
             self.stream_key = self._stream_key(path, config)
             return self.model.stream(read_audio_from(path), config, self.stream_key)
         self._session(path, config)
@@ -207,8 +216,7 @@ class Transcriber:
         self.words = []
         self.last_alignment = None
         try:
-            if config.engine == "nemo" and getattr(config, "native_streaming", "on") == "on":
-                self.load(config)
+            if self._uses_native_streaming(config):
                 text = self.model.stream(read_audio_from(path), config, key, final=True)
                 if config.pronunciation_matching == "on":
                     self.words = getattr(self.model, "words", [])

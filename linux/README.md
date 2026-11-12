@@ -155,11 +155,18 @@ captures the destination at explicit stop; `target_policy=start` captures at rec
 Without that setting, the application never activates another window. Changed or unidentifiable
 destinations fall back to copy.
 
+`destination_guard=field` (default, including existing configurations without this setting)
+requires an identifiable field/pane for automatic insertion and Spoken Send. A window ID alone
+cannot detect a switch between tabs, terminal panes, or fields, so text is copied instead.
+`destination_guard=window` explicitly permits the weaker window-only fallbacks below; choose it
+only when that limitation fits your workflow. `mouthkeys paste` remains an explicit focus-now paste
+in either mode, including Ghostty/other terminals; terminal text always uses clipboard paste.
+
 | Available desktop evidence | Automatic behavior and limit |
 | --- | --- |
 | AT-SPI editable field | Stable D-Bus object identity, foreground state, text, caret, and selection checks; verified insertion where the toolkit exposes them. Password fields are excluded. |
-| X11 without usable AT-SPI | Focused X-window continuity; cannot distinguish tabs/panes/fields within that window. |
-| Sway/Hyprland without usable AT-SPI | Compositor container/window identity; cannot distinguish fields inside it. |
+| X11 without usable AT-SPI | Copy by default; opt-in window guard permits focused X-window continuity, not tab/pane/field identity. |
+| Sway/Hyprland without usable AT-SPI | Copy by default; opt-in window guard permits container/window continuity, not inner-field identity. |
 | Other Wayland without usable AT-SPI | Clipboard-only fallback; no generic fabricated destination. |
 
 AT-SPI depends on toolkit/accessibility support. Helpers run out of process with bounded timeouts
@@ -214,7 +221,7 @@ withdrawing text already inserted. Terminals always receive plain Return.
 `send_after_pause=on` allows a trailing phrase plus half a second of quiet to stop and request Send.
 More speech or the panel control disarms it. Integrated hold state suppresses automatic quiet-stop
 while the activating gesture remains held. Starting a newer recording suppresses an older pending
-Send. Supported field/window/compositor continuity is checked again before the key; unsupported
+Send. Configured field/window/compositor continuity is checked again before the key; unsupported
 Wayland destinations, clipboard-only delivery, and duration-limit stops do not send.
 
 ## Models, microphones, and recovery
@@ -234,7 +241,7 @@ transfer callback where supported. A partial download is not advertised as a rea
 | `whisper` / default | faster-whisper, CPU/CUDA, incremental provisional text | Whisper word timings enabled for pronunciation matching; actual checkpoint quality varies. |
 | `onnx` / `[onnx]` | Parakeet TDT v2/v3, Canary 1B v2 / 180M Flash | Offline VAD chunks, not native streaming; no onnx-asr hotword decoder. |
 | `transformers` / `[transformers]` | Nemotron 3.5/English, Qwen3-ASR 0.6B/1.7B `-hf`, Cohere Transcribe | Builtin Transformers classes, provisional inference; no downloaded Python model code. Cohere needs explicit language and gated access where required. |
-| `nemo` / `[nemo]` | Parakeet Realtime EOU 120M (Flash equivalent), Nemotron 3.5 | Native cache-aware streaming; model-specific language/latency limits. Realtime EOU English output is uncased/unpunctuated. |
+| `nemo` / `[nemo]` | Parakeet TDT v2/v3, Realtime EOU 120M (Flash equivalent), Nemotron 3.5 | TDT v2/v3 use offline/provisional windows with native vocabulary and word times; Flash/Nemotron support native cache-aware streaming. Realtime EOU English output is uncased/unpunctuated. |
 
 Install only needed extras, after closing the application/service yourself. CPU native example
 with a uv version supporting `--torch-backend` (verified with uv 0.13.5):
@@ -284,8 +291,26 @@ The Microphone page edits ordered Preferred, fallback, and Never groups (drag or
 shows capture's actual meter, and selects sound output. CLI equivalents are comma-separated source
 names in `microphone_preferred`, `microphone_fallback`, and `microphone_never`. Explicit source
 selection never overrides Never. Choose source names from `pactl list short sources`; `.monitor`
-records system output rather than your microphone. Device selection is resolved before capture;
-an unplugged active device is reported, not silently spliced to a different microphone mid-recording.
+records system output rather than your microphone. Startup retries ranked inputs after capture or
+readiness failure, excluding failed inputs for 60 seconds in daemon memory. Readiness/retries have
+an eight-second work budget and bounded process cleanup; cancellation/status remain available.
+An unplugged active device is reported, not silently spliced to a different microphone mid-recording.
+
+Overlay microphone picks are temporary for the daemon session; they leave saved ordering and system
+defaults untouched. Picks during recording switch capture immediately. App Settings source changes
+are persistent and also apply to active capture. CLI:
+
+```sh
+mouthkeys microphone SOURCE            # temporary session choice; active switch if recording
+mouthkeys microphone SOURCE --persist  # also save for future daemon sessions
+```
+
+Switching restarts capture and has a real brief gap. Already captured PCM is preserved in order in
+the same recording; no silence or word timings are fabricated. A failed switch tries another allowed
+input, otherwise retained audio is recovered without automatic delivery. One bounded private segment
+temporarily exists alongside the canonical recording and is removed on stop/next startup after a crash.
+If old capture shutdown cannot be confirmed, new capture stays blocked; retry Stop/Cancel after the
+device recovers rather than opening overlapping microphone processes.
 
 `pause_media=on` uses `playerctl`/MPRIS, resuming only players this session paused and only if still
 paused. `sounds_enabled` independently enables/disables recording cues while retaining the chosen
@@ -386,22 +411,50 @@ keeping removes the offered word from the filler list. No location lookup or mod
   (`pronunciation_span_budget`, default 2000 comparisons), distance-cell/time caps, and 1–5-source-word
   candidate limit bound work; incomplete coverage is reported rather than claimed exhaustive.
   These scores are heuristic similarity, **not** calibrated recognition accuracy or speaker identity.
-- `vocabulary_boosting=on`: custom terms have weights 1–5 and explicit aliases. Whisper/Qwen use bounded
-  repeated context hints; supported NeMo uses a real weighted decoder context graph. ONNX has no native
-  hotword facility. Aliases are explicit literal normalization, not approximate acoustic guesses.
+- `vocabulary_boosting=on`: up to 256 custom terms have optional positive floating-point weights
+  (blank means default) and explicit aliases. Enabled replacement-dictionary terms join the effective
+  decoding vocabulary with weight 8; this does not rewrite saved custom terms. Whisper/Qwen hints
+  remain bounded to five repetitions per term and 4096 UTF-8 bytes. NeMo uses a real weighted decoder
+  context graph, including the explicit Parakeet TDT v2/v3 routes. ONNX has no native hotword facility;
+  choosing a native route never downloads or switches models implicitly. Aliases are explicit literal
+  normalization, not approximate acoustic guesses.
 
 Acoustic features, learned pairs, and vocabulary are private configuration data. Delete unwanted
-pronunciation profiles/vocabulary through their page. Dictionary export covers replacement/formatting
-rules; a complete backup also includes vocabulary and pronunciation features. Generalizing enrollment
+pronunciation profiles/vocabulary through their page. Dictionary transfers include custom vocabulary;
+native format also preserves punctuation/actions and enable states. Upstream format exports enabled
+replacements as `from`/`to` plus `customWords`. Imports accept both formats and API `items`/`entries`,
+with explicit merge/replace; absent sections remain unchanged. Both stores validate before writes.
+A complete backup additionally includes pronunciation features. Generalizing enrollment
 quality to real speakers/noise requires actual voice tests.
+
+```sh
+mouthkeys dictionary-import dictionary.json --mode merge --yes
+mouthkeys dictionary-export portable.json --format upstream
+```
 
 ## Optional AI cleanup, prompts, Command and Edit
 
 `ai_enabled=on` sends transcript **text**, not audio, to the selected local/remote endpoint.
 Remote endpoints require HTTPS; only loopback permits HTTP. Redirects are rejected. API keys live in
-the environment variable named by `ai_key_env` (default `MOUTHKEYS_AI_API_KEY`), never URL/profile fields.
+the environment variable named by `ai_key_env` (default `MOUTHKEYS_AI_API_KEY`) or desktop Secret Service,
+never URL/profile/backup fields. `ai_credential_source=environment` preserves existing behavior.
 An empty AI key-variable name is supported for unauthenticated local servers. Restart the service
 manually after changing its environment. Configure model, prompt, output limit, and timeout explicitly.
+
+For GUI-only credentials, install `libsecret-tools` and run a desktop Secret Service (for example
+GNOME Keyring or a compatible KWallet service). App Settings and profile editors offer **Save API key
+in desktop keyring** / **Delete** actions. Saving a key selects `secret-service` in that editor;
+Save settings/profile to apply. Keys are matched to the exact provider protocol and endpoint.
+Changing endpoints never reuses a different endpoint's key. Locked/missing keyrings fail explicitly;
+there is no silent environment/plaintext fallback. Opening Settings does not read the keyring.
+
+```sh
+mouthkeys credential set               # hidden interactive prompt, never a command argument
+mouthkeys config ai_credential_source secret-service
+mouthkeys credential delete
+# credential set/delete --profile PROFILE_UUID targets that profile's endpoint.
+# credential set --stdin supports a private pipe; the CLI never prints the key.
+```
 
 | `ai_provider` | Example full endpoint |
 | --- | --- |
@@ -551,8 +604,14 @@ Optional loopback API: set `api_enabled=on`, port, and a service environment tok
 Every request requires `Authorization: Bearer TOKEN`. Browser-origin/rebinding requests are rejected;
 no CORS, remote binding, or arbitrary input file paths. Routes include health/history/stats,
 `GET/POST /v1/dictionary/replacements`, `GET/POST /v1/dictionary/custom-words`,
-`POST /v1/postprocess` (`text`), and `POST /v1/transcribe` (`audio_base64`). Custom-word entries contain
-`text`, integer `weight`, and `aliases`; append/replace writes validate before saving. Requests cap at
+`POST /v1/postprocess` (`text`, or plain UTF-8 body), and `POST /v1/transcribe` (`audioBase64` or
+legacy `audio_base64`, or raw encoded audio body). Arbitrary file paths remain rejected; upload bytes.
+History/replacement routes return upstream-compatible `{count, items}` envelopes by default;
+`?format=native` preserves legacy Linux array responses. History includes ISO timestamps and raw/final
+aliases; new records track actual AI success/failure, while legacy unknown AI metadata stays null.
+Transcription adds `sampleCount`/`provider`; postprocessing adds `provider`/`model` without removing
+Linux result fields. Custom-word entries contain `text`, optional numeric `weight`, and `aliases`;
+append/replace writes validate before saving. Requests cap at
 25 MiB, uploaded decoded audio at ten minutes, concurrent connections at eight, and reads at 15 seconds;
 API inference is serialized and shares the recording model lock.
 
@@ -664,11 +723,16 @@ configuration before marking a setup verified:
 
 - Cold microphone/Bluetooth start: speak when Listening appears; check first word, immediate meter,
   silence readiness, stop/cancel/duration-limit microphone release, and interrupted-audio recovery.
+  Fail a present preferred input and confirm bounded alternate retry/quarantine; cancel during startup.
+  Switch active source from overlay/Settings/CLI; confirm temporary versus persistent selection,
+  ordered retained audio, reported restart gap, old-source failure recovery and no overlapping captures.
 - Editor and Ghostty/other terminal: Unicode/newlines, normal clipboard paste, direct nonterminal
   insertion, and no simulated character typing into terminals.
 - Focus safety: switch windows, fields, tabs, terminal panes, and virtual desktops while processing.
   Test active-window changes where a toolkit leaves its old child locally focused. Stale, protected,
   or unidentifiable destinations must not receive automatic text/Send.
+  Test default field guard separately from explicitly weaker window mode; verify focus-now Paste
+  still uses clipboard paste in Ghostty when automatic field-aware delivery is unavailable.
 - Start target and explicit return: verify `target_policy` both values and `return_to_start` off/on;
   no cross-window activation without the latter. Edit replacement must use exactly the captured
   selection; modify selection/text before completion and confirm review/copy fallback.
@@ -702,6 +766,8 @@ configuration before marking a setup verified:
   no desktop output from prompt tryout, exact shell-command/directory review under `command_confirm=on`,
   heuristic review under `destructive`, bounded automatic execution only under configured policy,
   and custom-only/base-composed prompts in normal dictation and both playgrounds.
+  Verify explicit keyring save/delete/unlock and endpoint/profile changes; no keyring read on Settings
+  open, no secret in backups/logs/command arguments, no fallback to unrelated environment credentials.
 - Conversations: new/switch/rename/delete in both modes, typed ↔ voice follow-ups, history-off memory,
   backup/legacy restore, long-context trimming, visible returned-thinking opt-in, cancellation while
   switching sessions, command-result continuation, nonzero exits/timeouts, 20-step boundary, and

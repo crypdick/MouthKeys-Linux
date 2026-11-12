@@ -2,12 +2,12 @@
 
 import copy
 import json
-import os
 import re
-import tempfile
-from pathlib import Path
+import uuid
 
 from .config import config_path, private_dir
+from .data_lock import dictionary_lock
+from .operations import write_private
 
 # Keep aliases grouped: dot/period, hyphen/dash, and quote variants have different spacing.
 DEFAULT_PUNCTUATION_RULES = [
@@ -145,9 +145,21 @@ class Dictionary:
             if not isinstance(data[section], list) or len(data[section]) > 10000:
                 raise ValueError(f"{section} must be a list of at most 10000 entries")
             seen = set()
+            seen_ids = set()
             for entry in data[section]:
-                if not isinstance(entry, dict) or set(entry) - {key, value_key, "enabled"}:
+                allowed = {key, value_key, "enabled"} | (
+                    {"id"} if section == "replacements" else set()
+                )
+                if not isinstance(entry, dict) or set(entry) - allowed:
                     raise ValueError(f"Invalid {section} entry")
+                if "id" in entry:
+                    try:
+                        identifier = str(uuid.UUID(entry["id"]))
+                    except (ValueError, TypeError, AttributeError):
+                        raise ValueError("Invalid replacement ID") from None
+                    if identifier in seen_ids:
+                        raise ValueError("Duplicate replacement ID")
+                    seen_ids.add(identifier)
                 aliases = entry.get(key)
                 if (
                     not isinstance(aliases, list)
@@ -167,34 +179,31 @@ class Dictionary:
 
     @classmethod
     def load(cls):
-        path = cls.path()
-        if not path.exists():
-            return cls.defaults()
-        return cls.validate(json.loads(path.read_text()))
+        with dictionary_lock():
+            path = cls.path()
+            if not path.exists():
+                return cls.defaults()
+            return cls.validate(json.loads(path.read_text()))
 
     @classmethod
     def save(cls, data):
         cls.validate(data)
-        path = cls.path()
-        private_dir(path.parent)
-        with tempfile.NamedTemporaryFile(mode="w", dir=path.parent, delete=False) as output:
-            json.dump(data, output, ensure_ascii=False, indent=2)
-            temporary = Path(output.name)
-        temporary.replace(path)
+        with dictionary_lock():
+            path = cls.path()
+            private_dir(path.parent)
+            write_private(path, json.dumps(data, ensure_ascii=False, indent=2).encode())
 
     @classmethod
-    def import_file(cls, path):
-        data = cls.validate(json.loads(Path(path).read_text()))
-        cls.save(data)
-        return data
+    def import_file(cls, path, mode="replace"):
+        from .dictionary_transfer import import_file
+
+        return import_file(path, mode)
 
     @classmethod
-    def export_file(cls, path):
-        data = cls.load()
-        descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-        with os.fdopen(descriptor, "w") as output:
-            os.fchmod(output.fileno(), 0o600)
-            json.dump(data, output, ensure_ascii=False, indent=2)
+    def export_file(cls, path, format="native"):
+        from .dictionary_transfer import export_file
+
+        return export_file(path, format)
 
     @classmethod
     def apply(cls, text, data=None):

@@ -86,6 +86,16 @@ The fresh settings/reachable-flow audit additionally adapts these baseline contr
 - File transcription reports actual stage/chunk progress (or indeterminate state), offers explicit
   result copy, and preserves clean CLI transcript stdout when structured stderr progress is enabled.
 
+The 2026-11-12 gap-closure pass further adapts `ASRService` wedged-input retry and
+`MicrophonePreferenceCoordinator` active/session microphone picks, `DictionaryTransferService`
+portable dictionary formats, `ParakeetVocabularyStore` 256-term/optional-weight and dictionary-derived
+boosting, and the `LocalAPI` request/response contracts from the same `d50ad008` baseline. Linux
+implements stable PCM source switching and explicit native NeMo TDT v2/v3 alternatives rather than
+pretending ONNX supports weighted graphs or complete word intervals. Secret Service replaces macOS
+Keychain through explicitly selected endpoint-scoped storage. Default field-level delivery checks
+now decline window-only insertion/Send; weaker window checks remain explicit configuration.
+Real hardware/toolkit and pretrained acceptance remain distinct from these implementations.
+
 [linux/PARITY.md](linux/PARITY.md) is the canonical acceptance ledger; the
 [Linux guide](linux/README.md) documents operation and limits. The objective is to bridge all
 bridgeable gaps, not to label optional features forbidden or to turn mock/tiny-model tests into

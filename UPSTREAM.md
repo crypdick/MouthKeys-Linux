@@ -96,6 +96,14 @@ Keychain through explicitly selected endpoint-scoped storage. Default field-leve
 now decline window-only insertion/Send; weaker window checks remain explicit configuration.
 Real hardware/toolkit and pretrained acceptance remain distinct from these implementations.
 
+The follow-up adapts `BackupService` schema-1 JSON with preflight preview, UUID-preserving history,
+supported settings/dictionaries/prompts, and explicit macOS-to-Linux application mapping. Missing
+credentials, audio bytes, per-profile provider pins, and Apple acoustic embeddings are not invented;
+imported AI selections stay inactive pending review. Transformers Nemotron's native duration output
+now reaches pronunciation matching. An optional existing local Whisper model supplies conservative
+forced alignment for backends without word metadata. Explicit offline fixture benchmarks replace
+unknown speed/RAM/accuracy only with scoped, hardware/settings-matched measurements, not estimates.
+
 [linux/PARITY.md](linux/PARITY.md) is the canonical acceptance ledger; the
 [Linux guide](linux/README.md) documents operation and limits. The objective is to bridge all
 bridgeable gaps, not to label optional features forbidden or to turn mock/tiny-model tests into

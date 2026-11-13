@@ -60,6 +60,19 @@ def apply_startup(config):
         (directory / "autostart" / "mouthkeys.desktop").unlink(missing_ok=True)
 
 
+def read_app_map(path):
+    if path is None:
+        return None
+    with path.open("rb") as source:
+        raw = source.read(256 * 1024 + 1)
+    if len(raw) > 256 * 1024:
+        raise ValueError("Application mapping exceeds 256 KiB")
+    mapping = json.loads(raw)
+    if not isinstance(mapping, dict):
+        raise ValueError("Application mapping must be a JSON object of macOS IDs to Linux IDs")
+    return mapping
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description="MouthKeys — local Linux dictation")
     parser.add_argument("--version", action="version", version=f"MouthKeys {__version__}")
@@ -132,6 +145,17 @@ def main(argv=None):
     transcribe_parser.add_argument(
         "--progress", action="store_true", help="Write structured stage progress to stderr"
     )
+    benchmark = commands.add_parser(
+        "benchmark", help="Measure an already-installed model offline without desktop delivery"
+    )
+    benchmark.add_argument("file", type=Path, help="Existing audio fixture (at most ten minutes)")
+    benchmark.add_argument("--reference-file", type=Path, help="Exact UTF-8 reference for WER/CER")
+    benchmark.add_argument("--timeout", type=float, default=600)
+    benchmark.add_argument("--model", help="Override model without changing saved configuration")
+    benchmark.add_argument("--engine", choices=["whisper", "onnx", "transformers", "nemo"])
+    benchmark.add_argument("--device", choices=["cpu", "cuda", "auto"])
+    benchmark.add_argument("--compute-type")
+    benchmark.add_argument("--revision", dest="model_revision")
     files = commands.add_parser("file-history")
     files.add_argument("--query", default="")
     files = commands.add_parser("delete-file-history")
@@ -148,11 +172,15 @@ def main(argv=None):
     commands.add_parser("download-speakers", help="Explicitly download diarization models")
     commands.add_parser("models", help="List locally known models and cache status")
     commands.add_parser("delete-model").add_argument("model")
-    for action in ("backup-export", "backup-import", "export-audio"):
+    for action in ("backup-export", "backup-import", "backup-preview", "export-audio"):
         command = commands.add_parser(action)
         command.add_argument("path", type=Path)
         if action == "backup-import":
             command.add_argument("--yes", action="store_true", required=True)
+        if action in ("backup-import", "backup-preview"):
+            command.add_argument(
+                "--app-map", type=Path, help="JSON object mapping macOS app IDs to Linux identities"
+            )
         if action == "export-audio":
             command.add_argument("--id")
     commands.add_parser("delete-audio").add_argument("--yes", action="store_true", required=True)
@@ -197,6 +225,24 @@ def main(argv=None):
                     raise ValueError("--stdin is only valid with credential set")
                 delete_key(config)
                 print("API key deleted")
+        elif args.command == "benchmark":
+            from .benchmark import run_benchmark
+
+            changes = {
+                name: getattr(args, name)
+                for name in ("model", "engine", "device", "compute_type", "model_revision")
+                if getattr(args, name) is not None
+            }
+            config = replace(Config.load(), **changes).validate()
+            reference = None
+            if args.reference_file is not None:
+                with args.reference_file.open("rb") as source:
+                    raw = source.read(256 * 1024 + 1)
+                if len(raw) > 256 * 1024:
+                    raise ValueError("Benchmark reference exceeds 256 KiB")
+                reference = raw.decode("utf-8")
+            result = run_benchmark(config, args.file, reference=reference, timeout=args.timeout)
+            print(json.dumps(result, ensure_ascii=False, indent=2))
         elif args.command == "config":
             config = asdict(Config.load())
             if args.key:
@@ -306,6 +352,11 @@ def main(argv=None):
                 config = Config.load()
                 delete_model(args.model, config.engine, revision=config.model_revision)
                 print("Cached model deleted")
+        elif args.command == "backup-preview":
+            from .operations import backup_preview
+
+            result = backup_preview(args.path, app_map=read_app_map(args.app_map))
+            print(json.dumps(result, ensure_ascii=False, indent=2))
         elif args.command.startswith("dictionary-"):
             from .dictionary import Dictionary
 
@@ -357,6 +408,8 @@ def main(argv=None):
                     data.update(source=args.source, persist=args.persist)
                 if hasattr(args, "path"):
                     data["path"] = str(args.path.resolve())
+                if args.command == "backup-import" and args.app_map is not None:
+                    data["app_map"] = read_app_map(args.app_map)
                 if args.command == "accept-edit":
                     data["return_to_target"] = args.return_to_target
                 if hasattr(args, "mode"):

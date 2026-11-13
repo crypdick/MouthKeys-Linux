@@ -234,6 +234,21 @@ label/row indicator uses service-reported engine/model/revision/device/precision
 Settings selection. Unknown RAM, speed, and accuracy are not invented; weight bytes are not runtime memory. Progress/cancel use the Hub
 transfer callback where supported. A partial download is not advertised as a ready native/ONNX model.
 
+**Benchmark selected…** measures an already-installed model against an existing WAV (up to ten
+minutes / 128 MiB). An optional exact reference enables WER/CER; without one accuracy stays unknown.
+The isolated offline worker never records, delivers text, calls AI, or saves transcripts. Reports
+retain fixture/reference hashes, artifact metadata fingerprints, software/hardware, load/decode time,
+real-time factor, and sampled worker/descendant RSS—not GPU VRAM. Samples can miss peaks and shared
+pages can be counted twice. At most 100 private reports are retained. Catalog measurements match the
+recorded model/settings/hardware; other rows remain unknown. One fixture is not general accuracy;
+OS/device caches are not flushed. Reference normalization and measurement scope appear in each report.
+CLI overrides do not change saved settings or start the daemon:
+
+```sh
+mouthkeys benchmark greeting.wav --model large-v3-turbo --device cpu --compute-type int8 \
+  --reference-file greeting.txt
+```
+
 ### Speech engines
 
 | `engine` / extra | Available integration | Important limits |
@@ -405,12 +420,20 @@ keeping removes the offered word from the filler list. No location lookup or mod
   Full field contents stay in memory, not the learned-pair file. New recording/cancel stops observation.
 - Pronunciation enrollment: supply a 1–5-word spelling and record at least two consistent isolated
   0.25–10 s takes. `pronunciation_matching=on` uses local cepstral/DTW templates, not Apple embeddings.
-  With actual Whisper/NeMo word timings, only matched word spans are replaced inside a longer utterance;
+  With actual Whisper/NeMo/Transformers Nemotron word timings, only matched word spans are replaced inside a longer utterance;
   outside text, punctuation, and observed intervals are preserved. Without actual alignment, only
   short whole-phrase matching is available. Ambiguous labels/distractors abstain. The search budget
   (`pronunciation_span_budget`, default 2000 comparisons), distance-cell/time caps, and 1–5-source-word
   candidate limit bound work; incomplete coverage is reported rather than claimed exhaustive.
   These scores are heuristic similarity, **not** calibrated recognition accuracy or speaker identity.
+  Optional `pronunciation_aligner_model` accepts a complete cached Whisper alias/path (blank disables).
+  This supplies real forced-alignment intervals when the primary backend lacks them, including
+  ONNX/Qwen/Cohere; existing native intervals take precedence. It loads a second CPU/int8 model
+  (two threads), adding memory and latency, without changing the primary ASR or downloading weights.
+  Exact text coverage, real segment bounds, likelihood and work limits must pass; uncertainty leaves
+  raw ASR untouched and reports a warning. Native alignment calls are not preemptible; the bounded
+  segment/token and inter-call budgets are not a hard wall-clock deadline. Turning pronunciation
+  matching off or clearing this setting releases the secondary model.
 - `vocabulary_boosting=on`: up to 256 custom terms have optional positive floating-point weights
   (blank means default) and explicit aliases. Enabled replacement-dictionary terms join the effective
   decoding vocabulary with weight 8; this does not rewrite saved custom terms. Whisper/Qwen hints
@@ -593,11 +616,25 @@ same as accepted dictionary data; backups preserve accepted data, not an active 
 
 ```sh
 mouthkeys backup-export backup.json
+mouthkeys backup-preview backup.json
 mouthkeys backup-import backup.json --yes
 mouthkeys export-audio recordings.zip
 mouthkeys dictionary-export dictionary.json
 mouthkeys dictionary-import dictionary.json --yes
 ```
+
+Restore also accepts upstream MouthKeys schema-1 JSON. Settings shows a transcript-free preview
+before confirmation and verifies the same file hash on apply. CLI `backup-preview` is read-only and
+does not start a daemon or create a history database. Supported settings, dictionary, prompt
+profiles, and history UUIDs/raw/final text/actual AI metadata migrate; audio metadata is not audio
+bytes. Missing Linux-only stores remain unchanged. Apple acoustic embeddings need Linux re-enrollment;
+shortcuts, device IDs, unsupported model routes and settings are reported, not guessed. Imported
+provider credentials are never inherited from a generic environment key; configure endpoint-scoped
+credentials before explicitly activating imported prompts. Imported AI selections/application routes
+remain inactive until reviewed. To translate macOS app identities, pass `--app-map apps.json` to
+preview/import, where the JSON object maps bundle IDs to Linux app names. Preview reports unmapped
+bindings. Upstream JSON does not contain per-profile provider pins, audio bytes, file history or
+assistant conversations; these cannot be recovered from it.
 
 Optional loopback API: set `api_enabled=on`, port, and a service environment token named by
 `api_token_env` (default `MOUTHKEYS_API_TOKEN`, at least 24 characters), then restart yourself.
@@ -608,7 +645,7 @@ no CORS, remote binding, or arbitrary input file paths. Routes include health/hi
 legacy `audio_base64`, or raw encoded audio body). Arbitrary file paths remain rejected; upload bytes.
 History/replacement routes return upstream-compatible `{count, items}` envelopes by default;
 `?format=native` preserves legacy Linux array responses. History includes ISO timestamps and raw/final
-aliases; new records track actual AI success/failure, while legacy unknown AI metadata stays null.
+aliases and `processingModel`; new records track actual AI success/failure/model, while legacy unknown AI metadata stays null.
 Transcription adds `sampleCount`/`provider`; postprocessing adds `provider`/`model` without removing
 Linux result fields. Custom-word entries contain `text`, optional numeric `weight`, and `aliases`;
 append/replace writes validate before saving. Requests cap at
@@ -761,6 +798,8 @@ configuration before marking a setup verified:
 - Pronunciation/vocabulary: independent real takes, homophones/distractors/noise, embedded spans,
   timing/punctuation preservation, budget warnings, ambiguity abstention, and each supported engine's
   native vocabulary mechanism. Similarity scores are not proof of recognition accuracy.
+  Compare native timing versus the optional cached aligner on ONNX/Qwen/Cohere, uncertain-language
+  abstention, opt-out memory release, and added CPU latency/RAM; cancel must still suppress delivery.
 - AI: explicit Verify/Discover only, local then configured cloud provider, reasoning/streaming,
   per-mode/app/shortcut routes, draft tests, typed/voice cancel, failed/truncated response fallback,
   no desktop output from prompt tryout, exact shell-command/directory review under `command_confirm=on`,
@@ -780,6 +819,12 @@ configuration before marking a setup verified:
   captured-selection review/return controls, stale/new-job refusal, one-shot acceptance and Copy fallback.
 - Files: mixed speakers/overlap/brief turns/missed turns, labels/confidence unknowns, TXT/JSON, persistent
   browser copy/delete/restart, private backup roundtrip, and history-off behavior.
+- Backup migration: preview a real upstream JSON, inspect unsupported/pending bindings, verify no
+  credential reuse or imported AI activation, then explicitly configure/select an imported draft.
+  Verify raw/final/history UUIDs, retention budget, and unchanged Linux-only stores without audio bytes.
+- Benchmark: representative WAV plus exact reference, recorded hardware/software/precision, cancel,
+  private report retention, and unmatched rows staying unknown. Compare only matching fixture/reference
+  contexts; sampled RSS and one short fixture do not establish peak RAM or broad recognition quality.
 - Pretrained engines: after authorized download/access, evaluate chosen language/model/revision,
   warmup, long dictation boundaries, native cache-aware finalization, resource use, and real accuracy.
 

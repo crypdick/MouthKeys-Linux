@@ -103,6 +103,7 @@ def test_ai_history_records_actual_success_even_when_text_unchanged(monkeypatch)
     assert row["raw_text"] == row["text"] == "Unchanged"
     assert row["was_ai_processed"] == 1
     assert row["ai_processing_error"] == ""
+    assert row["ai_processing_model"] == "model"
 
 
 def test_edit_delivery_failure_is_not_recorded_as_ai_failure(monkeypatch):
@@ -147,6 +148,7 @@ def test_cancelled_ai_result_does_not_leave_success_or_raw_transcript(monkeypatc
     row = app.history.rows()[0]
     assert row["was_ai_processed"] == 0
     assert row["ai_processing_error"] == row["raw_text"] == row["text"] == ""
+    assert row["ai_processing_model"] == ""
 
 
 def test_cancel_during_ai_suppresses_delivery(monkeypatch):

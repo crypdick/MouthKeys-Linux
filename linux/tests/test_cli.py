@@ -53,6 +53,89 @@ def test_dictionary_cli_portable_roundtrip_and_merge(tmp_path, capsys):
     assert saved["customWords"][0]["weight"] == 8.5
 
 
+def test_benchmark_cli_uses_overrides_without_daemon_or_saved_config(monkeypatch, tmp_path, capsys):
+    from mouthkeys import benchmark, service
+    from mouthkeys.config import config_path
+
+    calls = []
+    reference = tmp_path / "reference.txt"
+    reference.write_text("hello fluid voice")
+    monkeypatch.setattr(service, "ensure_daemon", lambda: pytest.fail("Benchmark started daemon"))
+    monkeypatch.setattr(
+        benchmark,
+        "run_benchmark",
+        lambda config, fixture, **kwargs: (
+            calls.append((config, fixture, kwargs)) or {"measured": True}
+        ),
+    )
+    assert (
+        main(
+            [
+                "benchmark",
+                "fixture.wav",
+                "--model",
+                "/cached/snapshot",
+                "--engine",
+                "whisper",
+                "--device",
+                "cpu",
+                "--compute-type",
+                "int8",
+                "--revision",
+                "pinned",
+                "--reference-file",
+                str(reference),
+                "--timeout",
+                "90",
+            ]
+        )
+        == 0
+    )
+    config, fixture, options = calls[0]
+    assert (
+        config.model,
+        config.engine,
+        config.device,
+        config.compute_type,
+        config.model_revision,
+    ) == ("/cached/snapshot", "whisper", "cpu", "int8", "pinned")
+    assert str(fixture) == "fixture.wav"
+    assert options == {"reference": "hello fluid voice", "timeout": 90.0}
+    assert json.loads(capsys.readouterr().out) == {"measured": True}
+    assert not config_path().exists()
+
+
+def test_backup_preview_cli_never_constructs_history_or_starts_daemon(
+    monkeypatch, tmp_path, capsys
+):
+    from dataclasses import asdict
+
+    from mouthkeys import service, storage
+    from mouthkeys.config import Config, config_path
+    from mouthkeys.dictionary import Dictionary
+
+    path = tmp_path / "backup.json"
+    path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "config": asdict(Config()),
+                "dictionary": Dictionary.defaults(),
+                "history": [],
+                "profiles": [],
+            }
+        )
+    )
+    monkeypatch.setattr(service, "ensure_daemon", lambda: pytest.fail("Preview started daemon"))
+    monkeypatch.setattr(storage, "History", lambda *a, **kw: pytest.fail("Preview opened history"))
+    assert main(["backup-preview", str(path)]) == 0
+    result = json.loads(capsys.readouterr().out)
+    assert result["format"] == "native"
+    assert result["counts"]["history"] == 0
+    assert len(result["file_sha256"]) == 64
+    assert not config_path().exists()
+
+
 def test_cli_reports_version_without_starting_service(monkeypatch, capsys):
     from mouthkeys import service
 

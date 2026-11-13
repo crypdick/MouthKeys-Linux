@@ -842,6 +842,7 @@ class Controller:
                 metadata["raw_text"] = ""
                 metadata["was_ai_processed"] = False
                 metadata["ai_processing_error"] = ""
+                metadata["ai_processing_model"] = ""
             self.history.update(job.item_id, status, text, error, **{**job.metadata, **metadata})
 
     def _job_status(self, job, phase, message):
@@ -1306,6 +1307,7 @@ class Controller:
                         text,
                         was_ai_processed=assistant_requested,
                         ai_processing_error=ai_warning,
+                        ai_processing_model=config.ai_model if assistant_requested else "",
                     )
                     if config.save_audio == "off" and config.save_history == "on":
                         self.history.prune_audio(job.item_id)
@@ -1361,6 +1363,12 @@ class Controller:
                         )
                 else:
                     text = PronunciationStore.correct(text, path)
+                if isinstance(alignment, dict) and alignment.get("warning"):
+                    pronunciation_warning = ". ".join(
+                        warning
+                        for warning in (pronunciation_warning, alignment["warning"])
+                        if warning
+                    )
             plan = parse_send(
                 text,
                 config.spoken_send_phrase,
@@ -1413,6 +1421,7 @@ class Controller:
                     text,
                     was_ai_processed=ai_processed,
                     ai_processing_error=ai_warning,
+                    ai_processing_model=config.ai_model if ai_processed else "",
                 )
                 self._job_status(job, "delivering", "Delivering transcript")
             result = self.delivery.deliver(text, config, target) if text else "transcribed"

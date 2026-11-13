@@ -1,0 +1,44 @@
+{
+  "timestamp_utc": "2026-11-13T00:05:53.770934+00:00",
+  "result": "passed",
+  "version": "0.2.2",
+  "distribution": "built non-editable wheel",
+  "config_fields_in_settings": 124,
+  "checks": [
+    "installed CLI version",
+    "owned isolated daemon start/status/shutdown",
+    "CLI-to-GUI configuration roundtrip",
+    "all configuration fields exposed",
+    "hidden offscreen Settings construction",
+    "new worker/UI imports",
+    "packaged base prompt and all sound presets"
+  ],
+  "network": "AF_INET/AF_INET6 denied by seccomp during the probe",
+  "desktop": "no display, microphone, clipboard, keys, sounds or visible windows",
+  "versions": {
+    "mouthkeys-linux": "0.2.2",
+    "PySide6-Essentials": "6.12.0",
+    "ctranslate2": "4.8.5",
+    "faster-whisper": "1.2.1"
+  },
+  "artifact_sha256": "da7ea5f0081cf1142973ccf1539d836106b9181e263984735ee496b8d5952280",
+  "installation": {
+    "scope": "separate temporary uv environment; user app unchanged",
+    "offline": true,
+    "source": "observed uv pip install --offline --reinstall-package invocation; not asserted by probe"
+  },
+  "module_imports": [
+    "credentials",
+    "data_lock",
+    "dictionary_transfer",
+    "native_worker",
+    "overlay_assistant",
+    "regional_ui",
+    "setup_languages",
+    "portal_shortcuts",
+    "atspi_helper",
+    "benchmark",
+    "forced_alignment",
+    "upstream_backup"
+  ]
+}

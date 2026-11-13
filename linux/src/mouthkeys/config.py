@@ -117,6 +117,7 @@ class Config:
     learning_min_occurrences: int = 2
     learning_observe_seconds: int = 30
     pronunciation_matching: str = "off"
+    pronunciation_aligner_model: str = ""
     vocabulary_boosting: str = "off"
     target_policy: str = "stop"
     return_to_start: str = "off"
@@ -230,6 +231,7 @@ RANGES = {
     "clipboard_restore_delay_ms": (100, 5000),
 }
 OPTIONAL = {
+    "pronunciation_aligner_model",
     "edit_prompt",
     "command_prompt",
     "command_shortcut_key",

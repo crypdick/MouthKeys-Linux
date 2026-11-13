@@ -58,6 +58,75 @@
       },
       "network": "AF_INET/AF_INET6 denied by seccomp",
       "word_times": true
+    },
+    {
+      "timestamp_utc": "2026-11-12T23:30:47.691596+00:00",
+      "result": "passed",
+      "validation": "functional only; NOT accuracy",
+      "engine": "transformers",
+      "artifact_name": "mouthkeys-tiny-nemotron-timing-v2",
+      "revision": "main",
+      "device": "cpu",
+      "compute_type": "float32",
+      "native_timeout_seconds": 300,
+      "operations": [
+        "segments"
+      ],
+      "audio_samples": 18524,
+      "fixture_sha256": "d5c3bc5bfa5123ec0cfc68bed9e4bc82b87ee4c3b44a03e2f9fab0238e5a1d30",
+      "versions": {
+        "torch": "2.11.0+cpu",
+        "transformers": "5.22.2"
+      },
+      "network": "AF_INET/AF_INET6 denied by seccomp",
+      "word_times": true,
+      "stream_repeat": 1,
+      "expected_greeting_counts": {},
+      "word_counts": {
+        "file": 8
+      },
+      "load_seconds": 4.679,
+      "file_seconds": 0.48,
+      "model_family": "nemotron_asr_streaming",
+      "synthetic_test_head": "Constant hello output bias to exercise nonblank intervals; not learned recognition",
+      "timing_source": "Actual Transformers RNNT generated durations decoded by builtin processor; grouped exact native token chunks",
+      "timing_contract_source": "https://github.com/huggingface/transformers/blob/v5.22.2/src/transformers/models/nemotron_asr_streaming/processing_nemotron_asr_streaming.py"
+    },
+    {
+      "timestamp_utc": "2026-11-12T23:34:57.663317+00:00",
+      "result": "passed",
+      "validation": "Functional integration only: tiny random weights and synthetic tokenizer; NOT pretrained recognition or vocabulary effectiveness",
+      "engine": "nemo",
+      "artifact_name": "mouthkeys-tiny-nemo-weighted-graph",
+      "revision": "main",
+      "device": "cpu",
+      "compute_type": "float32",
+      "native_timeout_seconds": 300,
+      "operations": [
+        "stream",
+        "segments"
+      ],
+      "audio_samples": 18524,
+      "fixture_sha256": "d5c3bc5bfa5123ec0cfc68bed9e4bc82b87ee4c3b44a03e2f9fab0238e5a1d30",
+      "versions": {
+        "torch": "2.11.0+cpu",
+        "transformers": "5.22.2",
+        "nemo_toolkit": "3.0.0"
+      },
+      "network": "AF_INET/AF_INET6 denied by seccomp",
+      "word_times": true,
+      "native_vocabulary_terms": 1,
+      "stream_repeat": 1,
+      "expected_greeting_counts": {},
+      "word_counts": {
+        "stream": 4,
+        "file": 4
+      },
+      "load_seconds": 8.288,
+      "stream_seconds": 0.266,
+      "file_seconds": 0.112,
+      "vocabulary_contract": "Actual NeMo weighted context graph, serialized private tree, decoder reconfiguration; one explicitly requested synthetic term at weight 8",
+      "timing_source": "Actual NeMo native word intervals through cache-aware stream/final and file inference"
     }
   ]
 }

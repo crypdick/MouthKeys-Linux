@@ -47,6 +47,7 @@ def history_item(row):
             bool(row["was_ai_processed"]) if row.get("was_ai_processed") is not None else None
         ),
         "aiProcessingError": row.get("ai_processing_error"),
+        "processingModel": row.get("ai_processing_model"),
     }
 
 

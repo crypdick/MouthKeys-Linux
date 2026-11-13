@@ -1,5 +1,6 @@
 import math
 from pathlib import Path
+from types import SimpleNamespace
 
 from .config import Config, cache_dir
 from .native_asr import uses_native_streaming
@@ -62,8 +63,14 @@ class Transcriber:
         self.committed_words = []
         self.pending_words = []
         self.decoded_words = []
+        self.aligner = None
+        self.alignment_warning = ""
 
     def load(self, config: Config):
+        if self.aligner is not None and (
+            config.pronunciation_matching != "on" or not config.pronunciation_aligner_model
+        ):
+            self.aligner.clear()
         key = (
             config.model,
             config.device,
@@ -153,6 +160,7 @@ class Transcriber:
             self.last_alignment = None
             self.committed_words = []
             self.pending_words = []
+            self.alignment_warning = ""
 
     @staticmethod
     def _stream_key(path, config):
@@ -165,7 +173,28 @@ class Transcriber:
             getattr(config, "engine", "whisper"),
             getattr(config, "model_revision", "main"),
             getattr(config, "pronunciation_matching", "off"),
+            getattr(config, "pronunciation_aligner_model", ""),
         )
+
+    def _align_segments(self, audio, config, segments):
+        if config.pronunciation_matching != "on" or not config.pronunciation_aligner_model:
+            if self.aligner is not None:
+                self.aligner.clear()
+            return segments
+        if self.aligner is None:
+            from .forced_alignment import WhisperForcedAligner
+
+            self.aligner = WhisperForcedAligner()
+        aligned, warning = self.aligner.align(audio, segments, config)
+        if warning and warning not in self.alignment_warning:
+            self.alignment_warning = "; ".join(filter(None, [self.alignment_warning, warning]))
+        return aligned
+
+    def _record_alignment(self, path, text, words):
+        self.words = words
+        self.last_alignment = {"text": text, "words": words, "source": str(path)}
+        if self.alignment_warning:
+            self.last_alignment["warning"] = self.alignment_warning
 
     def _uses_native_streaming(self, config):
         if not uses_native_streaming(config):
@@ -178,6 +207,8 @@ class Transcriber:
         from .audio import read_audio_from
 
         if self._uses_native_streaming(config):
+            if self.stream_key != self._stream_key(path, config):
+                self.alignment_warning = ""
             self.stream_key = self._stream_key(path, config)
             return self.model.stream(read_audio_from(path), config, self.stream_key)
         self._session(path, config)
@@ -215,12 +246,22 @@ class Transcriber:
         key = self._stream_key(path, config)
         self.words = []
         self.last_alignment = None
+        if key != self.stream_key:
+            self.alignment_warning = ""
         try:
             if self._uses_native_streaming(config):
-                text = self.model.stream(read_audio_from(path), config, key, final=True)
+                audio = read_audio_from(path)
+                text = self.model.stream(audio, config, key, final=True)
                 if config.pronunciation_matching == "on":
-                    self.words = getattr(self.model, "words", [])
-                    self.last_alignment = {"text": text, "words": self.words, "source": str(path)}
+                    words = getattr(self.model, "words", [])
+                    if not words:
+                        segments = self._align_segments(
+                            audio,
+                            config,
+                            [SimpleNamespace(start=0, end=len(audio) / 16000, text=text)],
+                        )
+                        words = self._word_metadata(segments)
+                    self._record_alignment(path, text, words)
                 return text
             if key != self.stream_key:
                 text = self._decode(str(path), config)
@@ -236,9 +277,8 @@ class Transcriber:
                     tail, tail_words = "", []
                 text = " ".join([*self.committed, tail]).strip()
                 words = [*self.committed_words, *tail_words]
-            if config.engine in ("whisper", "nemo") and config.pronunciation_matching == "on":
-                self.words = words
-                self.last_alignment = {"text": text, "words": words, "source": str(path)}
+            if config.pronunciation_matching == "on":
+                self._record_alignment(path, text, words)
             return text
         finally:
             self.stream_key = None
@@ -256,6 +296,7 @@ class Transcriber:
         self.pending = ""
         self.words = []
         self.last_alignment = None
+        self.alignment_warning = ""
         self.committed_words = []
         self.pending_words = []
 
@@ -266,19 +307,20 @@ class Transcriber:
                 from faster_whisper.audio import decode_audio
 
                 audio = decode_audio(audio, sampling_rate=16000)
-            return self.model.segments(audio, config)
+            return self._align_segments(audio, config, list(self.model.segments(audio, config)))
         if getattr(config, "engine", "whisper") == "onnx":
             if isinstance(audio, str):
                 from faster_whisper.audio import decode_audio
 
                 audio = decode_audio(audio, sampling_rate=16000)
-            return list(
+            segments = list(
                 self.model.recognize(
                     audio,
                     sample_rate=16000,
                     language=None if config.language == "auto" else config.language,
                 )
             )
+            return self._align_segments(audio, config, segments)
         from .vocabulary import whisper_options
 
         segments, _ = self.model.transcribe(
@@ -304,6 +346,8 @@ class Transcriber:
                 probability = getattr(word, "probability", None)
                 if probability is not None and math.isfinite(float(probability)):
                     entry["probability"] = float(probability)
+                if getattr(word, "alignment_source", None):
+                    entry["alignment_source"] = word.alignment_source
                 words.append(entry)
         return words
 

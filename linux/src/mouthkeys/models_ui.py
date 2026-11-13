@@ -1,12 +1,20 @@
 """Local-only model browser. Network and activation require explicit buttons."""
 
+import json
+import threading
+from dataclasses import replace
+
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
+    QFileDialog,
     QHBoxLayout,
+    QInputDialog,
     QLabel,
     QLineEdit,
+    QMessageBox,
+    QProgressDialog,
     QPushButton,
     QTableWidget,
     QTableWidgetItem,
@@ -18,6 +26,8 @@ class ModelBrowser(QDialog):
     def __init__(self, window):
         super().__init__(window)
         self.window = window
+        self.benchmark_task = None
+        self.measurement_context = None
         self.setWindowTitle("Speech models")
         self.resize(1100, 550)
         layout = QVBoxLayout(self)
@@ -64,6 +74,7 @@ class ModelBrowser(QDialog):
             ("Activate selected", self.activate),
             ("Download selected", self.download),
             ("Delete cached selected", self.delete),
+            ("Benchmark selected…", self.benchmark),
             ("Refresh", self.refresh),
         ):
             button = QPushButton(label)
@@ -76,11 +87,32 @@ class ModelBrowser(QDialog):
         self.timer.start(1000)
 
     def refresh(self):
+        from .config import Config
         from .engines import model_catalog
+        from .gui import field_value
 
         engine = self.window.fields["engine"].currentData()
         self.engine = engine
-        models = model_catalog(engine, revision=self.window.fields["model_revision"].text())
+        values = {
+            key: field_value(self.window.fields[key])
+            for key in (
+                "model",
+                "language",
+                "device",
+                "compute_type",
+                "asr_max_tokens",
+                "native_streaming",
+                "streaming_latency",
+            )
+            if key in self.window.fields
+        }
+        config = replace(Config(), **values, engine=engine)
+        models = model_catalog(
+            engine,
+            revision=self.window.fields["model_revision"].text(),
+            measurement_config=config,
+            measurement_context=self.measurement_context,
+        )
         self.table.setSortingEnabled(False)
         self.table.setRowCount(len(models))
         for row, model in enumerate(models):
@@ -105,6 +137,12 @@ class ModelBrowser(QDialog):
                     item.setText("Unknown" if col == 2 else str(value))
                 item.setData(Qt.ItemDataRole.UserRole, model)
                 item.setToolTip(model.get("source", "") + "\n" + str(value))
+                if model.get("measurement"):
+                    item.setToolTip(
+                        item.toolTip()
+                        + "\n"
+                        + json.dumps(model["measurement"], ensure_ascii=False, indent=2)
+                    )
                 self.table.setItem(row, col, item)
         self.table.setSortingEnabled(True)
         self.table.resizeColumnsToContents()
@@ -167,3 +205,113 @@ class ModelBrowser(QDialog):
         if self.choose():
             self.window.delete_model()
             self.refresh()
+
+    def benchmark(self):
+        from .assistant_ui import AssistantTask
+        from .benchmark import run_benchmark
+        from .config import Config
+        from .gui import field_value
+
+        if self.benchmark_task is not None or self.table.currentRow() < 0:
+            return
+        model = self.table.item(self.table.currentRow(), 0).data(Qt.ItemDataRole.UserRole)
+        if not model["installed"]:
+            QMessageBox.information(
+                self, "Offline benchmark", "Download this model explicitly first."
+            )
+            return
+        fixture, _ = QFileDialog.getOpenFileName(self, "Choose benchmark WAV", "", "WAV (*.wav)")
+        if not fixture:
+            return
+        reference, accepted = QInputDialog.getMultiLineText(
+            self,
+            "Optional reference",
+            "Exact reference transcript for this WAV, or leave blank.\n"
+            "Results describe this fixture only. Text and file paths are not saved.",
+        )
+        if not accepted:
+            return
+        try:
+            settings = {
+                key: field_value(self.window.fields[key])
+                for key in (
+                    "device",
+                    "compute_type",
+                    "language",
+                    "asr_max_tokens",
+                    "native_streaming",
+                    "streaming_latency",
+                )
+                if key in self.window.fields
+            }
+            config = replace(
+                Config.load(),
+                engine=self.engine,
+                model=model["model"],
+                model_revision=model["revision"],
+                **settings,
+            ).validate()
+        except (TypeError, ValueError) as exc:
+            QMessageBox.warning(self, "Benchmark", str(exc))
+            return
+        cancelled = threading.Event()
+        progress = QProgressDialog("Loading and decoding offline WAV…", "Cancel", 0, 0, self)
+        progress.setWindowModality(Qt.WindowModality.WindowModal)
+        progress.canceled.connect(cancelled.set)
+        progress.show()
+        task = AssistantTask(
+            lambda: run_benchmark(
+                config,
+                fixture,
+                reference=reference if reference.strip() else None,
+                cancel_event=cancelled,
+            ),
+            self,
+            cancelled,
+        )
+        self.benchmark_task = task
+        self.window.jobs.add(task)
+
+        def received(response):
+            progress.close()
+            if "error" in response:
+                QMessageBox.warning(self, "Benchmark", response["error"])
+            else:
+                report = response["result"]
+                self.measurement_context = (
+                    report["fixture_sha256"],
+                    (report.get("accuracy") or {}).get("reference_sha256"),
+                )
+                self.refresh()
+                summary = (
+                    f"Decode: {report['decode_seconds']:.3f}s for "
+                    f"{report['audio_seconds']:.3f}s audio; "
+                    f"RTF {report['real_time_factor']:.3f}.\n"
+                    f"Cold load: {report['load_seconds']:.3f}s.\n"
+                    f"{report['scope']}\n{report['memory_scope']}"
+                )
+                box = QMessageBox(
+                    QMessageBox.Icon.Information,
+                    "Benchmark saved",
+                    summary,
+                    QMessageBox.StandardButton.Ok,
+                    self,
+                )
+                box.setDetailedText(json.dumps(report, indent=2))
+                box.exec()
+
+        def finished():
+            self.window.jobs.discard(task)
+            self.benchmark_task = None
+            progress.deleteLater()
+
+        task.done.connect(received)
+        task.finished.connect(finished)
+        task.finished.connect(task.deleteLater)
+        task.start()
+
+    def closeEvent(self, event):
+        if self.benchmark_task is not None:
+            event.ignore()
+            return
+        super().closeEvent(event)

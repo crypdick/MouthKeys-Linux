@@ -1,0 +1,133 @@
+{
+  "notice": "Actual offline CPU/int8 measurements on one 1.15775-second public greeting fixture; not general performance or accuracy. Memory is sampled aggregate process-tree RSS, not GPU VRAM or exact peak. No network, downloads, microphone, desktop delivery, or installed-user-app changes. Reports recorded without saving to user measurement store.",
+  "runs": [
+    {
+      "version": 1,
+      "timestamp_utc": "2026-11-12T23:34:42.332286+00:00",
+      "engine": "whisper",
+      "model": "local:02bd256ecbaab697ee2fc228b6e441313f7b168836be41c8a90be3a8fb75d523",
+      "revision": "main",
+      "device": "cpu",
+      "compute_type": "int8",
+      "settings_scope": "Requested device/precision; auto/default are backend-selected",
+      "language": "en",
+      "decode_settings": {
+        "language": "en",
+        "asr_max_tokens": 512,
+        "native_streaming": "on",
+        "streaming_latency": "model"
+      },
+      "artifact": {
+        "metadata_sha256": "895b88e30a392040c3c7a3c35d612bc471848e0a4d022c1ea7f98e0b58f55065",
+        "scope": "Relative file names, byte sizes and mtimes; not a weight-content hash",
+        "snapshot_commit": "edaa852ec7e145841d8ffdb056a99866b5f0a478"
+      },
+      "fixture_sha256": "d5c3bc5bfa5123ec0cfc68bed9e4bc82b87ee4c3b44a03e2f9fab0238e5a1d30",
+      "audio_seconds": 1.15775,
+      "load_seconds": 7.95103775797179,
+      "decode_seconds": 8.622237395029515,
+      "real_time_factor": 7.447408676337305,
+      "decode_scope": "File decoding, VAD and inference; excludes cold model loading",
+      "accuracy": {
+        "algorithm": "levenshtein-nfkc-casefold-alphanumeric-v1",
+        "normalization": "Unicode alphanumeric words; CER joins words without spaces/punctuation",
+        "reference_sha256": "885929012be05146ad801fda292d8b1cf97e94135b5555e0ea84c5c4054290d6",
+        "max_cells_per_metric": 4000000,
+        "wer": 0.0,
+        "wer_errors": 0,
+        "wer_reference_units": 3,
+        "cer": 0.0,
+        "cer_errors": 0,
+        "cer_reference_units": 15
+      },
+      "hardware": {
+        "architecture": "x86_64",
+        "cpu": "Intel(R) Xeon(R) Platinum 8268 CPU @ 2.90GHz",
+        "logical_cpus": 96,
+        "display_adapter_pci_ids": [
+          "0x10de:0x0ffe"
+        ]
+      },
+      "software": {
+        "python": "3.13.14",
+        "kernel": "7.0.0-43-generic",
+        "packages": {
+          "mouthkeys-linux": "0.2.2",
+          "faster-whisper": "1.2.1",
+          "ctranslate2": "4.8.4",
+          "onnxruntime": "1.31.1"
+        }
+      },
+      "network": "AF_INET/AF_INET6 denied by seccomp; offline libraries; existing weights only",
+      "scope": "One offline WAV fixture, cold model load then one file decode; not general model accuracy.",
+      "sampled_peak_tree_rss_bytes": 3954995200,
+      "memory_samples": 687,
+      "memory_scope": "Sampled sum of benchmark worker and descendant resident sets, including model loading. 20 ms sampling can miss peaks; shared pages may be counted twice. GPU VRAM excluded. At most 128 processes observed per sample.",
+      "model_label": "Whisper large-v3"
+    },
+    {
+      "version": 1,
+      "timestamp_utc": "2026-11-12T23:32:42.610841+00:00",
+      "engine": "whisper",
+      "model": "local:fe0ec68163adc59c576bdbca8eeb1bf867fc1b4fbf860817d560501d7d53bad4",
+      "revision": "main",
+      "device": "cpu",
+      "compute_type": "int8",
+      "settings_scope": "Requested device/precision; auto/default are backend-selected",
+      "language": "en",
+      "decode_settings": {
+        "language": "en",
+        "asr_max_tokens": 512,
+        "native_streaming": "on",
+        "streaming_latency": "model"
+      },
+      "artifact": {
+        "metadata_sha256": "5749c9ec7de9bf36ff1c4ce9ce325694dd60440b312457d79550d34202dee244",
+        "scope": "Relative file names, byte sizes and mtimes; not a weight-content hash",
+        "snapshot_commit": "0a363e9161cbc7ed1431c9597a8ceaf0c4f78fcf"
+      },
+      "fixture_sha256": "d5c3bc5bfa5123ec0cfc68bed9e4bc82b87ee4c3b44a03e2f9fab0238e5a1d30",
+      "audio_seconds": 1.15775,
+      "load_seconds": 4.1349371850374155,
+      "decode_seconds": 8.445058165991213,
+      "real_time_factor": 7.294371121564425,
+      "decode_scope": "File decoding, VAD and inference; excludes cold model loading",
+      "accuracy": {
+        "algorithm": "levenshtein-nfkc-casefold-alphanumeric-v1",
+        "normalization": "Unicode alphanumeric words; CER joins words without spaces/punctuation",
+        "reference_sha256": "885929012be05146ad801fda292d8b1cf97e94135b5555e0ea84c5c4054290d6",
+        "max_cells_per_metric": 4000000,
+        "wer": 0.0,
+        "wer_errors": 0,
+        "wer_reference_units": 3,
+        "cer": 0.0,
+        "cer_errors": 0,
+        "cer_reference_units": 15
+      },
+      "hardware": {
+        "architecture": "x86_64",
+        "cpu": "Intel(R) Xeon(R) Platinum 8268 CPU @ 2.90GHz",
+        "logical_cpus": 96,
+        "display_adapter_pci_ids": [
+          "0x10de:0x0ffe"
+        ]
+      },
+      "software": {
+        "python": "3.13.14",
+        "kernel": "7.0.0-43-generic",
+        "packages": {
+          "mouthkeys-linux": "0.2.2",
+          "faster-whisper": "1.2.1",
+          "ctranslate2": "4.8.4",
+          "onnxruntime": "1.31.1"
+        }
+      },
+      "network": "AF_INET/AF_INET6 denied by seccomp; offline libraries; existing weights only",
+      "scope": "One offline WAV fixture, cold model load then one file decode; not general model accuracy.",
+      "sampled_peak_tree_rss_bytes": 2180145152,
+      "memory_samples": 961,
+      "memory_scope": "Sampled sum of benchmark worker and descendant resident sets, including model loading. 20 ms sampling can miss peaks; shared pages may be counted twice. GPU VRAM excluded. At most 128 processes observed per sample.",
+      "model_label": "Whisper large-v3-turbo"
+    }
+  ]
+}

@@ -197,7 +197,8 @@ def _model_catalog(engine="whisper", *, revision="main"):
                 "weight_bytes": entry["weight_bytes"],
                 "native_streaming": engine == "nemo" and entry.get("native_streaming", True),
                 "vocabulary": engine == "nemo" or entry.get("family") == "qwen3_asr",
-                "word_timing": engine == "nemo",
+                "word_timing": engine == "nemo"
+                or entry.get("family") in ("nemotron3_5_asr", "nemotron_asr_streaming"),
                 "source": f"https://huggingface.co/{name}",
                 "vocabulary_method": (
                     "weighted context graph"
@@ -249,14 +250,37 @@ def _model_catalog(engine="whisper", *, revision="main"):
     ]
 
 
-def model_catalog(engine="whisper", *, revision="main"):
+def model_catalog(
+    engine="whisper", *, revision="main", measurement_config=None, measurement_context=None
+):
     """Report capabilities and explicit unknowns, not Apple-hardware ratings.
 
     Parameter-memory estimates use the nominal model size in publisher names
     and four bytes per float32 parameter. They exclude inference workspace,
     activations and caches; archive size is not a runtime RAM measurement.
     """
+    from dataclasses import replace
+
+    from .benchmark import matching_measurement, measurements
+
+    measured = measurements()
     rows = _model_catalog(engine, revision=revision)
+    if (
+        measurement_config is not None
+        and not any(row["model"] == measurement_config.model for row in rows)
+        and Path(measurement_config.model).expanduser().exists()
+    ):
+        rows.append(
+            {
+                "model": measurement_config.model,
+                "name": "Custom model: " + Path(measurement_config.model).name,
+                "languages": "Custom checkpoint",
+                "engine": engine,
+                "revision": revision,
+                "installed": True,
+                "path": measurement_config.model,
+            }
+        )
     for row in rows:
         row["speed_note"] = "Not benchmarked on this hardware"
         row["accuracy_note"] = "Not evaluated for your language/audio"
@@ -278,6 +302,35 @@ def model_catalog(engine="whisper", *, revision="main"):
             )
         else:
             row["memory_note"] = "Precision/model/device dependent; RAM unmeasured"
+        report = (
+            matching_measurement(
+                replace(
+                    measurement_config,
+                    engine=engine,
+                    model=row["model"],
+                    model_revision=row.get("revision", revision),
+                ),
+                measured,
+                measurement_context,
+            )
+            if measurement_config
+            else None
+        )
+        if report:
+            settings = f"{report['device']}/{report['compute_type']} requested"
+            row["measurement"] = report
+            row["speed_note"] = (
+                f"{report['real_time_factor']:.3f}× real time; {settings}; "
+                f"fixture {report['fixture_sha256'][:8]} ({report['timestamp_utc'][:10]})"
+            )
+            scores = report.get("accuracy")
+            if isinstance(scores, dict) and type(scores.get("wer")) in (int, float):
+                row["accuracy_note"] = (
+                    f"{scores['wer']:.1%} WER on fixture {report['fixture_sha256'][:8]} only"
+                )
+            rss = report.get("sampled_peak_tree_rss_bytes")
+            if type(rss) is int and rss > 0:
+                row["memory_note"] += f"; sampled process-tree RSS {rss / 2**20:.0f} MiB"
     return rows
 
 

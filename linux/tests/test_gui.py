@@ -516,6 +516,53 @@ def test_dictionary_editor_preserves_imported_rule_id_when_editing(monkeypatch):
         window.close()
 
 
+@pytest.mark.parametrize("accept", [True, False])
+def test_backup_import_previews_before_applying_exact_reviewed_file(monkeypatch, accept):
+    import json
+    import time
+
+    from PySide6.QtWidgets import QApplication, QFileDialog, QMessageBox
+
+    from mouthkeys import gui, operations
+
+    monkeypatch.setattr(gui.Window, "poll", lambda self: None)
+    monkeypatch.setattr(QFileDialog, "getOpenFileName", lambda *a: ("chosen.json", ""))
+    report = {
+        "format": "upstream",
+        "counts": {"history": 2, "profiles": 1, "replacements": 3},
+        "warnings": ["Apple microphone IDs not imported"],
+        "file_sha256": "a" * 64,
+    }
+    monkeypatch.setattr(operations, "backup_preview", lambda path: report)
+    reviewed = []
+
+    def review(dialog):
+        reviewed.append(json.loads(dialog.detailedText()))
+        assert not dialog.isVisible()
+        return QMessageBox.StandardButton.Yes if accept else QMessageBox.StandardButton.No
+
+    monkeypatch.setattr(QMessageBox, "exec", review)
+    window = gui.Window()
+    window.timer.stop()
+    calls = []
+    monkeypatch.setattr(window, "send", lambda action, data, **kw: calls.append((action, data)))
+    try:
+        window.backup_action(True)
+        deadline = time.monotonic() + 2
+        while window.jobs and time.monotonic() < deadline:
+            QApplication.processEvents()
+            time.sleep(0.001)
+        assert not window.jobs
+        assert reviewed == [report]
+        assert calls == (
+            [("backup_import", {"path": "chosen.json", "expected_sha256": "a" * 64})]
+            if accept
+            else []
+        )
+    finally:
+        window.close()
+
+
 def test_queued_overlay_cancel_reaches_controller(monkeypatch):
     from PySide6.QtWidgets import QApplication
 

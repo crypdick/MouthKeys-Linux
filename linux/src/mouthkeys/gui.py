@@ -145,7 +145,7 @@ def setting_group(key):
         return "Microphone & media"
     if key == "file_history_limit":
         return "History & stats"
-    if key.startswith("learning_") or key in (
+    if key.startswith(("learning_", "pronunciation_")) or key in (
         "automatic_learning",
         "pronunciation_matching",
         "vocabulary_boosting",
@@ -445,6 +445,7 @@ class Window(QWidget):
             "ai_key_env": "AI API key environment variable",
             "ai_credential_source": "AI credential source",
             "destination_guard": "Automatic delivery destination checks",
+            "pronunciation_aligner_model": "Optional local Whisper pronunciation aligner",
             "ai_endpoint": "AI cleanup endpoint (full URL)",
             "spoken_send": "Spoken Send",
             "send_after_pause": "Send after a pause",
@@ -513,6 +514,12 @@ class Window(QWidget):
                 "unavailable. Window mode allows only weaker window continuity checks; "
                 "switching tabs or terminal panes inside that window cannot be detected. "
                 "Explicit Paste latest still pastes at current focus."
+            ),
+            "pronunciation_aligner_model": (
+                "Blank disables extra alignment. A complete already-cached Whisper model/path "
+                "can align engines without native word intervals for pronunciation matching. "
+                "No download; separate CPU/int8 model adds RAM and processing time. "
+                "Native word intervals remain preferred."
             ),
             "save_history": (
                 "Off removes completed attempts after delivery; failed raw text is"
@@ -1413,7 +1420,8 @@ class Window(QWidget):
         note = QLabel(
             "Back up settings, dictionary, and transcript history. API keys "
             "are excluded. Restore merges history by UUID; it does not delete "
-            "existing recordings. Audio exports are separate ZIP files."
+            "existing recordings. Import previews native and upstream backups, including "
+            "unsupported platform settings. Audio exports are separate ZIP files."
         )
         note.setWordWrap(True)
         layout.addWidget(note)
@@ -1446,29 +1454,57 @@ class Window(QWidget):
     def backup_action(self, importing):
         if importing:
             path, _ = QFileDialog.getOpenFileName(self, "Import backup", "", "JSON (*.json)")
-            if (
-                not path
-                or QMessageBox.question(
-                    self,
-                    "Restore backup",
-                    (
-                        "Replace settings and dictionary, and merge transcript history? "
-                        "Reopen Settings after restore."
-                    ),
-                )
-                != QMessageBox.StandardButton.Yes
-            ):
+            if not path:
                 return
+            from .assistant_ui import AssistantTask
+            from .operations import backup_preview
+
+            task = AssistantTask(lambda: backup_preview(path), self)
+            self.jobs.add(task)
+
+            def received(response):
+                if "error" in response:
+                    self.status.setText(response["error"])
+                    return
+                report = response["result"]
+                dialog = QMessageBox(self)
+                dialog.setWindowTitle("Review backup import")
+                counts = report.get("counts", {})
+                dialog.setText(
+                    f"{report['format'].capitalize()} backup: "
+                    f"{counts.get('history', 0)} transcripts, "
+                    f"{counts.get('profiles', 0)} profiles, "
+                    f"{counts.get('replacements', 0)} replacement rules."
+                )
+                warnings = report.get("warnings", [])
+                dialog.setInformativeText(
+                    f"{len(warnings)} migration warnings. "
+                    "Review details for settings changes and unsupported data before importing. "
+                    "History merges by UUID; existing recordings remain. Reopen Settings afterward."
+                )
+                dialog.setDetailedText(json.dumps(report, ensure_ascii=False, indent=2))
+                dialog.setStandardButtons(
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+                )
+                dialog.setDefaultButton(QMessageBox.StandardButton.No)
+                if dialog.exec() == QMessageBox.StandardButton.Yes:
+                    self.send(
+                        "backup_import",
+                        {"path": path, "expected_sha256": report["file_sha256"]},
+                        callback=self.operation_result,
+                    )
+
+            task.done.connect(received)
+            task.finished.connect(lambda: self.jobs.discard(task))
+            task.finished.connect(task.deleteLater)
+            task.start()
+            return
         else:
             path, _ = QFileDialog.getSaveFileName(
                 self, "Export backup", "mouthkeys-backup.json", "JSON (*.json)"
             )
         if path:
-            self.send(
-                "backup_import" if importing else "backup_export",
-                {"path": path},
-                callback=self.operation_result,
-            )
+            self.send("backup_export", {"path": path}, callback=self.operation_result)
 
     def export_all_audio(self):
         path, _ = QFileDialog.getSaveFileName(

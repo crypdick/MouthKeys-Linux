@@ -494,3 +494,103 @@ def test_prompted_native_file_strips_decoder_tags_from_text_and_word_times(monke
     assert calls == [("configure", True), ("prompt", "en-US"), ("strip_tags", True)]
     assert segments[0].text == "Hello."
     assert segments[0].words == [{"word": "Hello.", "start": 0.08, "end": 0.32}]
+
+
+@pytest.mark.parametrize("family", ["nemotron3_5_asr", "nemotron_asr_streaming"])
+def test_transformers_nemotron_preserves_native_durations_and_groups_word_intervals(
+    monkeypatch, tmp_path, family
+):
+    backend, config, processor, model, *_ = backend_fixture(monkeypatch, tmp_path, family)
+    durations = object()
+    generated = Tensor()
+    monkeypatch.setattr(
+        model, "generate", lambda **kw: SimpleNamespace(sequences=generated, durations=durations)
+    )
+    calls = []
+
+    def decode(sequence, **kwargs):
+        calls.append((sequence, kwargs))
+        return ["Native result."], [
+            [
+                {"token": "Nat", "start": 0.08, "end": 0.16},
+                {"token": "ive", "start": 0.16, "end": 0.24},
+                {"token": " result", "start": 0.32, "end": 0.4},
+                {"token": ".", "start": 0.4, "end": 0.48},
+            ]
+        ]
+
+    monkeypatch.setattr(processor, "decode", decode)
+    monkeypatch.setattr(native_asr, "speech_spans", lambda audio: [{"start": 8000, "end": 16000}])
+    segments = backend.segments(np.zeros(16000), replace(config, pronunciation_matching="on"))
+    assert calls == [(generated, {"skip_special_tokens": True, "durations": durations})]
+    assert segments[0].text == "Native result."
+    assert segments[0].words == [
+        {"word": "Native", "start": 0.58, "end": 0.74},
+        {"word": "result.", "start": 0.8200000000000001, "end": 0.98},
+    ]
+    assert backend.words == segments[0].words
+
+
+@pytest.mark.parametrize(
+    "text,tokens",
+    [
+        ("First second", [{"token": "First second", "start": 0.1, "end": 0.2}]),
+        ("First", [{"token": "Changed", "start": 0.1, "end": 0.2}]),
+        ("First", [{"token": "First", "start": -0.1, "end": 0.2}]),
+        ("First", [{"token": "First", "start": 0.2, "end": 0.1}]),
+        ("First", [{"token": "First", "start": float("nan"), "end": 0.2}]),
+        ("First", [{"token": "First", "start": True, "end": 0.2}]),
+        ("First", [{"token": "First", "start": 1.1, "end": 1.2}]),
+        ("First", [{"token": "First", "start": 0.1, "end": 100}]),
+        (
+            "First second",
+            [
+                {"token": "First", "start": 0.2, "end": 0.3},
+                {"token": " second", "start": 0.1, "end": 0.4},
+            ],
+        ),
+    ],
+)
+def test_native_token_timing_abstains_on_ambiguous_or_mismatched_metadata(text, tokens):
+    assert native_asr._native_token_words(text, tokens, duration=1) == []
+
+
+def test_native_token_timing_preserves_unicode_punctuation_and_clips_only_waveform_edge():
+    words = native_asr._native_token_words(
+        "Café! next",
+        [
+            {"token": "  Caf", "start": 0.1, "end": 0.2},
+            {"token": "é!", "start": 0.2, "end": 0.3},
+            {"token": " next", "start": 0.92, "end": 1.04},
+            {"token": "  ", "start": 0.92, "end": 1.04},
+        ],
+        duration=1,
+        offset=4,
+    )
+    assert words == [
+        {"word": "Café!", "start": 4.1, "end": 4.3},
+        {"word": "next", "start": 4.92, "end": 5},
+    ]
+
+
+def test_transformers_word_timing_opt_out_clears_previous_metadata(monkeypatch, tmp_path):
+    backend, config, processor, model, *_ = backend_fixture(
+        monkeypatch, tmp_path, "nemotron_asr_streaming"
+    )
+    monkeypatch.setattr(
+        model, "generate", lambda **kw: SimpleNamespace(sequences=Tensor(), durations=object())
+    )
+    calls = []
+
+    def decode(sequence, **kwargs):
+        calls.append(kwargs)
+        if "durations" in kwargs:
+            return ["Native"], [[{"token": "Native", "start": 0.08, "end": 0.16}]]
+        return ["Native"]
+
+    monkeypatch.setattr(processor, "decode", decode)
+    backend.segments(np.zeros(16000), replace(config, pronunciation_matching="on"))
+    assert backend.words == [{"word": "Native", "start": 0.08, "end": 0.16}]
+    segments = backend.segments(np.zeros(16000), replace(config, pronunciation_matching="off"))
+    assert calls[-1] == {"skip_special_tokens": True}
+    assert backend.words == segments[0].words == []

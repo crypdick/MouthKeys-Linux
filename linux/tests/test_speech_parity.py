@@ -74,7 +74,16 @@ def test_native_tdt_catalog_has_real_graphs_word_times_and_offline_encoder(model
     assert row["speed_note"] == "Not benchmarked on this hardware"
 
 
-def test_native_tdt_live_preview_uses_provisional_segments_not_streaming(monkeypatch, tmp_path):
+@pytest.mark.parametrize(
+    "engine,model",
+    [
+        ("nemo", "nvidia/parakeet-tdt-0.6b-v3"),
+        ("transformers", "nvidia/nemotron-speech-streaming-en-0.6b"),
+    ],
+)
+def test_offline_native_preview_preserves_word_times_without_cache_streaming(
+    monkeypatch, tmp_path, engine, model
+):
     path = tmp_path / "dictation.wav"
     with wave.open(str(path), "wb") as wav:
         wav.setnchannels(1)
@@ -83,8 +92,8 @@ def test_native_tdt_live_preview_uses_provisional_segments_not_streaming(monkeyp
         wav.writeframes(bytes(16000 * 4 * 2))
     config = replace(
         Config(),
-        engine="nemo",
-        model="nvidia/parakeet-tdt-0.6b-v3",
+        engine=engine,
+        model=model,
         native_streaming="on",
         pronunciation_matching="on",
     )

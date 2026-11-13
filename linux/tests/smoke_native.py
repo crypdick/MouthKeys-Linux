@@ -13,7 +13,8 @@ CPU-only development environment, without modifying the installed application::
     /tmp/mouthkeys-native-smoke-env/bin/python linux/tests/smoke_native.py \
         --build-tiny cohere --artifact /tmp/mouthkeys-tiny-cohere
     /tmp/mouthkeys-native-smoke-env/bin/python linux/tests/smoke_native.py \
-        --build-tiny nemo --artifact /tmp/mouthkeys-tiny-nemo --stream --word-times
+        --build-tiny nemo --artifact /tmp/mouthkeys-tiny-nemo --stream --word-times \
+        --vocabulary-word 'mouth keys'
     /tmp/mouthkeys-native-smoke-env/bin/python linux/tests/smoke_native.py \
         --engine nemo --artifact /absolute/path/model.nemo --stream --stream-repeat 3 \
         --word-times --expect-greeting --report /tmp/mouthkeys-native-acceptance.json
@@ -43,6 +44,8 @@ def build_tiny(family, path):
         raise ValueError("Tiny artifact destination already exists; choose an unused directory")
     if family == "nemo":
         return build_tiny_nemo(path)
+    if family == "nemotron":
+        return build_tiny_nemotron(path)
     import torch
     from tokenizers import Tokenizer, models, pre_tokenizers
     from transformers import PreTrainedTokenizerFast
@@ -169,6 +172,72 @@ def build_tiny(family, path):
     (path / "mouthkeys-smoke-artifact.json").write_text(json.dumps({"random_tiny_model": family}))
 
 
+def build_tiny_nemotron(path):
+    """Exercise real RNNT durations with a tiny model, not recognition accuracy."""
+    import torch
+    from tokenizers import Tokenizer, decoders, models, pre_tokenizers
+    from transformers import (
+        NemotronAsrStreamingConfig,
+        NemotronAsrStreamingEncoderConfig,
+        NemotronAsrStreamingFeatureExtractor,
+        NemotronAsrStreamingForRNNT,
+        NemotronAsrStreamingProcessor,
+        ParakeetTokenizer,
+    )
+
+    torch.manual_seed(1)
+    backend = Tokenizer(
+        models.WordLevel(
+            {"<pad>": 0, "<unk>": 1, "<blank>": 2, "hello": 3, "world": 4, "##s": 5},
+            unk_token="<unk>",
+        )
+    )
+    backend.pre_tokenizer = pre_tokenizers.Whitespace()
+    backend.decoder = decoders.WordPiece(prefix="##", cleanup=False)
+    tokenizer = ParakeetTokenizer(
+        tokenizer_object=backend,
+        pad_token="<pad>",
+        unk_token="<unk>",
+        additional_special_tokens=["<blank>"],
+    )
+    processor = NemotronAsrStreamingProcessor(
+        NemotronAsrStreamingFeatureExtractor(),
+        tokenizer,
+        default_num_lookahead_tokens=1,
+    )
+    config = NemotronAsrStreamingConfig(
+        encoder_config=NemotronAsrStreamingEncoderConfig(
+            hidden_size=16,
+            num_hidden_layers=1,
+            num_attention_heads=2,
+            intermediate_size=32,
+            subsampling_conv_channels=8,
+            conv_kernel_size=5,
+            sliding_window=9,
+            default_num_lookahead_tokens=1,
+        ),
+        vocab_size=len(tokenizer),
+        decoder_hidden_size=16,
+        num_decoder_layers=1,
+        max_symbols_per_step=1,
+        blank_token_id=2,
+        decoder_start_token_id=2,
+        pad_token_id=0,
+    )
+    model = NemotronAsrStreamingForRNNT(config)
+    # Ensure the smoke exercises nonblank native intervals rather than passing
+    # on empty random-model output. The fixed test head is not learned speech.
+    with torch.no_grad():
+        model.joint.head.weight.zero_()
+        model.joint.head.bias.fill_(-10)
+        model.joint.head.bias[3] = 10
+    model.save_pretrained(path)
+    processor.save_pretrained(path)
+    (path / "mouthkeys-smoke-artifact.json").write_text(
+        json.dumps({"random_tiny_model": "nemotron", "constant_test_head": "hello"})
+    )
+
+
 def build_tiny_nemo(path):
     import sentencepiece as spm
     import torch
@@ -283,7 +352,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--artifact", type=Path, required=True)
     parser.add_argument("--engine", choices=("transformers", "nemo"), default="transformers")
-    parser.add_argument("--build-tiny", choices=("qwen", "cohere", "nemo"))
+    parser.add_argument("--build-tiny", choices=("qwen", "cohere", "nemotron", "nemo"))
     parser.add_argument(
         "--fixture", type=Path, default=Path(__file__).parent / "resources/dictation_fixture.wav"
     )
@@ -293,7 +362,13 @@ def main():
     parser.add_argument("--native-timeout", type=int, help="Override the configured worker timeout")
     parser.add_argument("--revision", default="main", help="Record the local artifact revision")
     parser.add_argument(
-        "--word-times", action="store_true", help="Request authoritative NeMo word alignment"
+        "--word-times", action="store_true", help="Request actual native word-alignment metadata"
+    )
+    parser.add_argument(
+        "--vocabulary-word",
+        action="append",
+        default=[],
+        help="Exercise NeMo's actual weighted context graph with this term (repeatable)",
     )
     parser.add_argument("--report", type=Path, help="Write a summary without recognized text")
     args = parser.parse_args()
@@ -310,10 +385,10 @@ def main():
     isolate_network()
     if args.build_tiny == "nemo":
         args.engine = "nemo"
-    if args.word_times and args.engine != "nemo":
-        raise ValueError("Native word alignment smoke requires --engine nemo")
     if args.stream and args.engine != "nemo":
         raise ValueError("Native cache-aware streaming smoke requires --engine nemo")
+    if args.vocabulary_word and args.engine != "nemo":
+        raise ValueError("Weighted vocabulary smoke requires --engine nemo")
     if args.stream_repeat > 1 and not args.stream:
         raise ValueError("Repeated input requires --stream")
     from mouthkeys.audio import read_audio_from
@@ -340,6 +415,12 @@ def main():
             os.environ[key] = str(directory)
         if args.build_tiny:
             build_tiny(args.build_tiny, args.artifact)
+        if args.vocabulary_word:
+            from mouthkeys.vocabulary import VocabularyStore
+
+            VocabularyStore.save_entries(
+                [{"text": word, "weight": 8, "aliases": []} for word in args.vocabulary_word]
+            )
         defaults = Config()
         is_tiny = (args.artifact / "mouthkeys-smoke-artifact.json").is_file()
         config = replace(
@@ -356,6 +437,7 @@ def main():
                 else defaults.native_timeout_seconds
             ),
             pronunciation_matching="on" if args.word_times else "off",
+            vocabulary_boosting="on" if args.vocabulary_word else "off",
         ).validate()
         load_started = time.monotonic()
         worker = NativeWorkerBackend(config)
@@ -447,6 +529,7 @@ def main():
             "versions": versions,
             "network": "AF_INET/AF_INET6 denied by seccomp",
             "word_times": args.word_times,
+            "native_vocabulary_terms": len(args.vocabulary_word),
             "stream_repeat": args.stream_repeat,
             "expected_greeting_counts": greetings,
             "word_counts": word_counts,

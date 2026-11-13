@@ -153,6 +153,9 @@ try:
         "credentials",
         "data_lock",
         "dictionary_transfer",
+        "benchmark",
+        "forced_alignment",
+        "upstream_backup",
     ):
         __import__("mouthkeys." + module)
     assets = Path(mouthkeys.__file__).parent / "assets/sounds"

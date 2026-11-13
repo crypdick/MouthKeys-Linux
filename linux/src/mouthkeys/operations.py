@@ -158,18 +158,14 @@ def backup_export(history, path):
     )
 
 
-def backup_import(history, path):
+def _prepare_backup(data):
     from .dictionary import Dictionary
     from .file_history import FileHistory
-    from .profiles import load_profiles, save_profiles, validate_profiles
+    from .profiles import load_profiles, validate_profiles
     from .pronunciation import PronunciationStore
-    from .routing import load_routes, save_routes, validate_routes
+    from .routing import load_routes, validate_routes
     from .vocabulary import VocabularyStore
 
-    path = Path(path)
-    if path.stat().st_size > 100 * 1024 * 1024:
-        raise ValueError("Backup exceeds 100 MiB")
-    data = json.loads(path.read_text())
     if data.get("version") != 1:
         raise ValueError("Unsupported backup version")
     try:
@@ -194,6 +190,7 @@ def backup_import(history, path):
         "window",
         "was_ai_processed",
         "ai_processing_error",
+        "ai_processing_model",
     }
     for row in rows:
         if (
@@ -212,7 +209,13 @@ def backup_import(history, path):
             datetime.fromtimestamp(row["created"])
         except (ValueError, OverflowError, OSError):
             raise ValueError("History timestamp is out of range") from None
-        for name in fields - {"created", "duration", "was_ai_processed", "ai_processing_error"}:
+        for name in fields - {
+            "created",
+            "duration",
+            "was_ai_processed",
+            "ai_processing_error",
+            "ai_processing_model",
+        }:
             if name in row and not isinstance(row[name], str):
                 raise ValueError("Invalid history text")
         if row.get("was_ai_processed") is not None and (
@@ -224,6 +227,10 @@ def backup_import(history, path):
             row["ai_processing_error"], str
         ):
             raise ValueError("Invalid history AI error")
+        if row.get("ai_processing_model") is not None and not isinstance(
+            row["ai_processing_model"], str
+        ):
+            raise ValueError("Invalid history AI model")
         if "duration" in row and (
             type(row["duration"]) not in (int, float)
             or not math.isfinite(row["duration"])
@@ -260,6 +267,65 @@ def backup_import(history, path):
     for selection in (config.edit_profile, config.command_profile):
         if selection not in {"default", "off", *(profile["id"] for profile in profiles)}:
             raise ValueError("Backup selects a missing mode profile")
+    return {
+        "config": config,
+        "dictionary": dictionary,
+        "profiles": profiles,
+        "rows": rows,
+        "file_rows": file_rows,
+        "assistant_rows": assistant_rows,
+        "routes": routes,
+        "vocabulary": vocabulary,
+        "pronunciations": pronunciations,
+    }
+
+
+def _read_import(path, app_map, expected_sha256=None):
+    from .upstream_backup import load_upstream_backup, read_backup
+
+    data, digest = read_backup(path, with_digest=True)
+    if expected_sha256 is not None and expected_sha256 != digest:
+        raise ValueError("Backup changed since preview; preview it again")
+    if "schemaVersion" in data:
+        converted, report = load_upstream_backup(path, app_map=app_map, document=data)
+        return converted, {**report, "file_sha256": digest}, digest
+    return data, None, digest
+
+
+def backup_preview(path, *, app_map=None):
+    # Preview only validates files/snapshots; never construct history databases.
+    data, report, digest = _read_import(path, app_map)
+    prepared = _prepare_backup(data)
+    if report is not None:
+        return report
+    return {
+        "format": "native",
+        "counts": {
+            "history": len(prepared["rows"]),
+            "profiles": len(data.get("profiles", [])),
+            "routes": len(prepared["routes"]),
+            "replacements": len(prepared["dictionary"]["replacements"]),
+        },
+        "changes": data["config"],
+        "warnings": [],
+        "unmapped": {},
+        "file_sha256": digest,
+    }
+
+
+def backup_import(history, path, *, app_map=None, expected_sha256=None):
+    from .assistant_history import AssistantHistory
+    from .dictionary import Dictionary
+    from .file_history import FileHistory
+    from .profiles import save_profiles
+    from .pronunciation import PronunciationStore
+    from .routing import save_routes
+    from .vocabulary import VocabularyStore
+
+    data, migration, _ = _read_import(path, app_map, expected_sha256)
+    prepared = _prepare_backup(data)
+    config = prepared["config"]
+    rows = prepared["rows"]
     # Merge by UUID, never delete existing recordings or entries during restore.
     with history.connect() as connection:
         for row in rows:
@@ -269,20 +335,26 @@ def backup_import(history, path):
                 f"INSERT OR REPLACE INTO history ({','.join(names)}) VALUES ({placeholders})",
                 list(row.values()),
             )
-    Dictionary.save(dictionary)
-    save_profiles(profiles)
-    save_routes(routes)
+    Dictionary.save(prepared["dictionary"])
+    save_profiles(prepared["profiles"])
+    save_routes(prepared["routes"])
     config.save()
-    from .cli import apply_startup
+    if migration is None:
+        from .cli import apply_startup
 
-    apply_startup(config)
-    FileHistory().restore(file_rows)
-    AssistantHistory().restore(assistant_rows)
-    if vocabulary is not None:
-        VocabularyStore.save_entries(vocabulary)
-    if pronunciations is not None:
-        PronunciationStore.save(pronunciations)
-    return {"imported": len(rows), "mode": "merge"}
+        apply_startup(config)
+    if "file_history" in data:
+        FileHistory().restore(prepared["file_rows"])
+    if "assistant_history" in data:
+        AssistantHistory().restore(prepared["assistant_rows"])
+    if prepared["vocabulary"] is not None:
+        VocabularyStore.save_entries(prepared["vocabulary"])
+    if prepared["pronunciations"] is not None:
+        PronunciationStore.save(prepared["pronunciations"])
+    result = {"imported": len(rows), "mode": "merge"}
+    if migration is not None:
+        result["migration"] = migration
+    return result
 
 
 def handle_action(history, action, data, allow_mutation=True):
@@ -296,6 +368,8 @@ def handle_action(history, action, data, allow_mutation=True):
         return statistics(history)
     if action == "audio_usage":
         return history.audio_usage()
+    if action == "backup_preview":
+        return backup_preview(data["path"], app_map=data.get("app_map"))
     if action not in {"delete", "delete_audio", "export_audio", "backup_export", "backup_import"}:
         return NotImplemented
     if not allow_mutation:
@@ -311,4 +385,9 @@ def handle_action(history, action, data, allow_mutation=True):
         return export_audio(history, data["path"], data.get("id"))
     if action == "backup_export":
         return backup_export(history, data["path"])
-    return backup_import(history, data["path"])
+    return backup_import(
+        history,
+        data["path"],
+        app_map=data.get("app_map"),
+        expected_sha256=data.get("expected_sha256"),
+    )

@@ -19,9 +19,11 @@ import os
 import tempfile
 import time
 import wave
+from dataclasses import replace
 from datetime import UTC, datetime
 from importlib.metadata import version
 from pathlib import Path
+from types import SimpleNamespace
 
 from mouthkeys.config import Config
 from mouthkeys.engines import resolve_whisper
@@ -37,6 +39,11 @@ def main(argv=None):
     parser.add_argument("--word-times", action="store_true")
     parser.add_argument("--stream", action="store_true")
     parser.add_argument("--file-workflow", action="store_true")
+    parser.add_argument(
+        "--force-align",
+        action="store_true",
+        help="Also verify real cached-Whisper DTW fallback on exact recognized fixture text",
+    )
     parser.add_argument("--report", type=Path)
     args = parser.parse_args(argv)
     os.environ["HF_HUB_OFFLINE"] = "1"
@@ -53,7 +60,7 @@ def main(argv=None):
         config = Config(
             model=str(model),
             compute_type=args.compute_type,
-            pronunciation_matching="on" if args.word_times else "off",
+            pronunciation_matching="on" if args.word_times or args.force_align else "off",
         )
         transcriber = Transcriber()
         text = transcriber.transcribe(fixture, config)
@@ -65,6 +72,29 @@ def main(argv=None):
         words = align_words(text, transcriber.words, duration=duration) if args.word_times else []
         if args.word_times:
             assert words, "No real word timing returned"
+        forced_words = []
+        if args.force_align:
+            from faster_whisper.audio import decode_audio
+
+            from mouthkeys.forced_alignment import WhisperForcedAligner
+
+            aligner = WhisperForcedAligner()
+            try:
+                aligned, warning = aligner.align(
+                    decode_audio(str(fixture), sampling_rate=16000),
+                    [SimpleNamespace(start=0, end=duration, text=text)],
+                    replace(config, pronunciation_aligner_model=str(model)),
+                )
+                assert not warning, warning
+                forced_words = [vars(word) for word in aligned[0].words]
+                assert align_words(text, forced_words, duration=duration), (
+                    "No exact forced alignment"
+                )
+                assert all(
+                    word["alignment_source"].startswith("whisper-forced:") for word in forced_words
+                )
+            finally:
+                aligner.clear()
         committed = 0
         if args.stream:
             recording = Path(directory) / "repeated-fixture.wav"
@@ -109,6 +139,7 @@ def main(argv=None):
             "fixture_sha256": hashlib.sha256(fixture.read_bytes()).hexdigest(),
             "expected_greeting": True,
             "actual_word_count": len(words),
+            "forced_alignment_word_count": len(forced_words),
             "committed_stream_segments": committed,
             "file_workflow_stages": [event["stage"] for event in stages],
             "elapsed_seconds": round(time.monotonic() - started, 3),

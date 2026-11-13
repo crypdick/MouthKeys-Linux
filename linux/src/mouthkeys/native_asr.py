@@ -301,6 +301,68 @@ def _strip_decoder_prompt(generated, prompt):
     raise ValueError("Speech decoder returned an unexpected conditioning prefix")
 
 
+def _native_token_words(text, tokens, duration, offset=0):
+    """Group exact native emission intervals; never split one token's interval.
+
+    Transformers 5.22.2 Nemotron processors decode generated ``durations`` into
+    seconds for emitted token chunks (processing_nemotron*_asr*.py ``decode``).
+    Source: huggingface/transformers@v5.22.2, models/nemotron_asr_streaming.
+    A word spans
+    its first/last native token frames, as in NeMo; this is model alignment, not
+    measured acoustic word boundaries. Incomplete/ambiguous renderings abstain.
+    """
+    from .word_alignment import align_words
+
+    if not isinstance(tokens, list) or len(tokens) > 10000:
+        return []
+    parts, ranges, cursor, previous_start, previous_end = [], [], 0, 0.0, 0.0
+    for token in tokens:
+        if not isinstance(token, dict) or not isinstance(token.get("token"), str):
+            return []
+        chunk = token["token"]
+        start, end = token.get("start"), token.get("end")
+        if (
+            type(start) not in (int, float)
+            or type(end) not in (int, float)
+            or not math.isfinite(start)
+            or not math.isfinite(end)
+            or not 0 <= start <= end
+            or start < previous_start
+            or end < previous_end
+            or end > duration + 0.08  # At most one native 80 ms encoder frame at the waveform edge.
+            or len(chunk) > 1000
+            or len(re.findall(r"\S+", chunk)) > 1
+        ):
+            return []
+        parts.append(chunk)
+        ranges.append((cursor, cursor + len(chunk), float(start), min(float(end), duration)))
+        cursor += len(chunk)
+        previous_start, previous_end = float(start), float(end)
+    raw = "".join(parts)
+    if raw.strip() != text:
+        return []
+    words, index = [], 0
+    for word in re.finditer(r"\S+", raw):
+        while index < len(ranges) and ranges[index][1] <= word.start():
+            index += 1
+        first = index
+        while index < len(ranges) and ranges[index][0] < word.end():
+            index += 1
+        if first == index:
+            return []
+        start, end = ranges[first][2], ranges[index - 1][3]
+        if start > end:
+            return []
+        words.append({"word": word[0], "start": start, "end": end})
+    try:
+        align_words(text, words, duration=duration)
+    except ValueError:
+        return []
+    return [
+        {**word, "start": word["start"] + offset, "end": word["end"] + offset} for word in words
+    ]
+
+
 class TransformersBackend:
     def __init__(self, config):
         path = local_artifact(config)
@@ -338,6 +400,7 @@ class TransformersBackend:
         if self.family == "cohere_asr" and config.language == "auto":
             raise ValueError("Cohere Transcribe requires an explicit language")
         output = []
+        self.words = []
         spans = [{"start": 0, "end": len(samples)}] if presegmented else speech_spans(samples)
         for span in spans:
             audio = samples[span["start"] : span["end"]]
@@ -367,21 +430,43 @@ class TransformersBackend:
             inputs = inputs.to(self.model.device, dtype=self.model.dtype)
             with self.torch.inference_mode():
                 generated = self.model.generate(**inputs, max_new_tokens=config.asr_max_tokens)
+            durations = getattr(generated, "durations", None)
             generated = getattr(generated, "sequences", generated)
+            token_times = None
             if self.family == "qwen3_asr":
                 generated = generated[:, inputs["input_ids"].shape[1] :]
                 text = self.processor.decode(generated, return_format="transcription_only")
             else:
                 if self.family == "cohere_asr" and "decoder_input_ids" in inputs:
                     generated = _strip_decoder_prompt(generated, inputs["decoder_input_ids"])
-                text = self.processor.decode(generated, skip_special_tokens=True)
+                timed = (
+                    self.family in ("nemotron3_5_asr", "nemotron_asr_streaming")
+                    and config.pronunciation_matching == "on"
+                    and durations is not None
+                )
+                decoded = self.processor.decode(
+                    generated,
+                    skip_special_tokens=True,
+                    **({"durations": durations} if timed else {}),
+                )
+                if timed:
+                    text, token_times = decoded
+                else:
+                    text = decoded
             text = _text(text)
+            words = (
+                _native_token_words(text, token_times[0], len(audio) / 16000, span["start"] / 16000)
+                if isinstance(token_times, list) and len(token_times) == 1
+                else []
+            )
+            self.words.extend(words)
             if text:
                 output.append(
                     SimpleNamespace(
                         start=span["start"] / 16000,
                         end=span["end"] / 16000,
                         text=text,
+                        words=words,
                     )
                 )
         return output

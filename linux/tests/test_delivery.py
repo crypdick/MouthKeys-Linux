@@ -7,6 +7,16 @@ from mouthkeys import delivery
 from mouthkeys.config import Config
 
 
+def test_x11_auto_paste_reports_missing_default_backend(monkeypatch):
+    monkeypatch.setattr(delivery, "session", lambda: "x11")
+    monkeypatch.setattr(delivery.shutil, "which", lambda _: None)
+    config = Config(delivery="x11")
+    assert "xdotool not found" in delivery.automatic_delivery_warning(config)
+    assert delivery.automatic_delivery_warning(Config()) is None
+    monkeypatch.setattr(delivery.shutil, "which", lambda name: f"/fake/{name}")
+    assert delivery.automatic_delivery_warning(config) is None
+
+
 @pytest.mark.parametrize("desktop,target", [("x11", "10"), ("wayland", "sway:42")])
 def test_default_guard_never_delivers_or_sends_to_window_only_identity(
     monkeypatch, desktop, target

@@ -163,6 +163,19 @@ def test_config_cli_and_doctor(capsys):
     assert main(["config", "max_seconds", "zero"]) == 1
 
 
+def test_x11_auto_paste_warns_on_wayland_even_with_display(monkeypatch, capsys):
+    monkeypatch.setenv("DISPLAY", ":0")
+    monkeypatch.setenv("WAYLAND_DISPLAY", "wayland-0")
+    assert main(["config", "delivery", "x11"]) == 0
+    output = capsys.readouterr()
+    assert json.loads(output.out)["delivery"] == "x11"
+    assert "needs an X11 login session" in output.err
+    assert main(["doctor"]) == 1
+    result = json.loads(capsys.readouterr().out)
+    assert result["session"] == "wayland"
+    assert "needs an X11 login session" in result["delivery_warning"]
+
+
 def test_desktop_installer_uses_absolute_executable_and_no_autostart_by_default():
     assert main(["install-desktop"]) == 0
     entry = Path(os.environ["XDG_DATA_HOME"]) / "applications/mouthkeys.desktop"

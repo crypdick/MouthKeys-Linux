@@ -90,6 +90,7 @@ def test_dictation_persists_before_delivery_and_keeps_latest_audio(controller):
     controller.command("toggle")
     finish(controller)
     assert controller.history.rows()[0]["status"] == "copied"
+    assert controller.status()["notice"] is None
     assert controller.history.recording(first).exists()
     second = controller.command("start")["id"]
     controller.command("stop")
@@ -97,6 +98,26 @@ def test_dictation_persists_before_delivery_and_keeps_latest_audio(controller):
     assert not controller.history.recording(first).exists()
     assert controller.history.recording(second).exists()
     assert len(controller.history.rows()) == 2
+
+
+@pytest.mark.parametrize(
+    "desktop,expected",
+    [("wayland", "needs an X11 login session"), ("x11", "identify the focused field")],
+)
+def test_auto_paste_fallback_explains_why(controller, monkeypatch, desktop, expected):
+    from mouthkeys import delivery
+
+    monkeypatch.setattr(delivery, "session", lambda: desktop)
+    monkeypatch.setattr(delivery.shutil, "which", lambda name: f"/fake/{name}")
+    Config(delivery="x11").save()
+    controller.command("start")
+    controller.command("stop")
+    finish(controller)
+    status = controller.status()
+    assert status["notice"]["kind"] == "paste"
+    assert expected in status["notice"]["message"]
+    assert expected in status["message"]
+    assert controller.history.rows()[0]["status"] == "copied"
 
 
 def test_cancel_recording_stops_capture_without_delivery(controller):

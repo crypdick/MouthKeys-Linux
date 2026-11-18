@@ -18,7 +18,7 @@ from . import __version__
 from .accessibility import read_snapshot
 from .audio import CaptureSession, CaptureTeardownError, check_audio, live_meter
 from .config import Config, private_dir, runtime_dir, state_dir
-from .delivery import Delivery
+from .delivery import Delivery, automatic_delivery_warning
 from .desktop import MediaSession, choose_source, play_sound, source_candidates
 from .formatting import enabled, format_text, parse_send
 from .learning import CorrectionLearner
@@ -908,8 +908,9 @@ class Controller:
         self.worker.start()
 
     def _stopped(self, job, recorder, target, focus_gate):
+        auto_paste_expected = target == "capture-focus"
         try:
-            if target == "capture-focus":
+            if auto_paste_expected:
                 try:
                     if job.config.target_policy == "start" or job.config.return_to_start == "on":
                         target = job.start_target
@@ -990,7 +991,7 @@ class Controller:
                 self._update(job, "transcribing")
         if focus_gate and not focus_gate["valid"]:
             target = None
-        self._finish(job, target)
+        self._finish(job, target, auto_paste_expected=auto_paste_expected)
 
     def _manual_delivery(self, action, data):
         with self.lock:
@@ -1197,7 +1198,7 @@ class Controller:
         self.worker = threading.Thread(target=self._finish, args=(job, target), daemon=True)
         self.worker.start()
 
-    def _finish(self, job, target):
+    def _finish(self, job, target, *, auto_paste_expected=False):
         text = ""
         alignment = None
         pronunciation_warning = ""
@@ -1425,6 +1426,19 @@ class Controller:
                 )
                 self._job_status(job, "delivering", "Delivering transcript")
             result = self.delivery.deliver(text, config, target) if text else "transcribed"
+            paste_warning = None
+            if result == "copied" and auto_paste_expected:
+                paste_warning = automatic_delivery_warning(config)
+                if not paste_warning:
+                    if not target:
+                        paste_warning = "No destination was captured."
+                    elif config.destination_guard == "field" and not isinstance(target, dict):
+                        paste_warning = (
+                            "Could not identify the focused field. To allow window-only checks, "
+                            "change Automatic delivery destination checks in Text delivery."
+                        )
+                    else:
+                        paste_warning = "Could not verify the original destination was unchanged."
             if plan.should_send and text and result == "copied":
                 send_warning = "Spoken Send skipped: text copied; insertion destination unavailable"
             if result == "pasted" and enabled(config, "automatic_learning"):
@@ -1488,6 +1502,10 @@ class Controller:
                         else "Insertion requested — history disabled"
                     )
                 )
+                if paste_warning:
+                    message = f"Copied — auto-paste skipped. {paste_warning}"
+                    if self.job is job and not ai_warning:
+                        self.report_error(message, kind="paste")
                 if ai_warning:
                     message += f". {ai_warning}"
                 if pronunciation_warning:

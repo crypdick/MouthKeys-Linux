@@ -367,7 +367,10 @@ class Overlay(QWidget):
         if notice and notice["serial"] != self.notice_serial:
             self.notice_serial = notice["serial"]
             if time.time() - notice["at"] < 10:
-                self.notice = (notice["message"], time.monotonic() + 10)
+                message = notice["message"]
+                if notice.get("kind") == "paste" and config.overlay_style == "compact":
+                    message = "Auto-paste skipped. Text copied."
+                self.notice = (message, time.monotonic() + 10)
                 self.dismiss_at = self.notice[1]
                 if not self.positioned:
                     self.place()

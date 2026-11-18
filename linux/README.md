@@ -155,6 +155,12 @@ captures the destination at explicit stop; `target_policy=start` captures at rec
 Without that setting, the application never activates another window. Changed or unidentifiable
 destinations fall back to copy.
 
+**App Settings → Text delivery** shows the detected session and warns about incompatible choices
+or missing paste tools. `mouthkeys doctor` reports the same checks; a `DISPLAY` set by XWayland
+does not make Wayland an X11 session. If automatic paste falls back to copy, the recording panel
+shows a notice. See `mouthkeys status` for the reason on compact panels. Choose the paste shortcut
+your destination uses.
+
 `destination_guard=field` (default, including existing configurations without this setting)
 requires an identifiable field/pane for automatic insertion and Spoken Send. A window ID alone
 cannot detect a switch between tabs, terminal panes, or fields, so text is copied instead.
@@ -184,7 +190,8 @@ X11 example:
 
 ```sh
 mouthkeys config delivery x11
-mouthkeys config paste_shortcut ctrl+v   # ctrl+shift+v remains the terminal-oriented default
+mouthkeys config paste_shortcut ctrl+v   # Keep ctrl+shift+v for Ghostty and most terminals
+mouthkeys doctor                        # Check session and paste tool
 ```
 
 Wayland clipboard paste needs an existing compatible virtual-key backend:

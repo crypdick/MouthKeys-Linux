@@ -249,7 +249,13 @@ def main(argv=None):
                 if args.value is None:
                     parser.error("config KEY requires VALUE")
                 config[args.key] = int(args.value) if args.key in RANGES else args.value
-                Config(**config).save()
+                updated = Config(**config)
+                updated.save()
+                if args.key in ("delivery", "paste_backend", "insertion_mode"):
+                    from .delivery import automatic_delivery_warning
+
+                    if warning := automatic_delivery_warning(updated):
+                        print(f"Warning: {warning}", file=sys.stderr)
                 if args.key in ("launch_at_startup", "show_window_at_login", "tray"):
                     apply_startup(Config.load())
             elif args.value:
@@ -370,7 +376,11 @@ def main(argv=None):
 
             result = doctor(Config.load())
             print(json.dumps(result, indent=2))
-            return int(result["session"] == "headless" or not all(result["commands"].values()))
+            return int(
+                result["session"] == "headless"
+                or bool(result["delivery_warning"])
+                or not all(result["commands"].values())
+            )
         elif args.command == "install-desktop":
             if args.autostart:
                 replace(Config.load(), launch_at_startup="on").save()

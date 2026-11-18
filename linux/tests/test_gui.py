@@ -150,6 +150,13 @@ def test_settings_show_app_and_running_service_versions(monkeypatch):
     window.nav.setCurrentRow(1)
     assert window.app_version.text() == current
     assert window.service_version.text() == current
+    monkeypatch.setenv("DISPLAY", ":0")
+    monkeypatch.setenv("WAYLAND_DISPLAY", "wayland-0")
+    combo = window.fields["delivery"]
+    combo.setCurrentIndex(combo.findData("x11"))
+    assert "X11 auto-paste needs an X11 login session" in window.delivery_hint.text()
+    combo.setCurrentIndex(combo.findData("clipboard"))
+    assert "Dictation copies text" in window.delivery_hint.text()
     status["version"] = "0.0.1"
     window.poll()
     assert window.service_version.text() == "0.0.1 — restart MouthKeys after updating"

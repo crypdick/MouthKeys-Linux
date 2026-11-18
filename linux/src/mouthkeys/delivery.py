@@ -43,6 +43,33 @@ def session():
     return "x11" if os.environ.get("DISPLAY") else "headless"
 
 
+def automatic_delivery_warning(config: Config):
+    """Check configuration and tools without probing focus or sending input."""
+    if config.delivery == "clipboard":
+        return None
+    desktop = session()
+    if config.delivery != desktop:
+        if config.delivery == "x11" and desktop == "wayland":
+            return (
+                "X11 auto-paste needs an X11 login session; this session is Wayland "
+                "(even if DISPLAY is set). Choose Wayland auto-paste or Clipboard only."
+            )
+        return (
+            f"Delivery is set to {config.delivery}, but the detected session is {desktop}. "
+            "Choose delivery for your desktop session or Clipboard only."
+        )
+    backend = config.paste_backend
+    if desktop == "x11" and backend == "auto":
+        backend = "xdotool"
+    if desktop == "wayland" and backend in ("auto", "xdotool"):
+        return "Wayland paste keys need a compatible wtype or configured ydotool backend."
+    if not shutil.which(backend):
+        return f"Paste backend {backend} not found. Install it or choose another backend."
+    if desktop == "x11" and backend != "xdotool" and not shutil.which("xdotool"):
+        return "Install xdotool for X11 window detection and focus checks."
+    return None
+
+
 def run(args, **kwargs):
     try:
         return subprocess.run(args, check=True, timeout=3, capture_output=True, **kwargs)
@@ -622,4 +649,5 @@ def doctor(config: Config):
         "audio_source": config.audio_source,
         "model": config.model,
         "delivery": config.delivery,
+        "delivery_warning": automatic_delivery_warning(config),
     }

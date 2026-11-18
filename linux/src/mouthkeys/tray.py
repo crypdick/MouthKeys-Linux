@@ -181,6 +181,8 @@ class Tray(QSystemTrayIcon):
                         "Destination acceptance cannot be verified. "
                         "Transcript remains available in History.",
                     )
+                elif notice.get("kind") == "paste":
+                    self.showMessage("Manual paste needed", notice["message"])
                 elif message.startswith("Copied") and config.delivery != "clipboard":
                     self.showMessage(
                         "Manual paste needed",

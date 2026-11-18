@@ -34,6 +34,7 @@ from PySide6.QtWidgets import (
 
 from . import __version__
 from .config import CHOICES, RANGES, Config, config_path, state_dir
+from .delivery import automatic_delivery_warning, session
 from .processes import python_command
 from .service import ensure_daemon, ensure_overlay, request
 
@@ -410,13 +411,20 @@ class Window(QWidget):
             "audio_source": audio_sources(),
             "device": ["cpu", "cuda", "auto"],
             "recording_panel": [("Show panel", "on"), ("Hide panel", "off")],
-            "delivery": ["clipboard", "x11", "wayland"],
+            "delivery": [
+                ("Clipboard only", "clipboard"),
+                ("X11 auto-paste", "x11"),
+                ("Wayland auto-paste", "wayland"),
+            ],
             "destination_guard": [
                 ("Field / pane identity (recommended)", "field"),
                 ("Window only (cannot detect tab / pane switches)", "window"),
             ],
             "paste_backend": ["auto", "xdotool", "wtype", "ydotool"],
-            "paste_shortcut": ["ctrl+shift+v", "ctrl+v"],
+            "paste_shortcut": [
+                ("Ctrl+Shift+V (Ghostty / most terminals)", "ctrl+shift+v"),
+                ("Ctrl+V (most editors)", "ctrl+v"),
+            ],
             "sound_preset": [
                 ("Custom files", "custom"),
                 ("None", "none"),
@@ -493,10 +501,6 @@ class Window(QWidget):
                 "Opt-in: send configured key only after automatic insertion into "
                 "an unchanged X11 destination."
             ),
-            "delivery": (
-                "Wayland auto-paste requires Sway/Hyprland focus checks and wtype/ydotool; "
-                "compositor support varies."
-            ),
             "ai_enabled": (
                 "When on, recorded transcript is sent to the configured local or "
                 "remote AI endpoint."
@@ -565,12 +569,20 @@ class Window(QWidget):
             self.fields[key] = field
             self.settings_rows.append((form.rowCount(), setting_group(key)))
             form.addRow(labels.get(key, key.replace("_", " ").capitalize()), field)
-            if key in help_text:
+            if key == "delivery":
+                self.delivery_hint = QLabel()
+                self.delivery_hint.setWordWrap(True)
+                self.settings_rows.append((form.rowCount(), setting_group(key)))
+                form.addRow("", self.delivery_hint)
+            elif key in help_text:
                 field.setToolTip(help_text[key])
                 hint = QLabel(help_text[key])
                 hint.setWordWrap(True)
                 self.settings_rows.append((form.rowCount(), setting_group(key)))
                 form.addRow("", hint)
+        for key in ("delivery", "paste_backend", "insertion_mode"):
+            self.fields[key].currentIndexChanged.connect(self.refresh_delivery_hint)
+        self.refresh_delivery_hint()
         from .regional_ui import RegionalFillerBanner
 
         self.regional_banner = RegionalFillerBanner(self, on_change=self.refresh_regional_offers)
@@ -2039,6 +2051,25 @@ class Window(QWidget):
             == QMessageBox.StandardButton.Yes
         ):
             self.send("clear")
+
+    def refresh_delivery_hint(self):
+        config = Config(
+            **{
+                key: field_value(self.fields[key])
+                for key in ("delivery", "paste_backend", "insertion_mode")
+            },
+        )
+        warning = automatic_delivery_warning(config)
+        message = (
+            "Dictation copies text. Paste manually in the destination."
+            if config.delivery == "clipboard"
+            else "Auto-paste requires an unchanged destination. Otherwise, text is copied."
+        )
+        if warning:
+            message = f"{warning} Clipboard fallback stays available."
+            if config.insertion_mode == "direct" and config.delivery == session():
+                message += " Direct insertion may still work in supported fields."
+        self.delivery_hint.setText(f"Detected session: {session()}. {message}")
 
     def save(self):
         try:

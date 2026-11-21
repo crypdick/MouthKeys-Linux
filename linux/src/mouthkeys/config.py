@@ -3,6 +3,9 @@ import os
 import re
 from dataclasses import asdict, dataclass
 from pathlib import Path
+from typing import Self
+
+from beartype.roar import BeartypeCallHintParamViolation
 
 
 def private_dir(path: Path) -> Path:
@@ -91,7 +94,7 @@ class Config:
     weekends_break_streak: str = "on"
     api_enabled: str = "off"
     api_port: int = 47733
-    api_token_env: str = "MOUTHKEYS_API_TOKEN"
+    api_token_env: str = "MOUTHKEYS_API_TOKEN"  # noqa: S105
     file_speaker_labels: str = "off"
     file_speaker_count: int = 0
     ai_provider: str = "compatible"
@@ -156,12 +159,12 @@ class Config:
     regional_filler_answered: str = "off"
     pronunciation_span_budget: int = 2000
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if self.destination_guard == "window":
             # Saved settings, backups, and CLI scripts may still use the old name.
             object.__setattr__(self, "destination_guard", "field_then_window")
 
-    def validate(self):
+    def validate(self) -> Self:
         for key, value in asdict(self).items():
             if key in RANGES:
                 low, high = RANGES[key]
@@ -190,13 +193,30 @@ class Config:
         return self
 
     @classmethod
-    def load(cls):
+    def load(cls) -> Self:
         path = config_path()
         if not path.exists():
             return cls()
-        return cls(**without_audio_retention(json.loads(path.read_text()))).validate()
+        return cls.from_mapping(json.loads(path.read_text()))
 
-    def save(self):
+    @classmethod
+    def from_mapping(cls, values: object) -> Self:
+        if not isinstance(values, dict):
+            raise ValueError("Configuration must be a JSON object")
+        # Existing files/backups share this legacy-key migration.
+        current = {
+            key: value
+            for key, value in values.items()
+            if key not in {"save_audio", "audio_budget_mb", "reprocess_shortcut_key"}
+        }
+        try:
+            config = cls(**current)
+        except BeartypeCallHintParamViolation:
+            # Do not leak values from a malformed settings file in an error.
+            raise ValueError("Invalid configuration field type") from None
+        return config.validate()
+
+    def save(self) -> None:
         self.validate()
         path = config_path()
         private_dir(path.parent)
@@ -334,12 +354,3 @@ for _name in (
     "show_window_at_login",
 ):
     CHOICES[_name] = ["on", "off"]
-
-
-def without_audio_retention(values):
-    """Ignore retired options in existing configs and backups; reject other unknown keys."""
-    return {
-        k: v
-        for k, v in values.items()
-        if k not in {"save_audio", "audio_budget_mb", "reprocess_shortcut_key"}
-    }

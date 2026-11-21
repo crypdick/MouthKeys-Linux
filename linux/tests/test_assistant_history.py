@@ -41,7 +41,8 @@ def test_session_and_provider_context_remain_bounded_and_complete():
     assert messages[0]["content"] == "5"
     history = context_messages(messages)
     assert len(history) == 32
-    assert history[0]["role"] == "user" and history[-1]["role"] == "assistant"
+    assert history[0]["role"] == "user"
+    assert history[-1]["role"] == "assistant"
     large = turn("x" * 125000) + turn("Small")
     assert context_messages(large) == turn("Small")
     with pytest.raises(ValueError, match="completed"):
@@ -85,7 +86,7 @@ def test_cli_saved_chat_management(capsys):
 def receipt(command="pwd", output="directory"):
     return {
         "command": command,
-        "working_directory": "/tmp",
+        "working_directory": "/tmp",  # noqa: S108
         "returncode": 0,
         "output": output,
         "truncated": False,
@@ -192,7 +193,8 @@ def test_receipts_prune_to_serialized_byte_bound_and_chat_retention(monkeypatch)
     store.record_execution(old["id"], receipt("first", "x" * 512))
     store.record_execution(old["id"], receipt("latest", "y" * 512))
     events = store.get(old["id"])["executions"]
-    assert len(events) == 1 and events[0]["result"]["command"] == "latest"
+    assert len(events) == 1
+    assert events[0]["result"]["command"] == "latest"
     assert len(json.dumps(events, ensure_ascii=False).encode()) <= 1024
     store.new("command")
     store.new("command")

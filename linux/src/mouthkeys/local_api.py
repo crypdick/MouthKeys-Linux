@@ -198,7 +198,8 @@ class Handler(BaseHTTPRequestHandler):
             self.answer(400, {"error": "Invalid request"})
         except (BrokenPipeError, ConnectionResetError):
             pass
-        except Exception:
+        # Send a generic failure response; exceptions may contain private request data.
+        except Exception:  # allow: exception-handling  # noqa: BLE001
             self.answer(500, {"error": "Operation failed; verify configuration and models"})
 
     def dictionary(self, path, data, *, native):

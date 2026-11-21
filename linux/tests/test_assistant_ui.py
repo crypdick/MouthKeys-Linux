@@ -70,9 +70,9 @@ def test_voice_stream_clears_old_actionable_proposal_and_cancels_service():
 
 
 def test_typed_automatic_chain_freezes_resolved_profile_and_voice_clears_it(monkeypatch):
-    from test_mode_routing import profiles
-
     from mouthkeys.profiles import load_profiles, save_profiles
+
+    from .test_mode_routing import profiles
 
     profile_id = profiles()[0]
     Config(command_profile=profile_id, command_confirm="off", command_continue="on").save()

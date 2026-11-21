@@ -15,7 +15,7 @@ class FakeBus:
     focused_state = 12
     editable_state = 7
     active_state = 1
-    window_roles = {23}
+    window_roles = frozenset({23})
     window_ref = (":1.42", "/org/a11y/atspi/accessible/window")
 
     def __init__(self):

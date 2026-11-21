@@ -35,8 +35,12 @@ GROUPS = {
 def discover(kind):
     if session() == "headless":
         return []
-    result = subprocess.run(
-        ["pactl", "-f", "json", "list", kind], check=True, capture_output=True, text=True, timeout=2
+    result = subprocess.run(  # noqa: S603
+        ["pactl", "-f", "json", "list", kind],
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=2,  # noqa: S607
     )
     values = json.loads(result.stdout)
     return [
@@ -125,7 +129,7 @@ class MicrophonePage(QWidget):
             self.groups[key] = group
             column.addWidget(group)
             add = QPushButton("Add source here")
-            add.clicked.connect(lambda checked=False, key=key: self.add_source(key))
+            add.clicked.connect(lambda _checked=False, key=key: self.add_source(key))
             self.edit_controls.append(add)
             column.addWidget(add)
             columns.addLayout(column)
@@ -144,7 +148,7 @@ class MicrophonePage(QWidget):
         row = QHBoxLayout()
         for key, title in GROUPS.items():
             button = QPushButton("Move to " + title)
-            button.clicked.connect(lambda checked=False, key=key: self.move_selected(key))
+            button.clicked.connect(lambda _checked=False, key=key: self.move_selected(key))
             self.edit_controls.append(button)
             row.addWidget(button)
         root.addLayout(row)

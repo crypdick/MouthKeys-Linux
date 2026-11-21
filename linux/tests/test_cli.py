@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 from mouthkeys.cli import main
-from mouthkeys.config import runtime_dir
+from mouthkeys.config import Config, config_path, runtime_dir
 from mouthkeys.service import request
 
 
@@ -55,7 +55,6 @@ def test_dictionary_cli_portable_roundtrip_and_merge(tmp_path, capsys):
 
 def test_benchmark_cli_uses_overrides_without_daemon_or_saved_config(monkeypatch, tmp_path, capsys):
     from mouthkeys import benchmark, service
-    from mouthkeys.config import config_path
 
     calls = []
     reference = tmp_path / "reference.txt"
@@ -167,8 +166,6 @@ def test_config_cli_and_doctor(capsys):
 
 @pytest.mark.parametrize("stored", [None, "window", "field"])
 def test_destination_guard_loads_existing_settings_and_normalizes_legacy_alias(stored, capsys):
-    from mouthkeys.config import config_path
-
     path = config_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps({"destination_guard": stored} if stored else {}))
@@ -218,7 +215,9 @@ def test_real_daemon_ipc_duplicate_start_malformed_request_and_shutdown():
             raise AssertionError("Daemon failed to start")
         assert result["phase"] == "idle"
         assert result["version"] == version("mouthkeys-linux")
-        duplicate = subprocess.run([sys.executable, "-m", "mouthkeys", "daemon"], timeout=3)
+        duplicate = subprocess.run(
+            [sys.executable, "-m", "mouthkeys", "daemon"], timeout=3, check=False
+        )
         assert duplicate.returncode == 0
         assert request("status")["phase"] == "idle"
         with socket.socket(socket.AF_UNIX) as client:
@@ -267,8 +266,8 @@ def test_installed_command_from_untrusted_directory_starts_safe_daemon(tmp_path)
     # Use the actual installed console entry point; its child must not import cwd.
     executable = Path(sys.executable).parent / "mouthkeys"
     try:
-        result = subprocess.run(
-            [str(executable), "status"], cwd=tmp_path, capture_output=True, timeout=8
+        result = subprocess.run(  # noqa: S603
+            [str(executable), "status"], cwd=tmp_path, capture_output=True, timeout=8, check=False
         )
         assert result.returncode == 0, result.stderr.decode()
         assert json.loads(result.stdout)["phase"] == "idle"
@@ -334,3 +333,28 @@ def test_socket_errors_persist_feedback_for_panel():
             server.shutdown()
             thread.join(2)
         assert not thread.is_alive()
+
+
+@pytest.mark.parametrize(
+    ("raw", "message"),
+    [
+        ("[]", "Configuration must be a JSON object"),
+        ('{"model": 5}', "Invalid configuration field type"),
+    ],
+)
+def test_config_rejects_malformed_documents(raw, message):
+    path = config_path()
+    path.parent.mkdir(parents=True)
+    path.write_text(raw)
+    with pytest.raises(ValueError, match=message):
+        Config.load()
+
+
+def test_runtime_types_guard_python_helper_command():
+    from beartype.roar import BeartypeCallHintParamViolation
+
+    from mouthkeys.processes import python_command
+
+    assert python_command("mouthkeys", "status")[1:] == ["-P", "-m", "mouthkeys", "status"]
+    with pytest.raises(BeartypeCallHintParamViolation):
+        python_command(42)

@@ -1,13 +1,14 @@
 import json
 
 import pytest
-from test_pipeline import FakeDelivery, FakeRecorder, FakeTranscriber, finish
 
 from mouthkeys import assistance
 from mouthkeys.assistant_history import AssistantHistory
 from mouthkeys.config import Config, state_dir
 from mouthkeys.service import Controller
 from mouthkeys.storage import History
+
+from .test_pipeline import FakeDelivery, FakeRecorder, FakeTranscriber, finish
 
 
 @pytest.mark.parametrize(

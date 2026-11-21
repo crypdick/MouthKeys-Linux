@@ -137,7 +137,7 @@ def stream_completion(
     body = json.dumps(payload).encode()
     if len(body) > MAX_RESPONSE:
         raise ValueError("AI cleanup request exceeds 1 MB")
-    request = urllib.request.Request(
+    request = urllib.request.Request(  # noqa: S310
         endpoint_url(endpoint), data=body, headers=request_headers(config, provider), method="POST"
     )
     open_request = opener or urllib.request.build_opener(NoRedirect()).open

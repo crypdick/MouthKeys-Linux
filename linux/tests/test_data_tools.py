@@ -1,6 +1,7 @@
 import json
 import sqlite3
 import uuid
+from contextlib import closing
 from dataclasses import asdict, replace
 from datetime import date, datetime, timedelta
 
@@ -29,7 +30,7 @@ def test_additive_schema_preserves_legacy_history(tmp_path):
     root = tmp_path / "legacy"
     root.mkdir()
     item = str(uuid.uuid4())
-    with sqlite3.connect(root / "history.sqlite3") as connection:
+    with closing(sqlite3.connect(root / "history.sqlite3")) as connection, connection:
         connection.execute(
             "CREATE TABLE history(id TEXT PRIMARY KEY, created REAL NOT NULL, "
             "text TEXT NOT NULL DEFAULT '', status TEXT NOT NULL, error TEXT NOT NULL DEFAULT '')"

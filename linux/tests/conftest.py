@@ -69,11 +69,12 @@ def qt_object_lifetime(isolated_environment, qt_application_owner):
 
 
 @pytest.fixture(autouse=True)
-def isolated_environment(tmp_path, monkeypatch):
+def isolated_environment(tmp_path, tmp_path_factory, monkeypatch):
     for kind in ("CONFIG", "STATE", "CACHE", "DATA"):
         monkeypatch.setenv(f"XDG_{kind}_HOME", str(tmp_path / kind.lower()))
-    runtime = tmp_path / "runtime"
-    runtime.mkdir(mode=0o700)
+    # Leave space for the socket filename under Linux's AF_UNIX path limit.
+    runtime = tmp_path_factory.mktemp("rt")
+    runtime.chmod(0o700)
     monkeypatch.setenv("XDG_RUNTIME_DIR", str(runtime))
     for key in ("DISPLAY", "WAYLAND_DISPLAY", "XDG_SESSION_TYPE"):
         monkeypatch.delenv(key, raising=False)

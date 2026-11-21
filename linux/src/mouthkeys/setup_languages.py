@@ -120,16 +120,74 @@ LANGUAGE_ALIASES = {
     "tl": ["Filipino"],
     "zh": ["Chinese", "Mandarin"],
 }
-PARAKEET_V3 = set(
-    "bg hr cs da nl en et fi fr de el hu it lv lt mt pl pt ro sk sl es sv ru uk".split()
-)
-COHERE = set("ar de el en es fr it ja ko nl pl pt vi zh".split())
+PARAKEET_V3 = {
+    "bg",
+    "hr",
+    "cs",
+    "da",
+    "nl",
+    "en",
+    "et",
+    "fi",
+    "fr",
+    "de",
+    "el",
+    "hu",
+    "it",
+    "lv",
+    "lt",
+    "mt",
+    "pl",
+    "pt",
+    "ro",
+    "sk",
+    "sl",
+    "es",
+    "sv",
+    "ru",
+    "uk",
+}
+COHERE = {"ar", "de", "el", "en", "es", "fr", "it", "ja", "ko", "nl", "pl", "pt", "vi", "zh"}
 NEMOTRON = {
     code.split("-", 1)[0] if code != "nb-NO" else "no": code
-    for code in (
-        "es it pt hi ko en de-DE fr ru tr vi-VN nl ja-JP ar uk pl nb-NO fi zh-CN cs bg "
-        "sk sv hr ro et da hu el-GR he-IL lt-LT sl-SI lv-LV mt-MT th-TH nn-NO"
-    ).split()
+    for code in [
+        "es",
+        "it",
+        "pt",
+        "hi",
+        "ko",
+        "en",
+        "de-DE",
+        "fr",
+        "ru",
+        "tr",
+        "vi-VN",
+        "nl",
+        "ja-JP",
+        "ar",
+        "uk",
+        "pl",
+        "nb-NO",
+        "fi",
+        "zh-CN",
+        "cs",
+        "bg",
+        "sk",
+        "sv",
+        "hr",
+        "ro",
+        "et",
+        "da",
+        "hu",
+        "el-GR",
+        "he-IL",
+        "lt-LT",
+        "sl-SI",
+        "lv-LV",
+        "mt-MT",
+        "th-TH",
+        "nn-NO",
+    ]
 }
 
 

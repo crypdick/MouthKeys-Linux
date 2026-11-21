@@ -19,14 +19,14 @@ def aligner(monkeypatch):
     from faster_whisper import tokenizer
 
     class Tokenizer:
-        sot_sequence = [1, 2, 3]
         eot = 1000
 
         def __init__(self, *args):
-            pass
+            self.sot_sequence = [1, 2, 3]
 
         def encode(self, text):
-            assert text.startswith(" ") and not text.startswith("  ")
+            assert text.startswith(" ")
+            assert not text.startswith("  ")
             return [10, 11]
 
     monkeypatch.setattr(tokenizer, "Tokenizer", Tokenizer)
@@ -62,7 +62,8 @@ def test_forced_alignment_uses_real_segment_bounds_and_preserves_text_and_score(
     result, warning = value.align(np.zeros(32000), [segment], config())
     assert not warning
     assert calls[0][1:] == ([[10, 11]], "encoded", 100)
-    assert result[0].text == "Hello" and result[0].avg_logprob == -0.2
+    assert result[0].text == "Hello"
+    assert result[0].avg_logprob == -0.2
     assert vars(result[0].words[0]) == {
         "word": "Hello",
         "start": 0.6,
@@ -78,7 +79,8 @@ def test_native_word_metadata_prevents_extra_model_load(monkeypatch):
     monkeypatch.setattr(value, "_load", lambda config: pytest.fail("Loaded optional second model"))
     segment = SimpleNamespace(start=0, end=1, text="Hello", words=[object()])
     result, warning = value.align(np.zeros(16000), [segment], config())
-    assert result == [segment] and not warning
+    assert result == [segment]
+    assert not warning
 
 
 def test_alignment_opt_out_releases_model_and_does_no_work():
@@ -108,7 +110,8 @@ def test_uncertain_alignment_preserves_raw_asr_and_reports_warning(aligner, word
     segment = SimpleNamespace(start=0, end=1, text="Hello")
     result, warning = value.align(np.zeros(16000), [segment], config())
     assert result == [segment]
-    assert "uncertain" in warning and "ASR text retained" in warning
+    assert "uncertain" in warning
+    assert "ASR text retained" in warning
 
 
 def test_long_segment_is_not_arbitrarily_partitioned(monkeypatch):
@@ -130,18 +133,21 @@ def test_alignment_work_and_inter_call_deadline_are_bounded(monkeypatch, aligner
     segments = [SimpleNamespace(start=0, end=1, text="Hello") for _ in range(MAX_SEGMENTS + 1)]
     result, warning = value.align(np.zeros(16000), segments, config())
     assert len(calls) == MAX_SEGMENTS
-    assert len(result) == len(segments) and "budget reached" in warning
+    assert len(result) == len(segments)
+    assert "budget reached" in warning
     times = iter([0, 11])
     monkeypatch.setattr(forced_alignment, "time", SimpleNamespace(monotonic=lambda: next(times)))
     calls.clear()
     result, warning = value.align(np.zeros(16000), segments[:1], config())
-    assert not calls and "budget reached" in warning
+    assert not calls
+    assert "budget reached" in warning
 
 
 def test_auto_language_is_measured_or_abstained_not_guessed(aligner):
     value, model, calls = aligner
     words = value._words(np.zeros(16000), "Hello", config(language="auto"))
-    assert words[0]["word"] == "Hello" and len(calls) == 1
+    assert words[0]["word"] == "Hello"
+    assert len(calls) == 1
     model.model.detect_language = lambda encoded: [[("<|en|>", 0.3)]]
     with pytest.raises(ValueError, match="language is uncertain"):
         value._words(np.zeros(16000), "Hello", config(language="auto"))

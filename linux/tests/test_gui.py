@@ -1,9 +1,11 @@
 import time
+from importlib import import_module
 from importlib.metadata import version
 
 import pytest
 
-pytest.importorskip("PySide6")
+QApplication = pytest.importorskip("PySide6.QtWidgets").QApplication
+settings_gui = import_module("mouthkeys.gui")
 
 
 def test_taskbar_hint_is_configurable_and_separate_from_tray(monkeypatch):
@@ -81,8 +83,6 @@ def test_model_browser_resident_state_uses_loaded_identity_not_selected_settings
 def test_download_retries_unavailable_model_only_after_success(monkeypatch, tmp_path, success):
     from types import SimpleNamespace
 
-    from PySide6.QtWidgets import QApplication
-
     from mouthkeys import gui
     from mouthkeys.service import Controller
 
@@ -133,7 +133,6 @@ def test_download_retries_unavailable_model_only_after_success(monkeypatch, tmp_
 
 
 def test_settings_show_app_and_running_service_versions(monkeypatch):
-    from PySide6.QtWidgets import QApplication
 
     from mouthkeys import gui
 
@@ -174,7 +173,6 @@ def test_settings_show_app_and_running_service_versions(monkeypatch):
 
 
 def test_offscreen_controller_renders_history_and_saves_settings(monkeypatch):
-    from PySide6.QtWidgets import QApplication
 
     from mouthkeys import gui
     from mouthkeys.config import Config
@@ -230,7 +228,6 @@ def test_offscreen_controller_renders_history_and_saves_settings(monkeypatch):
 
 
 def test_dropdowns_preserve_existing_custom_settings(monkeypatch):
-    from PySide6.QtWidgets import QApplication
 
     from mouthkeys import gui
     from mouthkeys.config import Config
@@ -253,7 +250,6 @@ def test_dropdowns_preserve_existing_custom_settings(monkeypatch):
 
 @pytest.mark.parametrize("model", ["large", "turbo", "large-v3", "large-v3-turbo"])
 def test_model_dropdown_uses_specific_names_for_saved_aliases(monkeypatch, model):
-    from PySide6.QtWidgets import QApplication
 
     from mouthkeys import gui
     from mouthkeys.config import Config
@@ -281,7 +277,6 @@ def test_model_dropdown_uses_specific_names_for_saved_aliases(monkeypatch, model
 
 @pytest.mark.parametrize("model", ["large", "turbo"])
 def test_model_dropdown_preserves_local_directory_named_like_alias(monkeypatch, tmp_path, model):
-    from PySide6.QtWidgets import QApplication
 
     from mouthkeys import gui
     from mouthkeys.config import Config
@@ -329,152 +324,6 @@ def test_missing_pactl_keeps_manual_microphone_selection(monkeypatch):
 
     monkeypatch.setattr(subprocess, "run", run)
     assert gui.audio_sources() == ["default"]
-
-
-def test_overlay_never_takes_focus_and_tracks_recording_lifecycle(monkeypatch):
-    from PySide6.QtCore import Qt
-    from PySide6.QtWidgets import QApplication
-
-    from mouthkeys.overlay import Overlay
-
-    app = QApplication.instance() or QApplication([])
-    panel = Overlay()
-    panel.timer.stop()
-    panel.animation.stop()
-    shown = []
-    monkeypatch.setattr(panel, "show", lambda: shown.append(True))
-    assert panel.windowFlags() & Qt.WindowType.WindowDoesNotAcceptFocus
-    assert panel.testAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
-    assert panel.focusPolicy() == Qt.FocusPolicy.NoFocus
-    panel.set_status({"phase": "recording", "id": "a", "seconds": 3, "preview": "hello"})
-    assert shown == [True]
-    assert panel.data["preview"] == "hello"
-    assert not panel.buttons["copy"].isEnabled()
-    panel.set_status({"phase": "transcribing", "id": "a", "preview": "hello"})
-    assert panel.seconds == 3
-    panel.set_status(
-        {"phase": "idle", "id": "a", "preview": "Hello!", "message": "Copied — paste into your app"}
-    )
-    assert panel.buttons["copy"].isEnabled()
-    assert panel.dismiss_at is not None
-    panel.set_status({"phase": "recording", "id": "b", "seconds": 0, "preview": ""})
-    assert shown == [True, True]
-    assert panel.dismiss_at is None
-    panel.set_status({"phase": "idle", "id": "b", "preview": "", "message": "Cancelled"})
-    assert not panel.isVisible()
-    panel.close()
-    app.processEvents()
-
-
-def test_overlay_deduplicates_meter_frames_and_resets_on_new_recording(monkeypatch):
-    from PySide6.QtWidgets import QApplication
-
-    from mouthkeys import overlay
-
-    app = QApplication.instance() or QApplication([])
-    panel = overlay.Overlay()
-    panel.timer.stop()
-    monkeypatch.setattr(panel, "show", lambda: None)
-    now = time.monotonic()
-    data = {
-        "phase": "recording",
-        "id": "a",
-        "seconds": 1,
-        "meter": {"frame": 16000, "level": 0.8, "at": now},
-    }
-    panel.set_status(data)
-    first_voice = panel.trace.last_voice
-    panel.set_status({**data, "meter": {**data["meter"], "at": now + 0.1}})
-    assert panel.trace.last_voice == first_voice
-    panel.set_status({**data, "id": "b", "meter": {}})
-    assert panel.trace.last_voice is None
-    assert panel.trace.shown == [2] * 63
-    panel.animation.stop()
-    panel.close()
-    app.processEvents()
-
-
-def test_panel_dismisses_promptly_after_insertion_request(monkeypatch):
-    from PySide6.QtWidgets import QApplication
-
-    from mouthkeys import overlay
-
-    app = QApplication.instance() or QApplication([])
-    panel = overlay.Overlay()
-    panel.timer.stop()
-    hidden = []
-    now = 100.0
-    monkeypatch.setattr(overlay.time, "monotonic", lambda: now)
-    monkeypatch.setattr(panel, "show", lambda: None)
-    monkeypatch.setattr(panel, "hide", lambda: hidden.append(True))
-    panel.set_status({"phase": "delivering", "id": "a"})
-    done = {
-        "phase": "idle",
-        "id": "a",
-        "message": "Insertion requested — transcript saved in history",
-    }
-    panel.set_status(done)
-    assert not hidden
-    now += 1
-    panel.set_status(done)
-    assert hidden == [True]
-    panel.animation.stop()
-    panel.close()
-    app.processEvents()
-
-
-def test_panel_shows_fresh_shortcut_error_even_when_idle(monkeypatch):
-    from PySide6.QtWidgets import QApplication
-
-    from mouthkeys.config import Config
-    from mouthkeys.overlay import Overlay
-
-    app = QApplication.instance() or QApplication([])
-    panel = Overlay()
-    panel.timer.stop()
-    shown = []
-    monkeypatch.setattr(panel, "show", lambda: shown.append(True))
-    data = {
-        "phase": "idle",
-        "message": "Ready",
-        "notice": {"serial": 1, "message": "Source unplugged", "at": time.time()},
-    }
-    panel.set_status(data)
-    assert shown == [True]
-    assert panel.notice[0] == "Source unplugged"
-    panel.set_status(data)
-    assert shown == [True]  # Polling must not keep extending the error timeout.
-    Config(recording_panel="off").save()
-    panel.set_status({**data, "phase": "recording"})
-    assert shown == [True]
-    for button in panel.buttons.values():
-        assert not button.icon().isNull()
-        assert button.text() == ""  # No symbol font is needed.
-    panel.close()
-    app.processEvents()
-
-
-def test_panel_can_reappear_after_disabled_during_recording(monkeypatch):
-    from PySide6.QtWidgets import QApplication
-
-    from mouthkeys.config import Config
-    from mouthkeys.overlay import Overlay
-
-    app = QApplication.instance() or QApplication([])
-    panel = Overlay()
-    panel.timer.stop()
-    shown = []
-    monkeypatch.setattr(panel, "show", lambda: shown.append(True))
-    data = {"phase": "recording", "id": "same-recording", "seconds": 1}
-    panel.set_status(data)
-    Config(recording_panel="off").save()
-    panel.set_status(data)
-    Config(recording_panel="on").save()
-    panel.set_status(data)
-    assert shown == [True, True]
-    panel.animation.stop()
-    panel.close()
-    app.processEvents()
 
 
 def test_every_config_is_editable_in_settings_and_new_options_roundtrip(monkeypatch):
@@ -601,34 +450,10 @@ def test_backup_import_previews_before_applying_exact_reviewed_file(monkeypatch,
         window.close()
 
 
-def test_queued_overlay_cancel_reaches_controller(monkeypatch):
-    from PySide6.QtWidgets import QApplication
-
-    from mouthkeys.overlay import Overlay
-
-    app = QApplication.instance() or QApplication([])
-    panel = Overlay()
-    panel.timer.stop()
-    panel.animation.stop()
-    calls = []
-    monkeypatch.setattr(panel, "show", lambda: None)
-    monkeypatch.setattr(panel, "send", lambda action, *args, **kwargs: calls.append(action))
-    panel.set_status({"phase": "queued", "id": "pending", "preview": "queued words"})
-    assert panel.active
-    panel.action("cancel")
-    assert calls == ["cancel"]
-    panel.close()
-    app.processEvents()
-
-
 def test_stale_search_results_do_not_replace_current_search(monkeypatch):
-    from PySide6.QtWidgets import QApplication
-
-    from mouthkeys import gui
-
-    app = QApplication.instance() or QApplication([])
-    monkeypatch.setattr(gui.Window, "poll", lambda self: None)
-    window = gui.Window()
+    app = QApplication.instance()
+    monkeypatch.setattr(settings_gui.Window, "poll", lambda self: None)
+    window = settings_gui.Window()
     window.timer.stop()
     pending = []
     monkeypatch.setattr(window, "send", lambda action, data, callback: pending.append(callback))

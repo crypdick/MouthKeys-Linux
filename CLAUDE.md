@@ -6,15 +6,10 @@ installation, and manual desktop validation. `AGENTS.md` links to this file.
 
 ## Validation
 
-Run `./linux/check.sh`, which performs:
-
-```sh
-uv sync --project linux --python 3.13 --extra gui --locked
-uv run --project linux ruff check linux
-uv run --project linux ruff format --check linux
-QT_QPA_PLATFORM=offscreen uv run --project linux pytest linux/tests
-uv build linux
-```
+Run `./linux/check.sh` for locked Python 3.13 GUI dependencies, the full prek suite, and packaging.
+See [quality gates and conventions](docs/QUALITY.md), the [architecture map](docs/ARCHITECTURE.md),
+and [behavior test guidance](.claude/agents.red-green-tdd.md). Import contracts live in
+[architecture.toml](architecture.toml).
 
 Tests must stay headless: fake capture/clipboard/key adapters, isolated XDG directories, and Qt's
 offscreen backend. Never use a live microphone, touch the real clipboard, synthesize keys, show
@@ -39,7 +34,7 @@ desktop delivery unless the user explicitly disables history (then use memory an
 PRs, when requested, **must** target `crypdick/MouthKeys-Linux --base main`. Never publish personal
 changes to the parent project or its website. Upstream changes are adapted by hand; see `UPSTREAM.md`.
 
-Carry authorized changes through branch, build, tests, fresh-context review, merge to `main`,
-and push. The user prefers direct merges without PRs. Ask only for decisions or desktop checks
+Use `new-feature create NAME --no-agent` for managed worktrees. Carry authorized changes through
+build, tests, fresh-context review, `new-feature merge NAME` into `main`, and push. The user prefers direct merges without PRs. Ask only for decisions or desktop checks
 that require the user.
 macOS code and tooling are maintained upstream.

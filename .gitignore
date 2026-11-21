@@ -11,7 +11,6 @@ dist/
 # Local tools and scratch data
 .worktrees/
 .codex/
-.claude/
 .vscode/
 .agent/
 .mcp_temp/
@@ -27,3 +26,12 @@ scratch/
 *.key
 *.pem
 secrets.json
+
+# Strictify / managed worktrees
+.coverage
+.coverage.*
+.mypy_cache/
+.new-feature/
+*.local.toml
+.claude/*
+!.claude/agents.red-green-tdd.md

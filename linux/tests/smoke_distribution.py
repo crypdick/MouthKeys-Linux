@@ -62,7 +62,7 @@ args = parser.parse_args()
 
 def cli(*args):
     assert args[0] in ("--version", "config"), "No capture/delivery actions allowed"
-    result = subprocess.run(
+    result = subprocess.run(  # noqa: S603
         [str(executable), *args], check=True, capture_output=True, text=True, timeout=20, cwd=root
     )
     return result.stdout
@@ -115,7 +115,8 @@ try:
     started = True
     # Direct requests cannot auto-spawn an unowned replacement daemon on failure.
     status = request("status")
-    assert status["version"] == args.expect_version and status["phase"] == "idle"
+    assert status["version"] == args.expect_version
+    assert status["phase"] == "idle"
     cli("config", "spoken_send", "on")
     from mouthkeys.config import Config
 

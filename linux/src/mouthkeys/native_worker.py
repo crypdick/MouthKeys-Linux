@@ -184,7 +184,7 @@ def worker_main():
     try:
         isolate_network()
         request, _ = _read_message(source)
-        config = Config(**request["config"]).validate()
+        config = Config.from_mapping(request["config"])
         from .native_asr import NemoBackend, TransformersBackend
 
         backend = (NemoBackend if config.engine == "nemo" else TransformersBackend)(config)
@@ -195,7 +195,8 @@ def worker_main():
                 "native_streaming": getattr(backend, "supports_native_streaming", False),
             },
         )
-    except Exception as exc:
+    # Report through the private worker protocol; never log input data.
+    except Exception as exc:  # allow: exception-handling  # noqa: BLE001
         _write_message(output, {"error": str(exc)[:1000]})
         return
     while True:
@@ -210,7 +211,7 @@ def worker_main():
                     backend.reset_stream()
                 result = None
             else:
-                config = Config(**request["config"]).validate()
+                config = Config.from_mapping(request["config"])
                 if method == "stream":
                     result = backend.stream(
                         samples, config, request["session_key"], final=request.get("final", False)
@@ -230,7 +231,8 @@ def worker_main():
                 else:
                     raise ValueError("Unknown native operation")
             response = {"result": result, "words": getattr(backend, "words", [])}
-        except Exception as exc:
+        # Report through the private worker protocol; never log input data.
+        except Exception as exc:  # allow: exception-handling  # noqa: BLE001
             # Inference exceptions may echo model output; diagnostics stay structural.
             response = {
                 "error": f"Native speech operation failed ({type(exc).__name__}); "
@@ -258,7 +260,7 @@ class NativeWorkerBackend:
             "TORCH_FORCE_WEIGHTS_ONLY_LOAD": "1",
             "MOUTHKEYS_NATIVE_STATE": self.directory.name,
         }
-        self.process = subprocess.Popen(
+        self.process = subprocess.Popen(  # noqa: S603
             python_command("mouthkeys.native_worker"),
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
@@ -391,7 +393,8 @@ class NativeWorkerBackend:
     def __del__(self):
         try:
             self.close()
-        except Exception:
+        # Release other workers even if one fails during teardown.
+        except Exception:  # allow: exception-handling  # noqa: BLE001, S110
             pass
 
 

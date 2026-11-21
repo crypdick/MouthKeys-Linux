@@ -146,7 +146,8 @@ class LearningPage(QWidget):
             self.feedback.setText(
                 "Vocabulary saved. Enable vocabulary boosting in App Settings to use it."
             )
-        except Exception as exc:
+        # Report to the Settings UI without logging enrollment details.
+        except Exception as exc:  # allow: exception-handling  # noqa: BLE001
             self.feedback.setText(str(exc))
 
     def refresh_profiles(self):

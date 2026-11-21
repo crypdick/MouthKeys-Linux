@@ -25,7 +25,7 @@ class RegionalFillerBanner(QWidget):
         self.remove = QPushButton()
         for button, keep in ((self.keep, True), (self.remove, False)):
             button.setAutoDefault(False)
-            button.clicked.connect(lambda checked=False, keep=keep: self.answer(keep))
+            button.clicked.connect(lambda _checked=False, keep=keep: self.answer(keep))
             buttons.addWidget(button)
         layout.addLayout(buttons)
         self.refresh()

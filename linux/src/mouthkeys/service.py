@@ -358,7 +358,8 @@ class Controller:
                     else:
                         self.report_error(f"Selected microphone failed; resumed {current}. {error}")
                     return self.status()
-            except Exception as exc:
+            # The job or IPC response reports the failure; avoid duplicating private data in logs.
+            except Exception as exc:  # allow: exception-handling  # noqa: BLE001
                 error = exc
                 with self.lock:
                     if (
@@ -416,7 +417,8 @@ class Controller:
                 with self.lock:
                     self.source_quarantine.pop(source, None)
                 return capture, chosen
-            except Exception as exc:
+            # The job or IPC response reports the failure; avoid duplicating private data in logs.
+            except Exception as exc:  # allow: exception-handling
                 last_error = exc
                 if job.cancel_event.is_set() or self.interrupted:
                     raise
@@ -507,7 +509,8 @@ class Controller:
             ) and hasattr(self.delivery, "capture_target"):
                 try:
                     self.job.start_target = self.delivery.capture_target(self.config)
-                except Exception:
+                # Unknown focus disables automatic delivery.
+                except Exception:  # allow: exception-handling  # noqa: BLE001
                     self.job.start_target = None  # Optional desktop probing fails closed.
                 if mode == "edit" and not selected_text and isinstance(self.job.start_target, dict):
                     captured = self.job.start_target.get("field", {})
@@ -558,7 +561,8 @@ class Controller:
                     return self.status()
             capture.stop()
             capture = None
-        except Exception as exc:
+        # The job or IPC response reports the failure; avoid duplicating private data in logs.
+        except Exception as exc:  # allow: exception-handling
             with self.lock:
                 cancelled = job.cancel_event.is_set() and not self.interrupted
                 if not self.interrupted:
@@ -660,7 +664,8 @@ class Controller:
                     return
                 if learner.observation is None:
                     return
-        except Exception as exc:
+        # The job or IPC response reports the failure; avoid duplicating private data in logs.
+        except Exception as exc:  # allow: exception-handling  # noqa: BLE001
             if not stop.is_set():
                 self.report_error(f"Correction learning unavailable: {exc}")
         finally:
@@ -845,7 +850,8 @@ class Controller:
         if recorder is not None:
             try:
                 recorder.stop()
-            except Exception:
+            # Logout must continue with interrupted audio cleanup.
+            except Exception:  # allow: exception-handling  # noqa: BLE001, S110
                 pass  # Cleanup below also discards partial audio.
         # An already-stopping worker owns its recorder. Let it finalize the WAV, without
         # waiting for model inference or making a second concurrent stop call.
@@ -883,7 +889,8 @@ class Controller:
                         target = self.delivery.capture_target(job.config)
                     else:
                         target = self.delivery.focus()
-                except Exception:
+                # Unknown focus disables automatic delivery.
+                except Exception:  # allow: exception-handling  # noqa: BLE001
                     target = None
             metadata_target = target
             needs_metadata = (
@@ -902,7 +909,8 @@ class Controller:
                         if hasattr(self.delivery, "capture_target")
                         else self.delivery.focus()
                     )
-                except Exception:
+                # An unavailable desktop must not block audio shutdown.
+                except Exception:  # allow: exception-handling  # noqa: BLE001
                     metadata_target = None
             if enabled(job.config, "smart_capitalization") or enabled(
                 job.config, "space_between_dictations"
@@ -911,7 +919,8 @@ class Controller:
                     from .accessibility import read_context
 
                     job.context = read_context()
-                except Exception:
+                # Formatting context is optional; continue without it.
+                except Exception:  # allow: exception-handling  # noqa: BLE001
                     job.context = None  # Optional context must never prevent microphone shutdown.
             if focus_gate:
                 focus_gate["ready"].set()
@@ -924,9 +933,11 @@ class Controller:
             if needs_metadata and hasattr(self.delivery, "target_metadata"):
                 try:
                     job.metadata = self.delivery.target_metadata(metadata_target)
-                except Exception:
+                # Metadata lookup failure must not block transcription.
+                except Exception:  # allow: exception-handling  # noqa: BLE001, S110
                     pass  # Destination metadata is optional; never block transcription.
-        except Exception as exc:
+        # The job or IPC response reports the failure; avoid duplicating private data in logs.
+        except Exception as exc:  # allow: exception-handling  # noqa: BLE001
             with self.lock:
                 if not self.interrupted:
                     if isinstance(exc, CaptureTeardownError):
@@ -995,7 +1006,8 @@ class Controller:
             with self.model_lock:
                 self.transcriber.load(self.config)
             message = "Model ready"
-        except Exception as exc:
+        # The job or IPC response reports the failure; avoid duplicating private data in logs.
+        except Exception as exc:  # allow: exception-handling  # noqa: BLE001
             message = f"Model unavailable: {exc}. Run mouthkeys download first."
         with self.lock:
             if not self.interrupted:
@@ -1225,7 +1237,8 @@ class Controller:
                         profiles=job.profiles,
                         routes=job.routes,
                     )
-                except Exception as exc:
+                # The job or IPC response reports the failure; avoid duplicating private data in logs.
+                except Exception as exc:  # allow: exception-handling  # noqa: BLE001
                     ai_warning = f"Prompt routing failed ({exc}); using original transcription"
                     config = replace(config, ai_enabled="off")
                     if self.job is job:
@@ -1351,7 +1364,8 @@ class Controller:
                     else:
                         text = process(text, config)
                     ai_processed = True
-                except Exception as exc:
+                # The job or IPC response reports the failure; avoid duplicating private data in logs.
+                except Exception as exc:  # allow: exception-handling  # noqa: BLE001
                     ai_warning = f"AI cleanup failed ({exc}); using original transcription"
                     if self.job is job:
                         self.report_error(ai_warning, kind="ai")
@@ -1463,7 +1477,8 @@ class Controller:
                 if send_warning:
                     message += f". {send_warning}"
                 self._job_status(job, "idle", message)
-        except Exception as exc:
+        # The job or IPC response reports the failure; avoid duplicating private data in logs.
+        except Exception as exc:  # allow: exception-handling  # noqa: BLE001
             with self.lock:
                 if self.interrupted:
                     return
@@ -1498,11 +1513,10 @@ class Controller:
             finally:
                 with self.lock:
                     job.audio_path.unlink(missing_ok=True)
-                    if not self.interrupted:
-                        if self.job is job:
-                            self.assistant_stream = None
-                            self.dictation_delivery = False
-                            self.phase = "idle"
+                    if not self.interrupted and self.job is job:
+                        self.assistant_stream = None
+                        self.dictation_delivery = False
+                        self.phase = "idle"
                     job.done.set()
 
     def _preview(self, item_id, config):
@@ -1533,7 +1547,8 @@ class Controller:
                         self.send_armed_at = time.monotonic()
                 else:
                     self.send_armed_at = None
-        except Exception:
+        # Final inference reports errors; never log provisional transcript data.
+        except Exception:  # allow: exception-handling  # noqa: BLE001, S110
             pass  # Preview is provisional; final inference reports actionable errors.
         finally:
             with self.lock:
@@ -1590,7 +1605,8 @@ class Controller:
             ):
                 try:
                     self.command("stop", automatic=True)
-                except Exception:
+                # The stop path already persisted its error for the UI.
+                except Exception:  # allow: exception-handling  # noqa: BLE001, S110
                     pass  # The stop path has already persisted the error for the UI.
 
 
@@ -1621,7 +1637,8 @@ class Handler(socketserver.StreamRequestHandler):
             else:
                 result = self.server.controller.command(action, **data)
             response = {"ok": True, "result": result}
-        except Exception as exc:
+        # The job or IPC response reports the failure; avoid duplicating private data in logs.
+        except Exception as exc:  # allow: exception-handling  # noqa: BLE001
             if locals().get("action") in ("start", "stop", "toggle", "warmup"):
                 self.server.controller.report_error(str(exc))
             response = {"ok": False, "error": str(exc)}
@@ -1656,7 +1673,8 @@ def serve():
             from .local_api import start
 
             api = start(controller)
-        except Exception as exc:
+        # The job or IPC response reports the failure; avoid duplicating private data in logs.
+        except Exception as exc:  # allow: exception-handling  # noqa: BLE001
             controller.report_error(f"Local API unavailable: {exc}")
         with Server(str(path), Handler) as server:
             server.controller = controller
@@ -1702,7 +1720,7 @@ def ensure_daemon():
     log = state_dir() / "daemon.log"
     with log.open("a") as output:
         log.chmod(0o600)
-        subprocess.Popen(
+        subprocess.Popen(  # noqa: S603
             python_command("mouthkeys", "daemon"),
             stdin=subprocess.DEVNULL,
             stdout=output,
@@ -1741,8 +1759,8 @@ def ensure_overlay():
                     pass  # An initializing panel does its own immediate first poll.
             return
     with (state_dir() / "overlay.log").open("a") as output:
-        os.chmod(output.name, 0o600)
-        subprocess.Popen(
+        Path(output.name).chmod(0o600)
+        subprocess.Popen(  # noqa: S603
             python_command("mouthkeys", "overlay"),
             stdin=subprocess.DEVNULL,
             stdout=output,

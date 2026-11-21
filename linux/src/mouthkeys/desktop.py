@@ -1,13 +1,42 @@
 """Optional Linux desktop affordances; no global grabs or privileged services."""
 
 import os
+import re
 import subprocess
 import threading
 from pathlib import Path
 
+TERMINALS = (
+    "ghostty",
+    "c11",
+    "kitty",
+    "alacritty",
+    "wezterm",
+    "xterm",
+    "urxvt",
+    "gnome-terminal",
+    "org.gnome.terminal",
+    "gnome terminal",
+    "konsole",
+    "tilix",
+    "terminator",
+    "foot",
+    "st-256color",
+    "xfce4-terminal",
+    "qterminal",
+    "lxterminal",
+)
+
+
+def terminal_name(value: str) -> bool:
+    return any(
+        re.search(r"(?<![a-z0-9])" + re.escape(name) + r"(?![a-z0-9])", value.lower())
+        for name in TERMINALS
+    )
+
 
 def command(args):
-    return subprocess.run(args, capture_output=True, text=True, check=True, timeout=2).stdout
+    return subprocess.run(args, capture_output=True, text=True, check=True, timeout=2).stdout  # noqa: S603
 
 
 def source_names():
@@ -151,6 +180,6 @@ def _play_sound(config, path=None):
     if config.sound_output != "default":
         args += ["--device", config.sound_output]
     try:
-        subprocess.run(args + [str(path)], check=True, capture_output=True, timeout=3)
+        subprocess.run(args + [str(path)], check=True, capture_output=True, timeout=3)  # noqa: S603
     except (OSError, subprocess.SubprocessError):
         pass  # An unavailable cue must never discard a recording.

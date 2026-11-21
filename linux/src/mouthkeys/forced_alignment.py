@@ -176,7 +176,8 @@ class WhisperForcedAligner:
                     ],
                     avg_logprob=getattr(segment, "avg_logprob", None),
                 )
-            except Exception:
+            # Preserve primary ASR and report a warning without revealing transcript data.
+            except Exception:  # allow: exception-handling  # noqa: BLE001
                 # Optional library/model failure must not discard primary ASR text.
                 # Do not expose exceptions that may echo supplied transcript data.
                 warnings.add(

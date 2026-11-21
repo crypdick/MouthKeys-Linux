@@ -1,4 +1,5 @@
 import os
+import pathlib
 import shutil
 import subprocess
 import sys
@@ -33,7 +34,7 @@ def test_capture_lifeline_stops_child_on_stop_or_daemon_death(tmp_path, crash):
         "sys.stdin.buffer.read(1)\n"
         "p.stdin.close()\np.wait(timeout=4)\n"
     )
-    parent = subprocess.Popen([sys.executable, str(parent_script)], stdin=subprocess.PIPE)
+    parent = subprocess.Popen([sys.executable, str(parent_script)], stdin=subprocess.PIPE)  # noqa: S603
     try:
         deadline = time.monotonic() + 3
         while not ready.exists() and time.monotonic() < deadline:
@@ -71,7 +72,7 @@ def test_recorder_uses_supervised_ffmpeg_and_finishes_wav(monkeypatch, tmp_path)
             assert before_input[before_input.index("-probesize") + 1] == "32"
             assert kwargs["stdin"] == subprocess.PIPE
             assert kwargs["start_new_session"]
-            self.stdin = open(os.devnull, "wb")
+            self.stdin = pathlib.Path(os.devnull).open("wb")
             self.pid = 999999
             with wave.open(str(tmp_path / "recording.wav"), "wb") as wav:
                 wav.setnchannels(1)
@@ -103,7 +104,7 @@ def test_recorder_requires_samples_before_reporting_ready(monkeypatch, tmp_path,
 
     class FakeProcess:
         def __init__(self, args, **kwargs):
-            self.stdin = open(os.devnull, "wb")
+            self.stdin = pathlib.Path(os.devnull).open("wb")
             self.pid = 999999
             self.errors = kwargs["stderr"]
             processes.append(self)

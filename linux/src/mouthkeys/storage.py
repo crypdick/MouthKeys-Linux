@@ -49,7 +49,7 @@ class History:
         extra = "".join(f", {name}=?" for name in metadata)
         with self.connect() as conn:
             conn.execute(
-                f"UPDATE history SET status=?, text=?, error=?{extra} WHERE id=?",
+                f"UPDATE history SET status=?, text=?, error=?{extra} WHERE id=?",  # noqa: S608
                 (status, text, error, *metadata.values(), item_id),
             )
 

@@ -679,8 +679,8 @@ Run the repository-required headless checks and build:
 ./linux/check.sh
 ```
 
-It performs locked Python 3.13 GUI dependency sync, Ruff lint/format checks, offscreen pytest, and
-`uv build linux`. Tests use fake capture/clipboard/key adapters, isolated XDG directories, bounded
+It syncs locked Python 3.13 GUI dependencies, runs the [prek quality suite](../docs/QUALITY.md),
+and runs `uv build linux`. Tests use fake capture/clipboard/key adapters, isolated XDG directories, bounded
 waits, and no live microphone, clipboard, synthesized keys, visible windows, focus changes, or sounds.
 
 Existing-fixture pretrained checks are separate from the default headless suite and require weights

@@ -3,8 +3,6 @@ import threading
 from pathlib import Path
 
 import pytest
-from test_learning import snapshot
-from test_pipeline import FakeDelivery, FakeRecorder, FakeTranscriber, finish
 
 from mouthkeys.config import Config
 from mouthkeys.dictionary import Dictionary
@@ -12,6 +10,9 @@ from mouthkeys.learning import CorrectionLearner
 from mouthkeys.pronunciation import PronunciationStore
 from mouthkeys.service import Controller
 from mouthkeys.storage import History
+
+from .test_learning import snapshot
+from .test_pipeline import FakeDelivery, FakeRecorder, FakeTranscriber, finish
 
 
 def app(text="wurld", recorder=FakeRecorder):
@@ -176,7 +177,8 @@ def test_actual_alignment_uses_span_matcher_and_keeps_raw_on_budget_limit(monkey
 
     def correct(text, path, alignment, *, budget):
         assert text == alignment["text"] == "Heard phrase"
-        assert alignment == original and alignment is not original
+        assert alignment == original
+        assert alignment is not original
         assert alignment["words"] is not original["words"]
         assert budget == 321
         return {"text": "Correct phrase", "truncated": True}

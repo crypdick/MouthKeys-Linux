@@ -1,7 +1,7 @@
 """Datasheet Mono recording panel; independent of the settings window."""
 
 import fcntl
-import os
+import pathlib
 import socket
 import subprocess
 import sys
@@ -88,7 +88,7 @@ class Overlay(QWidget):
             button.setToolTip(tip)
             button.setAccessibleName(tip)
             button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-            button.clicked.connect(lambda checked=False, action=action: self.action(action))
+            button.clicked.connect(lambda _checked=False, action=action: self.action(action))
             self.buttons[action] = button
         self.mic_button = QPushButton(self)
         self.mic_button.setObjectName("microphone")
@@ -192,7 +192,8 @@ class Overlay(QWidget):
         menu = QMenu(self)
         try:
             names = ["default", *source_names()]
-        except Exception:
+        # The microphone menu remains usable when enumeration fails.
+        except Exception:  # allow: exception-handling  # noqa: BLE001
             names = ["default"]
         config = Config.load()
         excluded = {s.strip() for s in config.microphone_never.split(",")}
@@ -200,7 +201,7 @@ class Overlay(QWidget):
             if name not in excluded:
                 action = menu.addAction(name)
                 action.triggered.connect(
-                    lambda checked=False, name=name: self.send(
+                    lambda _checked=False, name=name: self.send(
                         "select_microphone", data={"source": name, "persist": False}
                     )
                 )
@@ -260,13 +261,13 @@ class Overlay(QWidget):
             copy = submenu.addAction("Copy transcript")
             copy.setEnabled(bool(row.get("text")))
             copy.triggered.connect(
-                lambda checked=False, item_id=row["id"]: self.send("copy", item_id=item_id)
+                lambda _checked=False, item_id=row["id"]: self.send("copy", item_id=item_id)
             )
         menu.addSeparator()
         menu.addAction("Open assistant / recent chats", self.open_assistant)
         menu.addAction(
             "Open full history / settings",
-            lambda: subprocess.Popen(python_command("mouthkeys", "gui"), start_new_session=True),
+            lambda: subprocess.Popen(python_command("mouthkeys", "gui"), start_new_session=True),  # noqa: S603
         )
         self.history_menu = menu
         origin = self.mapToGlobal(QPoint(round(42 * self.panel_scale), 0))
@@ -581,7 +582,7 @@ def launch():
         path.unlink(missing_ok=True)
         with socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM) as wake:
             wake.bind(str(path))
-            os.chmod(path, 0o600)
+            pathlib.Path(path).chmod(0o600)
             wake.setblocking(False)
             notifier = QSocketNotifier(wake.fileno(), QSocketNotifier.Type.Read)
 

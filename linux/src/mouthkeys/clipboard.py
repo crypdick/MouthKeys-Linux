@@ -56,7 +56,7 @@ def restore_formats(clipboard, saved):
 class ClipboardPaste:
     def __init__(self, text, delay_ms=500, exclude_history=False):
         self.delay_ms = delay_ms
-        self.process = subprocess.Popen(
+        self.process = subprocess.Popen(  # noqa: S603
             python_command("mouthkeys.clipboard"),
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
@@ -116,7 +116,7 @@ def main():
     app.processEvents()
     if not clipboard.ownsClipboard():
         return 1
-    print("ready", flush=True)
+    print("ready", flush=True)  # noqa: T201
     finished = False
     restored = False
     restore_requested = False
@@ -127,7 +127,7 @@ def main():
         if restore_requested and not acknowledged:
             acknowledged = True
             try:
-                print(result, flush=True)
+                print(result, flush=True)  # noqa: T201
             except BrokenPipeError:
                 pass
 

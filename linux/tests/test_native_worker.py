@@ -32,11 +32,12 @@ left.close()
 right.close()
 print('isolated')
 """
-    result = subprocess.run(
+    result = subprocess.run(  # noqa: S603
         [sys.executable, "-P", "-c", script],
         capture_output=True,
         text=True,
         timeout=10,
+        check=False,
     )
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == "isolated"

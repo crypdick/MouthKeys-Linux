@@ -421,7 +421,7 @@ def _measure(request):
     from .native_asr import effective_revision
     from .transcribe import Transcriber
 
-    original = Config(**request["config"]).validate()
+    original = Config.from_mapping(request["config"])
     config, artifact = _local_config(original)
     identity = _artifact_identity(artifact)
     fixture = _fixture(request["fixture"])
@@ -493,7 +493,8 @@ def worker_main():
         if len(raw) > 2 * 1024 * 1024:
             raise ValueError("Benchmark request too large")
         response = {"result": _measure(json.loads(raw))}
-    except Exception as exc:
+    # The worker returns failure through its private response channel.
+    except Exception as exc:  # allow: exception-handling  # noqa: BLE001
         response = {"error": str(exc)[:1000]}
     output.write(json.dumps(response, allow_nan=False).encode())
     output.close()

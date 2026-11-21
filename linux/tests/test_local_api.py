@@ -18,7 +18,7 @@ def api():
     controller = Controller()
     server = Server(("127.0.0.1", 0), Handler)
     server.controller = controller
-    server.token = "a-long-test-token-for-loopback-only"
+    server.token = "a-long-test-token-for-loopback-only"  # noqa: S105
     server.inference_lock = threading.Lock()
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -34,12 +34,12 @@ def call(api, path, data=None, *, authenticated=True, headers=None):
     request_headers = {"Content-Type": "application/json", **(headers or {})}
     if authenticated:
         request_headers["Authorization"] = f"Bearer {token}"
-    request = urllib.request.Request(
+    request = urllib.request.Request(  # noqa: S310
         address + path,
         headers=request_headers,
         data=json.dumps(data).encode() if data is not None else None,
     )
-    with urllib.request.urlopen(request, timeout=2) as response:
+    with urllib.request.urlopen(request, timeout=2) as response:  # noqa: S310
         return json.load(response)
 
 
@@ -83,12 +83,12 @@ def test_api_does_not_read_arbitrary_file_paths(api):
 
 def raw_call(api, path, body, content_type):
     address, token = api
-    request = urllib.request.Request(
+    request = urllib.request.Request(  # noqa: S310
         address + path,
         data=body,
         headers={"Content-Type": content_type, "Authorization": f"Bearer {token}"},
     )
-    with urllib.request.urlopen(request, timeout=2) as response:
+    with urllib.request.urlopen(request, timeout=2) as response:  # noqa: S310
         return json.load(response)
 
 

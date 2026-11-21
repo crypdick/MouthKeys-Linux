@@ -12,10 +12,10 @@ import os
 import subprocess
 from pathlib import Path
 
+from .processes import python_command
 
-def _request(action, target=None, text=None):
-    from .processes import python_command
 
+def _request(action: str, target: object = None, text: str | None = None) -> object:
     if not (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")):
         return None
     args = python_command("mouthkeys.atspi_helper")
@@ -26,7 +26,7 @@ def _request(action, target=None, text=None):
             str(Path(__file__).with_name("atspi_helper.py").resolve()),
         ]
     try:
-        result = subprocess.run(
+        result = subprocess.run(  # noqa: S603
             args,
             input=json.dumps(
                 {"action": action, "target": target, "text": text}, ensure_ascii=False
@@ -43,7 +43,9 @@ def _request(action, target=None, text=None):
         return None
 
 
-def read_snapshot(target=None, *, include_protected=False):
+def read_snapshot(
+    target: object = None, *, include_protected: bool = False
+) -> dict[str, object] | None:
     """Read a field snapshot, optionally reporting protected focus without field data."""
     value = _request("snapshot", target)
     if not isinstance(value, dict):
@@ -52,22 +54,23 @@ def read_snapshot(target=None, *, include_protected=False):
         return {"protected": True}
     if value.get("protected") is not False:
         return None
-    if not isinstance(value.get("text"), str) or len(value["text"]) > 100000:
+    text = value.get("text")
+    if not isinstance(text, str) or len(text) > 100000:
         return None
     return value
 
 
-def focus_target(target):
+def focus_target(target: object) -> bool:
     return _request("focus", target) is True
 
 
-def insert_text(target, text):
+def insert_text(target: object, text: str) -> dict[str, object] | None:
     """Insert/replace only an unchanged focused captured editable field, without keys."""
     value = _request("insert", target, text)
     return value if isinstance(value, dict) else None
 
 
-def read_context():
+def read_context() -> str | None:
     value = read_snapshot()
     if not value or value.get("foreground") is not True:
         return None

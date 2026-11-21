@@ -2,12 +2,13 @@ import threading
 import wave
 
 import pytest
-from test_pipeline import FakeDelivery, FakeRecorder, FakeTranscriber, finish, write_audio
 
 from mouthkeys.audio import CaptureSession
 from mouthkeys.config import Config
 from mouthkeys.service import Controller
 from mouthkeys.storage import History
+
+from .test_pipeline import FakeDelivery, FakeRecorder, FakeTranscriber, finish, write_audio
 
 
 def controller(recorder=FakeRecorder):
@@ -167,7 +168,8 @@ def test_capture_session_preserves_exact_pcm_prefix_and_removes_private_segments
 
     class Segment:
         def __init__(self, config, path, *, timeout, cancelled):
-            assert timeout > 0 and not cancelled()
+            assert timeout > 0
+            assert not cancelled()
             self.path = path
             opened.append(path)
             with wave.open(str(path), "wb") as wav:

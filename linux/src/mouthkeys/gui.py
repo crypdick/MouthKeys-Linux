@@ -106,7 +106,7 @@ def audio_sources():
         return ["default"]
     try:
         result = subprocess.run(
-            ["pactl", "list", "short", "sources"],
+            ["pactl", "list", "short", "sources"],  # noqa: S607
             capture_output=True,
             text=True,
             check=True,
@@ -228,7 +228,8 @@ class Request(QThread):
     def run(self):
         try:
             self.done.emit({"result": request(self.action, **self.data)})
-        except Exception as exc:
+        # Report to the Settings UI without duplicating private data in logs.
+        except Exception as exc:  # allow: exception-handling  # noqa: BLE001
             self.done.emit({"error": str(exc)})
 
 
@@ -350,7 +351,7 @@ class Window(QWidget):
         for text, action in (("Copy", "copy"),):
             button = QPushButton(text)
             button.clicked.connect(
-                lambda checked=False, action=action: self.selected_action(action)
+                lambda _checked=False, action=action: self.selected_action(action)
             )
             row.addWidget(button)
         clear = QPushButton("Clear history")
@@ -732,7 +733,8 @@ class Window(QWidget):
 
         try:
             ModelBrowser(self).exec()
-        except Exception as exc:
+        # Report to the Settings UI without duplicating private data in logs.
+        except Exception as exc:  # allow: exception-handling  # noqa: BLE001
             self.status.setText(str(exc))
 
     def load_more(self):
@@ -918,7 +920,8 @@ class Window(QWidget):
             self.dictionary_baseline = data
             self.status.setText("Dictionary saved")
             return True
-        except Exception as exc:
+        # Report to the Settings UI without duplicating private data in logs.
+        except Exception as exc:  # allow: exception-handling  # noqa: BLE001
             self.status.setText(str(exc))
             return False
 
@@ -1009,7 +1012,8 @@ class Window(QWidget):
             )
             self.learning_page.refresh_words()
             self.status.setText("Dictionary and supplied vocabulary imported")
-        except Exception as exc:
+        # Report to the Settings UI without duplicating private data in logs.
+        except Exception as exc:  # allow: exception-handling  # noqa: BLE001
             self.status.setText(str(exc))
 
     def export_dictionary(self):
@@ -1038,7 +1042,8 @@ class Window(QWidget):
                         path, format="native" if selected.startswith("Linux") else "upstream"
                     )
                     self.status.setText("Dictionary and vocabulary exported")
-                except Exception as exc:
+                # Report to the Settings UI without duplicating private data in logs.
+                except Exception as exc:  # allow: exception-handling  # noqa: BLE001
                     self.status.setText(str(exc))
 
     def file_page(self):
@@ -1279,7 +1284,8 @@ class Window(QWidget):
                 self.refresh_file_history()
             self.show_file_result(result)
             self.update_file_progress({"stage": "complete"})
-        except Exception as exc:
+        # Report to the Settings UI without duplicating private data in logs.
+        except Exception as exc:  # allow: exception-handling  # noqa: BLE001
             self.file_result = None
             self.file_text.setPlainText(str(exc))
             self.stop_file_progress("File transcription cancelled or failed")
@@ -1309,7 +1315,8 @@ class Window(QWidget):
             try:
                 export_result(self.file_result, path, "json" if kind == "json" else "txt")
                 self.update_file_progress({"stage": "complete"})
-            except Exception as exc:
+            # Report to the Settings UI without duplicating private data in logs.
+            except Exception as exc:  # allow: exception-handling  # noqa: BLE001
                 self.stop_file_progress("File export failed")
                 self.status.setText(str(exc))
 
@@ -1454,10 +1461,9 @@ class Window(QWidget):
             task.finished.connect(task.deleteLater)
             task.start()
             return
-        else:
-            path, _ = QFileDialog.getSaveFileName(
-                self, "Export backup", "mouthkeys-backup.json", "JSON (*.json)"
-            )
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Export backup", "mouthkeys-backup.json", "JSON (*.json)"
+        )
         if path:
             self.send("backup_export", {"path": path}, callback=self.operation_result)
 
@@ -1538,7 +1544,8 @@ class Window(QWidget):
                     revision=field_value(self.fields["model_revision"]),
                 )
                 self.status.setText("Cached model deleted")
-            except Exception as exc:
+            # Report to the Settings UI without duplicating private data in logs.
+            except Exception as exc:  # allow: exception-handling  # noqa: BLE001
                 self.status.setText(str(exc))
 
     def download_speakers(self):
@@ -1676,7 +1683,8 @@ class Window(QWidget):
     def record_prompt_test(self):
         try:
             self.prompt_test_config = self.draft_prompt_config()
-        except Exception as exc:
+        # Report to the Settings UI without duplicating private data in logs.
+        except Exception as exc:  # allow: exception-handling  # noqa: BLE001
             self.status.setText(str(exc))
             return
 
@@ -1706,7 +1714,8 @@ class Window(QWidget):
             text = self.prompt_test_raw.toPlainText()
             if not text.strip():
                 raise ValueError("Provide test text first")
-        except Exception as exc:
+        # Report to the Settings UI without duplicating private data in logs.
+        except Exception as exc:  # allow: exception-handling  # noqa: BLE001
             self.prompt_test_output.setPlainText(str(exc))
             return
         task = AssistantTask(lambda: process(text, config), self)
@@ -1760,7 +1769,8 @@ class Window(QWidget):
             ]
             save_routes(routes)
             self.status.setText("Application prompt overrides saved")
-        except Exception as exc:
+        # Report to the Settings UI without duplicating private data in logs.
+        except Exception as exc:  # allow: exception-handling  # noqa: BLE001
             self.status.setText(str(exc))
 
     def refresh_profiles(self, selected=None):
@@ -1830,7 +1840,8 @@ class Window(QWidget):
             save_profiles([*profiles, profile])
             self.refresh_profiles(item_id)
             self.status.setText("Profile saved; select it in App Settings to activate")
-        except Exception as exc:
+        # Report to the Settings UI without duplicating private data in logs.
+        except Exception as exc:  # allow: exception-handling  # noqa: BLE001
             self.status.setText(str(exc))
 
     def delete_profile(self):
@@ -2022,7 +2033,8 @@ class Window(QWidget):
             if previous.audio_source != updated.audio_source:
                 self.send("select_microphone", {"source": updated.audio_source, "persist": True})
             return True
-        except Exception as exc:
+        # Report to the Settings UI without duplicating private data in logs.
+        except Exception as exc:  # allow: exception-handling  # noqa: BLE001
             self.status.setText(str(exc))
             return False
 
@@ -2148,10 +2160,8 @@ class Window(QWidget):
         from .config import state_dir
 
         with (state_dir() / "hotkeys.log").open("a") as output:
-            import os
-
-            os.chmod(output.name, 0o600)
-            subprocess.Popen(
+            Path(output.name).chmod(0o600)
+            subprocess.Popen(  # noqa: S603
                 python_command("mouthkeys", "hotkeys"),
                 stdin=subprocess.DEVNULL,
                 stdout=output,

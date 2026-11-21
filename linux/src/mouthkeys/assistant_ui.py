@@ -45,7 +45,8 @@ class AssistantTask(QThread):
     def run(self):
         try:
             self.done.emit({"result": self.function()})
-        except Exception as exc:
+        # Report to the assistant UI without duplicating private data in logs.
+        except Exception as exc:  # allow: exception-handling  # noqa: BLE001
             self.done.emit({"error": str(exc)})
 
 
@@ -199,7 +200,8 @@ class AssistantPage(QWidget):
             self.chats.setCurrentIndex(max(0, self.chats.findData(self.session["id"])))
             self.chats.blockSignals(False)
             self.render_conversation()
-        except Exception as exc:
+        # Report to the assistant UI without duplicating private data in logs.
+        except Exception as exc:  # allow: exception-handling  # noqa: BLE001
             self.feedback.setText(str(exc))
 
     def render_conversation(self):
@@ -219,7 +221,8 @@ class AssistantPage(QWidget):
             self.session = AssistantHistory().select(self.chats.currentData())
             self.reset_proposal()
             self.render_conversation()
-        except Exception as exc:
+        # Report to the assistant UI without duplicating private data in logs.
+        except Exception as exc:  # allow: exception-handling  # noqa: BLE001
             self.feedback.setText(str(exc))
 
     def reset_proposal(self):
@@ -257,7 +260,8 @@ class AssistantPage(QWidget):
             try:
                 AssistantHistory().rename(self.session["id"], title)
                 self.reload_chat()
-            except Exception as exc:
+            # Report to the assistant UI without duplicating private data in logs.
+            except Exception as exc:  # allow: exception-handling  # noqa: BLE001
                 self.feedback.setText(str(exc))
 
     def delete_chat(self):
@@ -355,7 +359,7 @@ class AssistantPage(QWidget):
             return ""
         return selection
 
-    def generate(self, checked=False, *, continuation=False):
+    def generate(self, _checked=False, *, continuation=False):
         if self.jobs or self.waiting_voice:
             return
         try:
@@ -373,7 +377,8 @@ class AssistantPage(QWidget):
             self.reload_chat()
             session = dict(self.session)
             history = context_messages(session["messages"])
-        except Exception as exc:
+        # Report to the assistant UI without duplicating private data in logs.
+        except Exception as exc:  # allow: exception-handling  # noqa: BLE001
             self.feedback.setText(str(exc))
             return
         self.feedback.setText("Generating proposal…")
@@ -493,14 +498,16 @@ class AssistantPage(QWidget):
                     self.session = self.memory_sessions[session["mode"]] = session
                 self.render_conversation()
                 self.pending_result = None
-            except Exception as exc:
+            # Report to the assistant UI without duplicating private data in logs.
+            except Exception as exc:  # allow: exception-handling  # noqa: BLE001
                 self.feedback.setText(f"Result ready; could not save conversation: {exc}")
             self.request_context = None
         elif proposal.get("session_id") and Config.load().save_history == "on":
             try:
                 self.session = AssistantHistory().select(proposal["session_id"])
                 self.reload_chat()
-            except Exception as exc:
+            # Report to the assistant UI without duplicating private data in logs.
+            except Exception as exc:  # allow: exception-handling  # noqa: BLE001
                 self.feedback.setText(str(exc))
         if "private_messages" in proposal and Config.load().save_history == "off":
             try:
@@ -639,7 +646,7 @@ class AssistantPage(QWidget):
         dialog.setDefaultButton(QMessageBox.StandardButton.No)
         return dialog.exec() == QMessageBox.StandardButton.Yes
 
-    def run_command(self, checked=False, *, automatic=False):
+    def run_command(self, _checked=False, *, automatic=False):
         if (
             self.jobs
             or self.waiting_voice
@@ -686,7 +693,8 @@ class AssistantPage(QWidget):
                     self.session = self.memory_sessions[execution_session["mode"]] = (
                         execution_session
                     )
-            except Exception as exc:
+            # Report to the assistant UI without duplicating private data in logs.
+            except Exception as exc:  # allow: exception-handling  # noqa: BLE001
                 saved = False
                 self.feedback.setText(f"Command finished; result could not be saved: {exc}")
             self.result.setPlainText(result["output"])

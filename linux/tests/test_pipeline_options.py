@@ -2,11 +2,11 @@ import threading
 import time
 from dataclasses import replace
 
-from test_pipeline import FakeDelivery, FakeRecorder, FakeTranscriber, finish
-
 from mouthkeys.config import Config
 from mouthkeys.service import Controller
 from mouthkeys.storage import History
+
+from .test_pipeline import FakeDelivery, FakeRecorder, FakeTranscriber, finish
 
 
 def controller(text="Hello world"):

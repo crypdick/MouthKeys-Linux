@@ -18,7 +18,9 @@ then dispatches local work or uses `control` to contact the private Unix socket 
   `local_api` is opt-in loopback access. `ai_providers` and `ai_stream` handle configured AI
   requests only; imports, status, and Settings opening must not contact providers or download models.
 - **State:** `config.Config.from_mapping` loads settings at the JSON boundary, including old files.
-  `operations` and `upstream_backup` prepare backup data before applying it. `word_alignment`
+  `operations` prepares and applies backups. `upstream_backup` converts upstream dictionaries and
+  prompt drafts; `upstream_backup_sections` parses settings and transcript records without writing
+  state. `word_alignment`
   parses timed tokens into character-aware spans; character offsets are not time values.
 
 [Import policy](../architecture.toml) keeps primitives independent and prevents the desktop

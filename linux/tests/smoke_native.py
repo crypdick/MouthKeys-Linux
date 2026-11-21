@@ -33,9 +33,15 @@ import os
 import re
 import tempfile
 import time
+from contextlib import suppress
 from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
+
+
+def tiny_fixture(name):
+    path = Path(__file__).with_name("resources") / "native_smoke_models.json"
+    return json.loads(path.read_bytes())[name]
 
 
 def build_tiny(family, path):
@@ -53,31 +59,7 @@ def build_tiny(family, path):
     from transformers import PreTrainedTokenizerFast
 
     torch.manual_seed(1)
-    tokens = [
-        "<pad>",
-        "<unk>",
-        "<eos>",
-        "<bos>",
-        "<|audio_pad|>",
-        "<|audio_start|>",
-        "<|audio_end|>",
-        "<timestamp>",
-        "<asr_text>",
-        "language",
-        "English",
-        "hello",
-        "world",
-        "▁",
-        "<|startofcontext|>",
-        "<|startoftranscript|>",
-        "<|emo:undefined|>",
-        "<|en|>",
-        "<|pnc|>",
-        "<|nopnc|>",
-        "<|noitn|>",
-        "<|notimestamp|>",
-        "<|nodiarize|>",
-    ]
+    tokens = tiny_fixture("qwen_cohere_tokens")
     backend = Tokenizer(
         models.WordLevel({token: i for i, token in enumerate(tokens)}, unk_token="<unk>")  # noqa: S106
     )
@@ -104,12 +86,7 @@ def build_tiny(family, path):
             Qwen3Config,
         )
 
-        template = (
-            "{% for message in messages %}{% for item in message['content'] %}"
-            "{% if item['type'] == 'audio' %}"
-            "<|audio_start|><|audio_pad|><|audio_end|>"
-            "{% else %}{{ item['text'] }}{% endif %}{% endfor %}{% endfor %}"
-        )
+        template = tiny_fixture("qwen_chat_template")
         processor = Qwen3ASRProcessor(Qwen3ASRFeatureExtractor(), tokenizer, chat_template=template)
         config = Qwen3ASRConfig(
             audio_config=Qwen3ASREncoderConfig(
@@ -208,16 +185,7 @@ def build_tiny_nemotron(path):
         default_num_lookahead_tokens=1,
     )
     config = NemotronAsrStreamingConfig(
-        encoder_config=NemotronAsrStreamingEncoderConfig(
-            hidden_size=16,
-            num_hidden_layers=1,
-            num_attention_heads=2,
-            intermediate_size=32,
-            subsampling_conv_channels=8,
-            conv_kernel_size=5,
-            sliding_window=9,
-            default_num_lookahead_tokens=1,
-        ),
+        encoder_config=NemotronAsrStreamingEncoderConfig(**tiny_fixture("nemotron_encoder")),
         vocab_size=len(tokenizer),
         decoder_hidden_size=16,
         num_decoder_layers=1,
@@ -266,69 +234,8 @@ def build_tiny_nemo(path):
         (Path(temporary) / "vocab.txt").write_text(
             "\n".join(tokenizer.id_to_piece(i) for i in range(tokenizer.get_piece_size())) + "\n"
         )
-        config = {
-            "sample_rate": 16000,
-            "model_defaults": {"enc_hidden": 16, "pred_hidden": 16, "joint_hidden": 16},
-            "tokenizer": {"dir": temporary, "type": "bpe"},
-            "preprocessor": {
-                "_target_": "nemo.collections.asr.modules.AudioToMelSpectrogramPreprocessor",
-                "normalize": "per_feature",
-                "window_size": 0.025,
-                "window_stride": 0.01,
-                "features": 80,
-                "n_fft": 512,
-                "dither": 0.0,
-                "pad_to": 0,
-            },
-            "encoder": {
-                "_target_": "nemo.collections.asr.modules.ConformerEncoder",
-                "feat_in": 80,
-                "feat_out": -1,
-                "n_layers": 1,
-                "d_model": 16,
-                "subsampling": "dw_striding",
-                "subsampling_factor": 8,
-                "subsampling_conv_channels": 8,
-                "ff_expansion_factor": 2,
-                "self_attention_model": "rel_pos",
-                "n_heads": 2,
-                "att_context_size": [8, 1],
-                "att_context_style": "chunked_limited",
-                "conv_kernel_size": 5,
-                "conv_context_size": "causal",
-                "dropout": 0.0,
-                "dropout_pre_encoder": 0.0,
-                "dropout_emb": 0.0,
-                "dropout_att": 0.0,
-            },
-            "decoder": {
-                "_target_": "nemo.collections.asr.modules.RNNTDecoder",
-                "normalization_mode": None,
-                "random_state_sampling": False,
-                "blank_as_pad": True,
-                "prednet": {"pred_hidden": 16, "pred_rnn_layers": 1, "t_max": None, "dropout": 0.0},
-            },
-            "joint": {
-                "_target_": "nemo.collections.asr.modules.RNNTJoint",
-                "log_softmax": None,
-                "preserve_memory": False,
-                "fuse_loss_wer": False,
-                "jointnet": {
-                    "encoder_hidden": 16,
-                    "pred_hidden": 16,
-                    "joint_hidden": 16,
-                    "activation": "relu",
-                    "dropout": 0.0,
-                },
-            },
-            "decoding": {
-                "strategy": "greedy_batch",
-                "greedy": {"max_symbols": 1},
-                "preserve_alignments": False,
-                "compute_timestamps": False,
-            },
-            "loss": {"loss_name": "default"},
-        }
+        config = tiny_fixture("nemo")
+        config["tokenizer"]["dir"] = temporary
         model = EncDecRNNTBPEModel(OmegaConf.create(config))
         model.save_to(str(path / "tiny.nemo"))
     (path / "mouthkeys-smoke-artifact.json").write_text(json.dumps({"random_tiny_model": "nemo"}))
@@ -344,7 +251,8 @@ def check_word_times(words, samples, expect_greeting):
     assert all(0 <= word["start"] <= word["end"] <= samples / 16000 for word in words)
     if expect_greeting:
         starts = [word["start"] for word in words if greeting_count(word["word"])]
-        assert starts and starts == sorted(starts), "Expected ordered greeting word timings"
+        assert starts, "Expected greeting word timings"
+        assert starts == sorted(starts), "Expected ordered greeting word timings"
         assert all(word["start"] < word["end"] for word in words)
         return len(set(starts))
     return 0
@@ -507,10 +415,8 @@ def main():
     if args.report:
         versions = {}
         for name in ("torch", "transformers", "nemo_toolkit"):
-            try:
+            with suppress(importlib.metadata.PackageNotFoundError):
                 versions[name] = importlib.metadata.version(name)
-            except importlib.metadata.PackageNotFoundError:
-                pass
         report = {
             "timestamp_utc": datetime.now(UTC).isoformat(),
             "result": "passed",

@@ -10,8 +10,10 @@ literal replacements; they never guess similar-sounding words.
 import json
 import math
 import re
+from pathlib import Path
+from typing import TypedDict
 
-from .config import config_path
+from .config import config_path, private_dir
 from .data_lock import dictionary_lock
 from .dictionary import Dictionary, phrase_pattern
 from .operations import write_private
@@ -20,7 +22,13 @@ MAX_TERMS = 256
 MAX_PROMPT_BYTES = 4096
 
 
-def _phrase(value):
+class VocabularyEntry(TypedDict):
+    text: str
+    weight: float | None
+    aliases: list[str]
+
+
+def _phrase(value: object) -> str:
     if not isinstance(value, str) or not value.strip() or len(value) > 128:
         raise ValueError("Vocabulary entries must contain 1–128 characters")
     if any(not char.isprintable() for char in value):
@@ -30,11 +38,11 @@ def _phrase(value):
 
 class VocabularyStore:
     @staticmethod
-    def path():
+    def path() -> Path:
         return config_path().with_name("vocabulary.json")
 
     @staticmethod
-    def validate(words):
+    def validate(words: object) -> list[str]:
         if not isinstance(words, list):
             raise ValueError("Vocabulary must be a list")
         entries = VocabularyStore.validate_entries(
@@ -43,10 +51,12 @@ class VocabularyStore:
         return [entry["text"] for entry in entries]
 
     @staticmethod
-    def validate_entries(entries):
+    def validate_entries(entries: object) -> list[VocabularyEntry]:
         if not isinstance(entries, list) or len(entries) > MAX_TERMS:
             raise ValueError("Vocabulary must contain at most 256 words or phrases")
-        cleaned, seen, aliases = [], set(), set()
+        cleaned: list[VocabularyEntry] = []
+        seen: set[str] = set()
+        aliases: set[str] = set()
         for entry in entries:
             if (
                 not isinstance(entry, dict)
@@ -69,8 +79,8 @@ class VocabularyStore:
             if not isinstance(entry_aliases, list) or len(entry_aliases) > 20:
                 raise ValueError("Each vocabulary entry supports at most 20 aliases")
             variants = []
-            for alias in entry_aliases:
-                alias = _phrase(alias)
+            for value in entry_aliases:
+                alias = _phrase(value)
                 if alias.casefold() in aliases or alias.casefold() == word.casefold():
                     raise ValueError("Duplicate or self-referencing vocabulary alias")
                 aliases.add(alias.casefold())
@@ -83,7 +93,7 @@ class VocabularyStore:
         return cleaned
 
     @classmethod
-    def entries(cls):
+    def entries(cls) -> list[VocabularyEntry]:
         with dictionary_lock():
             path = cls.path()
             if not path.exists():
@@ -96,51 +106,49 @@ class VocabularyStore:
             return cls.validate_entries(data)
 
     @classmethod
-    def load(cls):
+    def load(cls) -> list[str]:
         return [entry["text"] for entry in cls.entries()]
 
     @classmethod
-    def save_entries(cls, entries):
-        from .config import private_dir
-
+    def save_entries(cls, entries: object) -> list[VocabularyEntry]:
         with dictionary_lock():
-            entries = cls.validate_entries(entries)
+            cleaned = cls.validate_entries(entries)
             path = cls.path()
             private_dir(path.parent)
-            write_private(path, json.dumps(entries, ensure_ascii=False, indent=2).encode())
-            return entries
+            write_private(path, json.dumps(cleaned, ensure_ascii=False, indent=2).encode())
+            return cleaned
 
     @classmethod
-    def save(cls, words):
+    def save(cls, words: object) -> list[str]:
         """Legacy string-list editing preserves weights/aliases for surviving words."""
         with dictionary_lock():
-            words = cls.validate(words)
+            cleaned = cls.validate(words)
             previous = {entry["text"].casefold(): entry for entry in cls.entries()}
             entries = [
                 {**previous[word.casefold()], "text": word}
                 if word.casefold() in previous
                 else {"text": word, "weight": 1, "aliases": []}
-                for word in words
+                for word in cleaned
             ]
             cls.save_entries(entries)
-            return words
+            return cleaned
 
     @classmethod
-    def add(cls, word):
+    def add(cls, word: object) -> list[str]:
         with dictionary_lock():
-            word = _phrase(word)
+            phrase = _phrase(word)
             words = cls.load()
-            if word.casefold() not in {item.casefold() for item in words}:
-                words.append(word)
+            if phrase.casefold() not in {item.casefold() for item in words}:
+                words.append(phrase)
             return cls.save(words)
 
     @classmethod
-    def remove(cls, word):
+    def remove(cls, word: str) -> list[str]:
         with dictionary_lock():
             return cls.save([item for item in cls.load() if item.casefold() != word.casefold()])
 
     @classmethod
-    def effective_entries(cls):
+    def effective_entries(cls) -> list[VocabularyEntry]:
         """Merge enabled replacements for decoding, without rewriting user vocabulary.
 
         Upstream uses weight 8 for dictionary terms and keeps highest-priority
@@ -148,7 +156,7 @@ class VocabularyStore:
         decoder metadata only; explicit replacement application stays one-pass.
         """
         with dictionary_lock():
-            merged = {entry["text"].casefold(): dict(entry) for entry in cls.entries()}
+            merged = {entry["text"].casefold(): entry for entry in cls.entries()}
             for replacement in Dictionary.load()["replacements"]:
                 if not replacement.get("enabled", True):
                     continue
@@ -179,7 +187,7 @@ class VocabularyStore:
             )[:MAX_TERMS]
 
     @classmethod
-    def apply_aliases(cls, text):
+    def apply_aliases(cls, text: str) -> str:
         aliases = {
             " ".join(alias.casefold().split()): entry["text"]
             for entry in cls.entries()
@@ -195,10 +203,11 @@ class VocabularyStore:
         )
 
 
-def _prompt_words(config):
+def _prompt_words(config: object) -> list[str]:
     if getattr(config, "vocabulary_boosting", "off") != "on":
         return []
-    words, size = [], 0
+    words: list[str] = []
+    size = 0
     for entry in VocabularyStore.effective_entries():
         repetitions = math.ceil(min(5, entry["weight"] or 1))
         for _ in range(repetitions):
@@ -210,11 +219,11 @@ def _prompt_words(config):
     return words
 
 
-def context_prompt(config):
+def context_prompt(config: object) -> str:
     words = _prompt_words(config)
     return "Vocabulary: " + ", ".join(words) if words else ""
 
 
-def whisper_options(config):
+def whisper_options(config: object) -> dict[str, str]:
     words = _prompt_words(config)
     return {"hotwords": ", ".join(words)} if words else {}

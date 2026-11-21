@@ -8,11 +8,10 @@ import copy
 import hashlib
 import ipaddress
 import json
-import math
 import uuid
-from dataclasses import replace
-from datetime import datetime
+from dataclasses import asdict
 from pathlib import Path
+from typing import Literal, overload
 from urllib.parse import urlsplit
 
 from .config import Config
@@ -20,47 +19,20 @@ from .dictionary import Dictionary
 from .dictionary_transfer import _merge_rules, merge_replacements, replacement_entries
 from .profiles import PROFILE_FIELDS, load_profiles, validate_profiles
 from .routing import load_routes, validate_routes
+from .upstream_backup_sections import (
+    MigrationNotes,
+    backup_header,
+    convert_history,
+    convert_settings,
+    read_aliases,
+    read_app_mapping,
+    read_list,
+    read_object,
+    read_text,
+)
 
 MAX_BACKUP_BYTES = 100 * 1024 * 1024
 
-BOOL_SETTINGS = {
-    "hideFromDockAndAppSwitcher": "hide_from_taskbar",
-    "showMainWindowAtLoginLaunch": "show_window_at_login",
-    "showThinkingTokens": "ai_show_thinking",
-    "enableStreamingPreview": "live_preview",
-    "skipSilentRecordingsEnabled": "skip_silent_recordings",
-    "enableAIStreaming": "ai_streaming",
-    "copyTranscriptionToClipboard": "copy_to_clipboard",
-    "overlayOuterBorderEnabled": "overlay_border",
-    "saveTranscriptionHistory": "save_history",
-    "notifyAIProcessingFailures": "show_ai_alerts",
-    "showMicrophoneChangeAlerts": "show_microphone_alerts",
-    "showPasteCheckAlerts": "show_paste_alerts",
-    "returnDictationToStartingField": "return_to_start",
-    "spokenSendEnabled": "spoken_send",
-    "spokenSendImmediatelyEnabled": "send_after_pause",
-    "questionMarkShortcutEnabled": "question_mark_shortcut",
-    "removeFillerWordsEnabled": "remove_filler_words",
-    "autoConvertPunctuationEnabled": "spoken_formatting",
-    "literalDictationFormattingEnabled": "literal_formatting",
-    "pauseMediaDuringTranscription": "pause_media",
-    "automaticDictionaryLearningEnabled": "automatic_learning",
-    "vocabularyBoostingEnabled": "vocabulary_boosting",
-    "fileTranscriptionSpeakerLabelsEnabled": "file_speaker_labels",
-}
-DIRECT_SETTINGS = {
-    "overlayPosition": "overlay_position",
-    "overlayBottomOffset": "overlay_bottom_offset",
-    "transcriptionPreviewCharLimit": "preview_chars",
-    "userTypingWPM": "typing_wpm",
-    "spokenSendPhrase": "spoken_send_phrase",
-    "punctuationDictionaryPrefix": "literal_prefix",
-    "fileTranscriptionExpectedSpeakerCount": "file_speaker_count",
-    "defaultDictationPromptOverride": "ai_prompt",
-    "defaultEditPromptOverride": "edit_prompt",
-    "hotkeyMode": "hotkey_mode",
-    "transcriptionStartSound": "sound_preset",
-}
 # URLs match upstream ModelRepository, not discovery results or model guesses.
 PROVIDERS = {
     "openai": "https://api.openai.com/v1",
@@ -75,7 +47,19 @@ PROVIDERS = {
 }
 
 
-def read_backup(path, *, with_digest=False):
+@overload
+def read_backup(path: str | Path, *, with_digest: Literal[False] = False) -> dict[str, object]: ...
+
+
+@overload
+def read_backup(
+    path: str | Path, *, with_digest: Literal[True]
+) -> tuple[dict[str, object], str]: ...
+
+
+def read_backup(
+    path: str | Path, *, with_digest: bool = False
+) -> dict[str, object] | tuple[dict[str, object], str]:
     with Path(path).open("rb") as source:
         raw = source.read(MAX_BACKUP_BYTES + 1)
     if len(raw) > MAX_BACKUP_BYTES:
@@ -86,46 +70,11 @@ def read_backup(path, *, with_digest=False):
     return (data, hashlib.sha256(raw).hexdigest()) if with_digest else data
 
 
-def _list(document, name, limit):
-    value = document.get(name, [])
-    if not isinstance(value, list) or len(value) > limit:
-        raise ValueError(f"Invalid upstream {name}")
-    return value
-
-
-def _date(value):
-    if not isinstance(value, str):
-        raise ValueError("Upstream dates must be ISO8601 strings")
-    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    if parsed.tzinfo is None:
-        raise ValueError("Upstream dates must include a timezone")
-    result = parsed.timestamp()
-    if not math.isfinite(result):
-        raise ValueError("Invalid upstream date")
-    return result
-
-
-def _text(value, name):
-    if not isinstance(value, str):
-        raise ValueError(f"Upstream {name} must be text")
-    return value
-
-
-def _aliases(value):
-    if not isinstance(value, list):
-        raise ValueError("Upstream aliases must be a list")
-    return list(
-        dict.fromkeys(
-            alias for item in value if (alias := " ".join(_text(item, "alias").casefold().split()))
-        )
-    )
-
-
-def _provider(settings):
+def _provider(settings: dict[str, object]) -> Config | None:
     provider_id = settings.get("selectedProviderID")
     if not isinstance(provider_id, str):
         return None
-    providers = _list(settings, "savedProviders", 100)
+    providers = read_list(settings, "savedProviders", 100)
     saved = next((p for p in providers if isinstance(p, dict) and p.get("id") == provider_id), None)
     base = saved.get("baseURL") if saved else PROVIDERS.get(provider_id)
     models = settings.get("selectedModelByProvider", {})
@@ -141,7 +90,7 @@ def _provider(settings):
         endpoint += path
     host = urlsplit(endpoint).hostname
     try:
-        local = ipaddress.ip_address(host).is_loopback
+        local = host is not None and ipaddress.ip_address(host).is_loopback
     except ValueError:
         local = host == "localhost"
     config = Config(
@@ -155,149 +104,40 @@ def _provider(settings):
     return config
 
 
-def _convert_upstream_backup(
-    document, base_config, current_dictionary, current_profiles, current_routes, *, app_map=None
-):
-    """Build native import data plus transcript-free report; do not write any state."""
-    version = document.get("schemaVersion")
-    if (
-        not isinstance(version, dict)
-        or type(version.get("major")) is not int
-        or version["major"] != 1
-    ):
-        raise ValueError("Unsupported upstream backup schema version")
-    if type(version.get("minor")) is not int or version["minor"] < 0:
-        raise ValueError("Invalid upstream backup schema version")
-    settings = document.get("settings")
-    if not isinstance(settings, dict):
-        raise ValueError("Invalid upstream backup settings")
-    if "exportedAt" in document:
-        _date(document["exportedAt"])
-    warnings, unmapped, changes = [], {}, {}
-    handled = set()
-
-    def skip(field, reason):
-        handled.add(field)
-        unmapped[field] = reason
-        warnings.append(f"{field}: {reason}")
-
-    for source, destination in BOOL_SETTINGS.items():
-        if settings.get(source) is None:
-            continue
-        if type(settings[source]) is not bool:
-            raise ValueError(f"Upstream {source} must be boolean")
-        changes[destination] = "on" if settings[source] else "off"
-        handled.add(source)
-    for source, destination in DIRECT_SETTINGS.items():
-        if settings.get(source) is not None:
-            value = settings[source]
-            if destination in (
-                "overlay_bottom_offset",
-                "preview_chars",
-                "typing_wpm",
-                "file_speaker_count",
-            ):
-                if type(value) not in (int, float) or not math.isfinite(value):
-                    raise ValueError(f"Invalid upstream {source}")
-                value = round(value)
-            changes[destination] = value
-            handled.add(source)
-    for source, fallback, destination in (
-        ("gaavLowercaseFirstLetterEnabled", "gaavModeEnabled", "lowercase_first"),
-        ("gaavRemoveTrailingPeriodEnabled", "gaavModeEnabled", "remove_trailing_period"),
-        (
-            "continuousDictationSpacingEnabled",
-            "continuousDictationModeEnabled",
-            "space_between_dictations",
-        ),
-        (
-            "contextAwareCapitalizationEnabled",
-            "continuousDictationModeEnabled",
-            "smart_capitalization",
-        ),
-    ):
-        value = settings.get(source, settings.get(fallback))
-        if value is not None:
-            if type(value) is not bool:
-                raise ValueError(f"Upstream {source} must be boolean")
-            changes[destination] = "on" if value else "off"
-            handled.update((source, fallback))
-    if "weekendsDontBreakStreak" in settings:
-        if type(settings["weekendsDontBreakStreak"]) is not bool:
-            raise ValueError("Upstream weekendsDontBreakStreak must be boolean")
-        changes["weekends_break_streak"] = "off" if settings["weekendsDontBreakStreak"] else "on"
-        handled.add("weekendsDontBreakStreak")
-    if "fillerWords" in settings:
-        words = _list(settings, "fillerWords", 10000)
-        changes["filler_words"] = ",".join(_text(word, "filler word") for word in words)
-        handled.add("fillerWords")
-    if "transcriptionSoundVolume" in settings:
-        value = settings["transcriptionSoundVolume"]
-        if type(value) not in (int, float) or not math.isfinite(value) or not 0 <= value <= 1:
-            raise ValueError("Invalid upstream recording sound volume")
-        changes["sound_volume"] = round(value * 100)
-        handled.add("transcriptionSoundVolume")
-    if settings.get("spokenSendKey") in ("enter", "shiftEnter"):
-        changes["spoken_send_key"] = {"enter": "return", "shiftEnter": "shift+return"}[
-            settings["spokenSendKey"]
-        ]
-        handled.add("spokenSendKey")
-    insertion = settings.get("textInsertionMode")
-    if insertion in ("standard", "reliablePaste"):
-        changes["insertion_mode"] = "direct" if insertion == "standard" else "clipboard"
-        if insertion == "reliablePaste":
-            changes["restore_clipboard"] = "on"
-        handled.add("textInsertionMode")
-    speech = settings.get("selectedSpeechModel")
-    whisper = {
-        "whisper-tiny": "tiny",
-        "whisper-base": "base",
-        "whisper-small": "small",
-        "whisper-medium": "medium",
-        "whisper-large-turbo": "large-v3-turbo",
-        "whisper-large": "large-v3",
-    }
-    if speech in whisper:
-        changes.update(engine="whisper", model=whisper[speech], compute_type="default")
-        handled.add("selectedSpeechModel")
-        warnings.append(
-            "Speech selection saves a Linux route only; weights are never downloaded or loaded."
-        )
-    elif speech is not None:
-        skip(
-            "selectedSpeechModel",
-            "Apple APIs/artifacts and non-Whisper routes require explicit Linux model selection",
-        )
-
+def _convert_dictionary(
+    settings: dict[str, object], current_dictionary: object, notes: MigrationNotes
+) -> tuple[dict[str, object], int]:
     dictionary = copy.deepcopy(Dictionary.validate(current_dictionary))
-    replacements = replacement_entries(_list(settings, "customDictionaryEntries", 10000))
+    replacements = replacement_entries(read_list(settings, "customDictionaryEntries", 10000))
     dictionary["replacements"] = merge_replacements(dictionary["replacements"], replacements)
-    handled.add("customDictionaryEntries")
+    notes.handled.add("customDictionaryEntries")
     if settings.get("punctuationDictionaryRules") is not None:
-        rows = _list(settings, "punctuationDictionaryRules", 10000)
+        rows = read_list(settings, "punctuationDictionaryRules", 10000)
         rules = []
-        for index, row in enumerate(rows):
-            aliases = _aliases(row["aliases"])
-            symbol = _text(row["symbol"], "symbol").strip()
+        for index, value in enumerate(rows):
+            row = read_object(value)
+            aliases = read_aliases(row["aliases"])
+            symbol = read_text(row["symbol"], "symbol").strip()
             if not aliases or not symbol:
-                skip(
+                notes.skip(
                     f"punctuationDictionaryRules[{index}]",
                     "Empty punctuation row omitted like upstream normalization",
                 )
                 continue
             rules.append({"aliases": aliases, "symbol": symbol})
         dictionary["punctuation"] = _merge_rules(dictionary["punctuation"], rules)
-        handled.add("punctuationDictionaryRules")
+        notes.handled.add("punctuationDictionaryRules")
     if settings.get("spokenFormattingActionRules") is not None:
         symbols = {"newLine": "\n", "newParagraph": "\n\n", "tab": "\t", "space": " "}
         seen_actions = set()
-        for index, row in enumerate(_list(settings, "spokenFormattingActionRules", 10000)):
-            action = row["action"]
+        for index, value in enumerate(read_list(settings, "spokenFormattingActionRules", 10000)):
+            row = read_object(value)
+            action = read_text(row["action"], "action")
             symbol = symbols[action]
             if action in seen_actions:
                 continue  # Upstream keeps the first row for each action.
             seen_actions.add(action)
-            aliases = _aliases(row["aliases"])
+            aliases = read_aliases(row["aliases"])
             enabled = row.get("isEnabled", True)
             if type(enabled) is not bool:
                 raise ValueError("Upstream action enabled flag must be boolean")
@@ -307,7 +147,7 @@ def _convert_upstream_backup(
                 for entry in matching:
                     entry["enabled"] = False
                 if not aliases and not matching:
-                    skip(
+                    notes.skip(
                         f"spokenFormattingActionRules[{index}]",
                         "Disabled action has no native aliases; remains unavailable",
                     )
@@ -322,119 +162,145 @@ def _convert_upstream_backup(
                         }
                     ],
                 )
-        handled.add("spokenFormattingActionRules")
+        notes.handled.add("spokenFormattingActionRules")
     Dictionary.validate(dictionary)
+    return dictionary, len(replacements)
 
-    profiles, profile_id_map, pending_profiles = [], {}, []
-    current_by_id = {profile["id"]: profile for profile in current_profiles}
-    reserved = {base_config.ai_profile, base_config.edit_profile, base_config.command_profile}
-    reserved.update(rule["profile"] for rule in current_routes)
+
+def _selected_provider(settings: dict[str, object], notes: MigrationNotes) -> Config | None:
     try:
-        provider = _provider(settings)
+        return _provider(settings)
     except (ValueError, TypeError):
-        provider = None
-        skip(
+        notes.skip(
             "provider",
             "Provider endpoint/model unsupported; credentials and endpoint not imported",
         )
-    upstream_profiles = _list(document, "promptProfiles", 100)
-    if provider is not None:
-        handled.update(("selectedProviderID", "selectedModelByProvider", "savedProviders"))
-        warnings.append(
-            "Imported AI profiles stay inactive; existing Linux providers/selections unchanged. "
-            "Review credentials and explicitly select a profile/add a route in Settings."
-        )
-        for profile in upstream_profiles:
-            identifier = str(uuid.UUID(profile["id"]))
-            if identifier in profile_id_map:
-                raise ValueError("Duplicate upstream prompt profile ID")
-            mode = {"dictate": "dictation", "edit": "edit", "write": "edit", "rewrite": "edit"}.get(
-                profile.get("mode", "dictate")
+        return None
+
+
+def _mode(row: dict[str, object]) -> str | None:
+    value = row.get("mode", "dictate")
+    modes = {"dictate": "dictation", "edit": "edit", "write": "edit", "rewrite": "edit"}
+    return modes.get(value) if isinstance(value, str) else None
+
+
+def _draft_profiles(
+    upstream_profiles: list[object],
+    provider: Config | None,
+    current_by_id: dict[str, dict[str, object]],
+    reserved: set[str],
+    notes: MigrationNotes,
+) -> tuple[list[dict[str, object]], dict[str, str], list[dict[str, object]]]:
+    if provider is None:
+        if upstream_profiles:
+            notes.skip(
+                "promptProfiles",
+                "No supported selected provider/model; prompt profiles remain in original backup",
             )
-            if mode is None:
-                raise ValueError("Invalid upstream prompt mode")
-            draft = {
-                "id": identifier,
+        return [], {}, []
+    profiles: list[dict[str, object]] = []
+    profile_id_map: dict[str, str] = {}
+    pending_profiles: list[dict[str, object]] = []
+    notes.handled.update(("selectedProviderID", "selectedModelByProvider", "savedProviders"))
+    notes.warnings.append(
+        "Imported AI profiles stay inactive; existing Linux providers/selections unchanged. "
+        "Review credentials and explicitly select a profile/add a route in Settings."
+    )
+    for value in upstream_profiles:
+        profile = read_object(value)
+        identifier = str(uuid.UUID(read_text(profile["id"], "prompt profile ID")))
+        if identifier in profile_id_map:
+            raise ValueError("Duplicate upstream prompt profile ID")
+        mode = _mode(profile)
+        if mode is None:
+            raise ValueError("Invalid upstream prompt mode")
+        draft: dict[str, object] = {
+            "id": identifier,
+            "name": profile["name"],
+            "shortcut": "",
+            **{key: getattr(provider, key) for key in PROFILE_FIELDS},
+            "ai_prompt": profile["prompt"],
+        }
+        draft_id = identifier
+        existing = current_by_id.get(identifier)
+        if existing != draft and (existing is not None or identifier in reserved):
+            serialized = json.dumps(draft, sort_keys=True, ensure_ascii=False)
+            draft_id = str(uuid.uuid5(uuid.NAMESPACE_URL, "mouthkeys:upstream:" + serialized))
+            draft["id"] = draft_id
+            if draft_id in current_by_id and current_by_id[draft_id] != draft:
+                raise ValueError("Imported prompt profile ID conflicts with existing data")
+        profile_id_map[identifier] = draft_id
+        profiles.append(draft)
+        pending_profiles.append(
+            {
+                "source_id": identifier,
+                "id": draft["id"],
                 "name": profile["name"],
-                "shortcut": "",
-                **{key: getattr(provider, key) for key in PROFILE_FIELDS},
-                "ai_prompt": profile["prompt"],
+                "mode": mode,
+                "provider": provider.ai_provider,
+                "endpoint": provider.ai_endpoint,
+                "model": provider.ai_model,
+                "credential_source": provider.ai_credential_source,
             }
-            existing = current_by_id.get(identifier)
-            if existing != draft and (existing is not None or identifier in reserved):
-                serialized = json.dumps(draft, sort_keys=True, ensure_ascii=False)
-                draft["id"] = str(
-                    uuid.uuid5(uuid.NAMESPACE_URL, "mouthkeys:upstream:" + serialized)
-                )
-                if draft["id"] in current_by_id and current_by_id[draft["id"]] != draft:
-                    raise ValueError("Imported prompt profile ID conflicts with existing data")
-            profile_id_map[identifier] = draft["id"]
-            profiles.append(draft)
-            pending_profiles.append(
-                {
-                    "source_id": identifier,
-                    "id": draft["id"],
-                    "name": profile["name"],
-                    "mode": mode,
-                    "provider": provider.ai_provider,
-                    "endpoint": provider.ai_endpoint,
-                    "model": provider.ai_model,
-                    "credential_source": provider.ai_credential_source,
-                }
-            )
-        profiles = validate_profiles(profiles)
-        if profiles:
-            warnings.append(
-                "Prompts use global provider/model; backup omits per-profile provider pins."
-            )
-            warnings.append(
-                "Profile dates/context flags omitted; source selections/routes shown as pending."
-            )
-    elif upstream_profiles:
-        skip(
-            "promptProfiles",
-            "No supported selected provider/model; prompt profiles remain in original backup",
         )
-    pending_selections = {}
+    validated: list[dict[str, object]] = validate_profiles(profiles)
+    if validated:
+        notes.warnings.append(
+            "Prompts use global provider/model; backup omits per-profile provider pins."
+        )
+        notes.warnings.append(
+            "Profile dates/context flags omitted; source selections/routes shown as pending."
+        )
+    return validated, profile_id_map, pending_profiles
+
+
+def _pending_selections(
+    settings: dict[str, object], profile_id_map: dict[str, str], notes: MigrationNotes
+) -> dict[str, object]:
+    pending_selections: dict[str, object] = {}
     for source in ("selectedDictationPromptID", "selectedEditPromptID"):
         identifier = settings.get(source)
-        if identifier and str(uuid.UUID(identifier)) in profile_id_map:
-            identifier = str(uuid.UUID(identifier))
+        if not identifier:
+            continue
+        identifier = str(uuid.UUID(read_text(identifier, "selected prompt ID")))
+        if identifier in profile_id_map:
             pending_selections[source] = {
                 "source_id": identifier,
                 "profile": profile_id_map[identifier],
             }
-            handled.add(source)
+            notes.handled.add(source)
     for source in ("editPromptOff", "dictationPromptOff"):
         if settings.get(source) is not None:
             if type(settings[source]) is not bool:
                 raise ValueError(f"Upstream {source} must be boolean")
             pending_selections[source] = settings[source]
-            handled.add(source)
+            notes.handled.add(source)
     scope = settings.get("dictationPromptRoutingScope")
     if scope in ("allApps", "selectedAppsOnly"):
         pending_selections["dictationPromptRoutingScope"] = scope
-        handled.add("dictationPromptRoutingScope")
+        notes.handled.add("dictationPromptRoutingScope")
+    return pending_selections
 
-    app_map = {} if app_map is None else app_map
-    if not isinstance(app_map, dict) or any(
-        not isinstance(k, str) or not isinstance(v, str) or not v.strip()
-        for k, v in app_map.items()
-    ):
-        raise ValueError("Application mapping must map macOS bundle IDs to Linux application names")
-    routes = copy.deepcopy(current_routes)
-    pending_bindings = []
-    for index, binding in enumerate(_list(document, "appPromptBindings", 1000)):
-        bundle = binding.get("appBundleID", "")
-        mode = {"dictate": "dictation", "edit": "edit", "write": "edit", "rewrite": "edit"}.get(
-            binding.get("mode", "dictate")
-        )
+
+def _pending_bindings(
+    bindings: list[object],
+    app_map: dict[str, str],
+    profile_id_map: dict[str, str],
+    notes: MigrationNotes,
+) -> list[dict[str, object]]:
+    pending_bindings: list[dict[str, object]] = []
+    for index, value in enumerate(bindings):
+        binding = read_object(value)
+        bundle = read_text(binding.get("appBundleID", ""), "application ID")
+        mode = _mode(binding)
         selected = binding.get("promptID")
-        source_id = str(uuid.UUID(selected)) if selected else "default"
+        source_id = (
+            str(uuid.UUID(read_text(selected, "binding prompt ID"))) if selected else "default"
+        )
         identifier = profile_id_map.get(source_id, "default" if not selected else None)
         app = app_map.get(bundle)
         if not app or mode is None or identifier is None:
-            skip(
+            notes.skip(
                 f"appPromptBindings[{index}]",
                 "Requires explicit Linux application mapping and an imported prompt",
             )
@@ -448,74 +314,65 @@ def _convert_upstream_backup(
                 "mode": mode,
             }
         )
-    combined = {p["id"]: p for p in current_profiles}
-    combined.update({p["id"]: p for p in profiles})
+    return pending_bindings
+
+
+def _convert_upstream_backup(
+    document: object,
+    base_config: Config,
+    current_dictionary: object,
+    current_profiles: list[dict[str, object]],
+    current_routes: list[dict[str, object]],
+    *,
+    app_map: object = None,
+) -> tuple[dict[str, object], dict[str, object]]:
+    """Build native import data plus transcript-free report; do not write any state."""
+    document = read_object(document)
+    version, settings = backup_header(document)
+    notes = MigrationNotes()
+    changes = convert_settings(settings, notes)
+
+    dictionary, replacement_count = _convert_dictionary(settings, current_dictionary, notes)
+    current_by_id = {
+        read_text(profile["id"], "profile ID"): profile for profile in current_profiles
+    }
+    reserved = {base_config.ai_profile, base_config.edit_profile, base_config.command_profile}
+    reserved.update(read_text(rule["profile"], "route profile") for rule in current_routes)
+    provider = _selected_provider(settings, notes)
+    profiles, profile_id_map, pending_profiles = _draft_profiles(
+        read_list(document, "promptProfiles", 100), provider, current_by_id, reserved, notes
+    )
+    pending_selections = _pending_selections(settings, profile_id_map, notes)
+    mapping = read_app_mapping(app_map)
+    pending_bindings = _pending_bindings(
+        read_list(document, "appPromptBindings", 1000), mapping, profile_id_map, notes
+    )
+    routes = copy.deepcopy(current_routes)
+    combined = dict(current_by_id)
+    combined.update({read_text(p["id"], "profile ID"): p for p in profiles})
     validate_routes(routes, validate_profiles(list(combined.values())))
 
-    history, seen_history = [], set()
-    for row in _list(document, "transcriptionHistory", 1000000):
-        identifier = str(uuid.UUID(row["id"]))
-        if identifier in seen_history:
-            raise ValueError("Duplicate upstream history ID")
-        seen_history.add(identifier)
-        flag = row["wasAIProcessed"]
-        if type(flag) is not bool:
-            raise ValueError("Upstream wasAIProcessed must be boolean")
-        audio = row.get("audio")
-        duration, model = 0, ""
-        if audio is not None:
-            if (
-                not isinstance(audio, dict)
-                or type(audio.get("durationMilliseconds")) is not int
-                or audio["durationMilliseconds"] < 0
-            ):
-                raise ValueError("Invalid upstream audio metadata")
-            duration = audio["durationMilliseconds"] / 1000
-            model = audio.get("model") or ""
-        error = row.get("aiProcessingError")
-        if error is not None:
-            _text(error, "AI processing error")
-        if row.get("processingModel") is not None:
-            _text(row["processingModel"], "AI processing model")
-        history.append(
-            {
-                "id": identifier,
-                "created": _date(row["timestamp"]),
-                "text": _text(row["processedText"], "processed text"),
-                "raw_text": _text(row["rawText"], "raw text"),
-                "app": _text(row["appName"], "application name"),
-                "window": _text(row["windowTitle"], "window title"),
-                "was_ai_processed": flag,
-                "ai_processing_error": error,
-                "ai_processing_model": row.get("processingModel"),
-                "status": "transcribed",
-                "error": "",
-                "duration": duration,
-                "model": _text(model, "audio model"),
-            }
-        )
-    if any(row.get("audio") is not None for row in document.get("transcriptionHistory", [])):
-        warnings.append(
-            "Audio metadata/duration imported, not files; backup JSON has no audio bytes."
-        )
+    history = convert_history(document, notes)
     if document.get("pronunciationProfiles"):
-        skip(
+        notes.skip(
             "pronunciationProfiles",
             "Apple embeddings cannot become Linux acoustic templates; existing profiles unchanged",
         )
     if settings.get("pronunciationMatchingEnabled"):
-        skip(
+        notes.skip(
             "pronunciationMatchingEnabled",
             "Re-enroll Linux pronunciation takes before enabling matching",
         )
     elif settings.get("pronunciationMatchingEnabled") is False:
         changes["pronunciation_matching"] = "off"
-        handled.add("pronunciationMatchingEnabled")
+        notes.handled.add("pronunciationMatchingEnabled")
     for field, value in settings.items():
-        if field not in handled and value is not None:
-            skip(field, "No equivalent safe automatic mapping; existing Linux setting retained")
+        if field not in notes.handled and value is not None:
+            notes.skip(
+                field, "No equivalent safe automatic mapping; existing Linux setting retained"
+            )
     # Config validation enforces native ranges without truncating or inventing settings.
-    replace(base_config, **changes).validate()
+    Config.from_mapping(asdict(base_config) | changes)
     backup = {
         "version": 1,
         "config": changes,
@@ -524,7 +381,7 @@ def _convert_upstream_backup(
         "history": history,
         "prompt_routes": routes,
     }
-    report = {
+    report: dict[str, object] = {
         "format": "upstream",
         "schema_version": version,
         "counts": {
@@ -532,11 +389,11 @@ def _convert_upstream_backup(
             "profiles": len(profiles),
             "routes": 0,
             "pending_routes": len(pending_bindings),
-            "replacements": len(replacements),
+            "replacements": replacement_count,
         },
         "changes": changes,
-        "warnings": warnings,
-        "unmapped": unmapped,
+        "warnings": notes.warnings,
+        "unmapped": notes.unmapped,
         "pending_profiles": pending_profiles,
         "pending_selections": pending_selections,
         "pending_bindings": pending_bindings,
@@ -546,8 +403,14 @@ def _convert_upstream_backup(
 
 
 def convert_upstream_backup(
-    document, base_config, current_dictionary, current_profiles, current_routes, *, app_map=None
-):
+    document: object,
+    base_config: Config,
+    current_dictionary: object,
+    current_profiles: list[dict[str, object]],
+    current_routes: list[dict[str, object]],
+    *,
+    app_map: object = None,
+) -> tuple[dict[str, object], dict[str, object]]:
     try:
         return _convert_upstream_backup(
             document,
@@ -561,7 +424,9 @@ def convert_upstream_backup(
         raise ValueError("Invalid upstream backup fields") from None
 
 
-def load_upstream_backup(path, *, app_map=None, document=None):
+def load_upstream_backup(
+    path: str | Path, *, app_map: object = None, document: object = None
+) -> tuple[dict[str, object], dict[str, object]]:
     """Read snapshots only: unlike store helpers, never create lock files or databases."""
     dictionary_path = Dictionary.path()
     dictionary = read_backup(dictionary_path) if dictionary_path.exists() else Dictionary.defaults()
@@ -573,12 +438,3 @@ def load_upstream_backup(path, *, app_map=None, document=None):
         load_routes(),
         app_map=app_map,
     )
-
-
-def preview_upstream_backup(path, *, app_map=None):
-    from .operations import _prepare_backup
-
-    document, digest = read_backup(path, with_digest=True)
-    converted, report = load_upstream_backup(path, app_map=app_map, document=document)
-    _prepare_backup(converted)
-    return {**report, "file_sha256": digest}

@@ -985,7 +985,6 @@
 1	src/mouthkeys/overlay.py	ANN201	Missing return type annotation for public function `mouseReleaseEvent`
 1	src/mouthkeys/overlay.py	ANN201	Missing return type annotation for public function `open_assistant`
 1	src/mouthkeys/overlay.py	ANN201	Missing return type annotation for public function `paintEvent`
-1	src/mouthkeys/overlay.py	ANN201	Missing return type annotation for public function `place`
 1	src/mouthkeys/overlay.py	ANN201	Missing return type annotation for public function `poll`
 1	src/mouthkeys/overlay.py	ANN201	Missing return type annotation for public function `send`
 1	src/mouthkeys/overlay.py	ANN201	Missing return type annotation for public function `set_status`
@@ -995,7 +994,7 @@
 1	src/mouthkeys/overlay.py	ANN202	Missing return type annotation for private function `received`
 1	src/mouthkeys/overlay.py	ANN204	Missing return type annotation for special method `__init__`
 3	src/mouthkeys/overlay.py	ARG002	Unused method argument: `event`
-1	src/mouthkeys/overlay.py	C901	`set_status` is too complex (21 > 15)
+1	src/mouthkeys/overlay.py	C901	`set_status` is too complex (18 > 15)
 1	src/mouthkeys/overlay.py	FBT003	Boolean positional value in function call
 1	src/mouthkeys/overlay.py	N802	Function name `mouseDoubleClickEvent` should be lowercase
 1	src/mouthkeys/overlay.py	N802	Function name `mouseMoveEvent` should be lowercase
@@ -1003,10 +1002,9 @@
 1	src/mouthkeys/overlay.py	N802	Function name `mouseReleaseEvent` should be lowercase
 1	src/mouthkeys/overlay.py	N802	Function name `paintEvent` should be lowercase
 1	src/mouthkeys/overlay.py	PLC0415	`import` should be at the top-level of a file
-1	src/mouthkeys/overlay.py	PLR0912	Too many branches (22 > 12)
-1	src/mouthkeys/overlay.py	PLR0915	Too many statements (54 > 50)
+1	src/mouthkeys/overlay.py	PLR0912	Too many branches (19 > 12)
 1	src/mouthkeys/overlay.py	PLR0915	Too many statements (62 > 50)
-1	src/mouthkeys/overlay.py	PLR0915	Too many statements (78 > 50)
+1	src/mouthkeys/overlay.py	PLR0915	Too many statements (73 > 50)
 1	src/mouthkeys/overlay_assistant.py	ANN001	Missing type annotation for function argument `action`
 1	src/mouthkeys/overlay_assistant.py	ANN001	Missing type annotation for function argument `callback`
 1	src/mouthkeys/overlay_assistant.py	ANN001	Missing type annotation for function argument `data`

@@ -8,13 +8,14 @@ import sys
 import time
 
 from PySide6.QtCore import QPoint, QRect, QRectF, QSize, QSocketNotifier, Qt, QTimer
-from PySide6.QtGui import QColor, QCursor, QFont, QIcon, QPainter, QPen, QPixmap, QTextLayout
+from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPen, QPixmap, QTextLayout
 from PySide6.QtWidgets import QApplication, QMenu, QPushButton, QWidget
 
 from .config import Config, runtime_dir
 from .desktop import source_names
 from .gui import Request
 from .lark import BatteryMonitor
+from .overlay_placement import OverlayPlacement
 from .processes import python_command
 from .trace import Trace
 
@@ -57,9 +58,7 @@ class Overlay(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        self.setFixedSize(424, 146)
         self.settings = Config.load()
-        self.panel_scale = 1.0
         self.battery = BatteryMonitor()
         self.data = {}
         self.trace = Trace()
@@ -69,22 +68,20 @@ class Overlay(QWidget):
         self.pending = False
         self.active = False
         self.dismiss_at = None
-        self.positioned = False
-        self.drag = None
+        self.placement = OverlayPlacement(self, self._layout_panel)
         self.seconds = 0
         self.notice = None
         self.notice_serial = None
         self.failures = 0
         self.assistant_window = None
         self.buttons = {}
-        for action, tip, x, y in (
-            ("history", "Open history", 6, 29),
-            ("copy", "Copy transcript", 6, 83),
-            ("cancel", "Cancel / dismiss", 388, 29),
+        for action, tip in (
+            ("history", "Open history"),
+            ("copy", "Copy transcript"),
+            ("cancel", "Cancel / dismiss"),
         ):
             button = QPushButton(self)
             button.setIconSize(QSize(20, 20))
-            button.setGeometry(x, y, 30, 30)
             button.setToolTip(tip)
             button.setAccessibleName(tip)
             button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
@@ -105,7 +102,7 @@ class Overlay(QWidget):
         self.assistant_button.setAccessibleName("Open assistant review and conversations")
         self.assistant_button.clicked.connect(self.open_assistant)
         self.assistant_button.hide()
-        self.apply_settings(self.settings)
+        self.placement.place(self.settings)
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.poll)
         self.timer.start(200)
@@ -141,14 +138,13 @@ class Overlay(QWidget):
             self.assistant_window.apply_theme()
         self.update()
 
-    def apply_settings(self, config):
-        previous = self.settings
-        self.settings = config
-        self.panel_scale = config.overlay_size / 100
-        compact = config.overlay_style == "compact"
-        self.setFixedSize(
-            round(424 * self.panel_scale), round((106 if compact else 146) * self.panel_scale)
+    def _layout_panel(self, bounds: QSize) -> None:
+        compact = self.settings.overlay_style == "compact"
+        height = 106 if compact else 146
+        self.panel_scale = min(
+            self.settings.overlay_size / 100, bounds.width() / 424, bounds.height() / height
         )
+        self.setFixedSize(round(424 * self.panel_scale), round(height * self.panel_scale))
         for action, x, y in (
             ("history", 6, 14 if compact else 29),
             ("copy", 6, 60 if compact else 83),
@@ -172,6 +168,10 @@ class Overlay(QWidget):
             round(125 * self.panel_scale),
             round(20 * self.panel_scale),
         )
+
+    def apply_settings(self, config):
+        previous = self.settings
+        self.settings = config
         if previous.theme != config.theme:
             self.apply_theme()
         if (
@@ -185,7 +185,7 @@ class Overlay(QWidget):
             config.overlay_size,
             config.overlay_style,
         ):
-            self.positioned = False
+            self.placement.place(config)
             self.text_cache = None
 
     def choose_microphone(self):
@@ -227,7 +227,7 @@ class Overlay(QWidget):
                 if "error" in response:
                     self.notice = (response["error"], time.monotonic() + 10)
                     self.dismiss_at = self.notice[1]
-                    self.show()
+                    self.placement.show(self.settings)
                     self.update()
 
             job.done.connect(feedback)
@@ -305,17 +305,6 @@ class Overlay(QWidget):
 
         self.send("status", received)
 
-    def place(self):
-        screen = QApplication.screenAt(QCursor.pos()) or QApplication.primaryScreen()
-        area = screen.availableGeometry()
-        y = (
-            area.top() + self.settings.overlay_bottom_offset
-            if self.settings.overlay_position == "top"
-            else area.bottom() - self.height() - self.settings.overlay_bottom_offset
-        )
-        self.move(area.center().x() - self.width() // 2, y)
-        self.positioned = True
-
     def set_status(self, data):
         config = Config.load()
         self.apply_settings(config)
@@ -335,9 +324,7 @@ class Overlay(QWidget):
         if active and (not self.active or new_recording):
             self.dismiss_at = None
             self.notice = None
-            if not self.positioned:
-                self.place()
-            self.show()  # Never activate or raise the destination app.
+            self.placement.show(config, new_recording=new_recording)
         if not active and self.active:
             message = data.get("message", "")
             success = message.startswith(("Copied —", "Paste requested —", "Insertion requested —"))
@@ -347,9 +334,7 @@ class Overlay(QWidget):
         if proposal and (new_recording or proposal != self.data.get("assistant_proposal")):
             # Retain the answer until explicit dismissal; never open or focus its review window.
             self.dismiss_at = None
-            if not self.positioned:
-                self.place()
-            self.show()
+            self.placement.show(config)
         notice = data.get("notice")
         if not notice:
             self.notice = None
@@ -362,11 +347,10 @@ class Overlay(QWidget):
                     message = "Auto-paste skipped. Text copied."
                 self.notice = (message, time.monotonic() + 10)
                 self.dismiss_at = self.notice[1]
-                if not self.positioned:
-                    self.place()
-                self.show()
+                self.placement.show(config)
         if self.dismiss_at is not None and time.monotonic() >= self.dismiss_at:
             self.hide()
+        self.placement.recover(config)
         now = time.monotonic()
         if data["phase"] == "recording":
             if new_recording or self.data.get("phase") != "recording":
@@ -534,17 +518,16 @@ class Overlay(QWidget):
 
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
-            self.drag = event.globalPosition().toPoint() - self.pos()
+            self.placement.begin_drag(event.globalPosition().toPoint())
 
     def mouseMoveEvent(self, event):
-        if self.drag is not None:
-            self.move(event.globalPosition().toPoint() - self.drag)
+        self.placement.drag_to(event.globalPosition().toPoint())
 
     def mouseReleaseEvent(self, event):
-        self.drag = None
+        self.placement.end_drag()
 
     def mouseDoubleClickEvent(self, event):
-        self.place()
+        self.placement.place(self.settings)
 
 
 def active_phase(phase):

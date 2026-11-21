@@ -1,13 +1,140 @@
 import time
 from importlib import import_module
+from types import SimpleNamespace
 
 import pytest
 
 from mouthkeys.config import Config
 
-Qt = pytest.importorskip("PySide6.QtCore").Qt
+QtCore = pytest.importorskip("PySide6.QtCore")
+Qt = QtCore.Qt
 QApplication = pytest.importorskip("PySide6.QtWidgets").QApplication
 overlay = import_module("mouthkeys.overlay")
+
+
+@pytest.fixture
+def panel_placement(monkeypatch):
+    panel = overlay.Overlay()
+    panel.timer.stop()
+    shown = []
+    monkeypatch.setattr(panel, "show", lambda: shown.append(panel.frameGeometry()))
+    screens = []
+    monkeypatch.setattr(QApplication, "screens", lambda: screens)
+    monkeypatch.setattr(QApplication, "screenAt", lambda _: screens[-1])
+    return panel, shown, screens
+
+
+@pytest.mark.parametrize("edge", ["top", "bottom"])
+def test_overlay_clamps_offset_to_screen_work_area(panel_placement, edge):
+    panel, shown, screens = panel_placement
+    area = QtCore.QRect(-900, 60, 900, 500)
+    screens.append(SimpleNamespace(availableGeometry=lambda: area))
+    Config(overlay_position=edge, overlay_size=150, overlay_bottom_offset=1000).save()
+
+    panel.set_status({"phase": "recording", "id": "a"})
+
+    (frame,) = shown
+    assert area.contains(frame)
+    if edge == "top":
+        assert frame.bottom() == area.bottom()
+    else:
+        assert frame.top() == area.top()
+
+
+def test_overlay_recovers_stale_position_on_next_shortcut(panel_placement):
+    panel, shown, screens = panel_placement
+    primary = QtCore.QRect(0, 32, 1600, 868)
+    external = QtCore.QRect(-1200, 0, 1200, 1200)
+    screens.extend(
+        [
+            SimpleNamespace(availableGeometry=lambda: primary),
+            SimpleNamespace(availableGeometry=lambda: external),
+        ]
+    )
+    panel.set_status({"phase": "recording", "id": "a"})
+    assert external.contains(shown[-1])
+    panel.set_status({"phase": "idle", "id": "a", "message": "Cancelled"})
+    screens.pop()
+
+    panel.set_status({"phase": "recording", "id": "b"})
+
+    assert primary.contains(shown[-1])
+
+
+def test_overlay_scales_to_fit_narrow_display_without_changing_settings(panel_placement):
+    panel, shown, screens = panel_placement
+    area = QtCore.QRect(-576, 0, 576, 900)
+    screens.append(SimpleNamespace(availableGeometry=lambda: area))
+    Config(overlay_size=150).save()
+
+    panel.set_status({"phase": "recording", "id": "a"})
+
+    assert area.contains(shown[-1])
+    assert panel.rect().contains(panel.buttons["cancel"].geometry())
+    assert Config.load().overlay_size == 150
+    panel.set_status({"phase": "idle", "id": "a", "message": "Cancelled"})
+    area.setWidth(900)
+    panel.set_status({"phase": "recording", "id": "b"})
+    assert shown[-1].size() == QtCore.QSize(636, 219)
+
+
+def test_overlay_recovers_when_work_area_changes_mid_recording(panel_placement, monkeypatch):
+    panel, _, screens = panel_placement
+    area = QtCore.QRect(0, 0, 1600, 1200)
+    screens.append(SimpleNamespace(availableGeometry=lambda: area))
+    data = {"phase": "recording", "id": "a"}
+    panel.set_status(data)
+    monkeypatch.setattr(panel, "isVisible", lambda: True)
+    area.setHeight(900)
+    assert not area.contains(panel.frameGeometry())
+
+    panel.set_status(data)
+
+    assert area.contains(panel.frameGeometry())
+
+
+def test_overlay_follows_new_recording_but_not_notice_to_pointer_display(
+    panel_placement, monkeypatch
+):
+    panel, shown, screens = panel_placement
+    area = QtCore.QRect(0, 0, 1600, 900)
+    other = QtCore.QRect(1600, 0, 1600, 900)
+    screens.append(SimpleNamespace(availableGeometry=lambda: area))
+    data = {"phase": "recording", "id": "a"}
+    panel.set_status(data)
+    monkeypatch.setattr(panel, "isVisible", lambda: True)
+    screens.append(SimpleNamespace(availableGeometry=lambda: other))
+
+    panel.set_status({**data, "notice": {"serial": 1, "message": "Warning", "at": time.time()}})
+    assert shown[-1] == shown[0]
+
+    panel.set_status({**data, "id": "b"})
+    assert other.contains(shown[-1])
+
+
+def test_overlay_clamps_drag_and_retains_it_between_shortcuts(panel_placement):
+    panel, shown, screens = panel_placement
+    area = QtCore.QRect(0, 0, 1600, 900)
+    screens.append(SimpleNamespace(availableGeometry=lambda: area))
+    panel.set_status({"phase": "recording", "id": "a"})
+    panel.mousePressEvent(
+        SimpleNamespace(
+            button=lambda: Qt.MouseButton.LeftButton,
+            globalPosition=lambda: QtCore.QPointF(panel.frameGeometry().center()),
+        )
+    )
+    panel.mouseMoveEvent(SimpleNamespace(globalPosition=lambda: QtCore.QPointF(0, 355)))
+    panel.mouseReleaseEvent(None)
+    dragged = panel.frameGeometry()
+    assert area.contains(dragged)
+    assert dragged.left() == area.left()
+    panel.set_status({"phase": "idle", "id": "a", "message": "Cancelled"})
+
+    panel.set_status({"phase": "recording", "id": "b"})
+
+    assert shown[-1] == dragged
+    panel.mouseDoubleClickEvent(None)
+    assert panel.frameGeometry() == shown[0]
 
 
 def test_overlay_never_takes_focus_and_tracks_recording_lifecycle(monkeypatch):

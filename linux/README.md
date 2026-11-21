@@ -64,6 +64,8 @@ mouthkeys gui
 ```
 
 Preserve the extras you actually use when reinstalling. Configuration, history, and models survive.
+The recording panel runs independently of the daemon. To load panel changes, stop any old
+`mouthkeys overlay` process or log out and back in. The next recording shortcut starts a new panel.
 No code update or test installs over or restarts the running application automatically.
 
 To uninstall, stop the service yourself, remove the MouthKeys autostart/desktop entries, and run
@@ -135,8 +137,9 @@ reset before reuse. `native_timeout_seconds` bounds the isolated native worker.
 The overlay is a separate optional Qt process, intended not to take focus. It shows provisional text,
 waveform, timer, words/WPM, microphone, and optional battery. Regular/compact, top/bottom, size,
 offset, preview length, border, sensitivity, and theme are configurable. History offers inline
-copy/reinsert; delivery failures offer transcript copy. Drag to move; double-click to reset.
-Compositors control placement/stacking. **Review AI / chats** (also in the panel menu) explicitly opens
+copy/reinsert; delivery failures offer transcript copy. For a new recording, the panel uses the
+pointer's display unless a dragged position still fits. It shrinks if needed. Double-click to reset.
+Compositors can override placement and stacking. **Review AI / chats** (also in the panel menu) opens
 an expanded, focusable assistant window for conversations, follow-up instructions, execution output,
 and review controls. The passive recording panel keeps its no-focus flags; opening the expanded
 window is a separate user action. Disable the panel with `recording_panel=off` if it interferes with focus.
@@ -794,6 +797,8 @@ configuration before marking a setup verified:
 - Panel/tray: no focus theft while typing; light/dark/compact/placement/drag/reset; inline reinsertion,
   failure recovery, tray close/reopen/quit guards, startup/window preference, notifications, and
   taskbar/app-switcher hint off/on independently of tray visibility.
+  Trigger shortcuts on displays of different sizes and after disconnecting one; check the whole
+  panel stays visible, including with a large offset or after dragging to an edge.
 - Integrated shortcuts: explicit X11 keyboard/mouse grabs or portal consent/denial; multiple chords,
   conflict errors, hold/toggle/automatic, autorepeat, overlapping primary shortcuts, profile binding,
   and terminating/reconfiguring the listener while a gesture remains held.

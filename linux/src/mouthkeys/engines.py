@@ -337,7 +337,7 @@ def model_catalog(
     return rows
 
 
-def delete_model(model, engine="whisper", *, revision="main"):
+def delete_model(model: str, engine: str = "whisper", *, revision: str = "main") -> None:
     """Delete only app-owned cache entries, never an entered local model directory."""
     if Path(model).expanduser().exists():
         raise ValueError("Local model paths must be managed outside MouthKeys")

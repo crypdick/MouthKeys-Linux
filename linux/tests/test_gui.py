@@ -84,7 +84,7 @@ def test_model_browser_resident_state_uses_loaded_identity_not_selected_settings
 def test_download_retries_unavailable_model_only_after_success(monkeypatch, tmp_path, success):
     from types import SimpleNamespace
 
-    from mouthkeys import gui
+    from mouthkeys import gui, model_downloads_ui
     from mouthkeys.service import Controller
 
     app = QApplication.instance() or QApplication([])
@@ -106,22 +106,24 @@ def test_download_retries_unavailable_model_only_after_success(monkeypatch, tmp_
         if success
         else "import sys; print('Download failed'); sys.exit(1)"
     )
-    monkeypatch.setattr(gui, "python_command", lambda *args: ["python", "-c", script])
+    monkeypatch.setattr(
+        model_downloads_ui, "python_command", lambda *args: ["python", "-c", script]
+    )
     messages = []
     monkeypatch.setattr(gui.QMessageBox, "information", lambda *args: messages.append(args[-1]))
     window = gui.Window()
     window.timer.stop()
     try:
-        window.download_button.click()
+        window.model_downloads.model_button.click()
         deadline = time.monotonic() + 4
         while time.monotonic() < deadline:
             app.processEvents()
             if messages and not window.jobs and controller.status()["phase"] == "idle":
                 break
             time.sleep(0.01)
-        assert window.download is None
+        assert not window.model_downloads.running
         assert not window.jobs
-        assert window.download_button.isEnabled()
+        assert window.model_downloads.model_button.isEnabled()
         if success:
             assert controller.status()["message"] == "Model ready"
         else:

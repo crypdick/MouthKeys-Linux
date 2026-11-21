@@ -458,21 +458,6 @@
 1	src/mouthkeys/engines.py	ANN202	Missing return type annotation for private function `has_revision`
 14	src/mouthkeys/engines.py	PLC0415	`import` should be at the top-level of a file
 1	src/mouthkeys/engines.py	SLF001	Private member accessed: `_get_model_files`
-1	src/mouthkeys/file_history.py	ANN001	Missing type annotation for function argument `filename`
-1	src/mouthkeys/file_history.py	ANN001	Missing type annotation for function argument `item_id`
-1	src/mouthkeys/file_history.py	ANN001	Missing type annotation for function argument `limit`
-1	src/mouthkeys/file_history.py	ANN001	Missing type annotation for function argument `query`
-2	src/mouthkeys/file_history.py	ANN001	Missing type annotation for function argument `result`
-2	src/mouthkeys/file_history.py	ANN001	Missing type annotation for function argument `rows`
-1	src/mouthkeys/file_history.py	ANN201	Missing return type annotation for public function `add`
-1	src/mouthkeys/file_history.py	ANN201	Missing return type annotation for public function `clear`
-1	src/mouthkeys/file_history.py	ANN201	Missing return type annotation for public function `connect`
-1	src/mouthkeys/file_history.py	ANN201	Missing return type annotation for public function `delete`
-1	src/mouthkeys/file_history.py	ANN201	Missing return type annotation for public function `restore`
-1	src/mouthkeys/file_history.py	ANN201	Missing return type annotation for public function `rows`
-1	src/mouthkeys/file_history.py	ANN201	Missing return type annotation for public function `validate_result`
-1	src/mouthkeys/file_history.py	ANN204	Missing return type annotation for special method `__init__`
-1	src/mouthkeys/file_history.py	ANN205	Missing return type annotation for staticmethod `validate_entries`
 1	src/mouthkeys/file_history.py	DTZ006	`datetime.datetime.fromtimestamp()` called without a `tz` argument
 3	src/mouthkeys/file_history.py	TRY004	Prefer `TypeError` exception for invalid type
 1	src/mouthkeys/file_transcription.py	A002	Function argument `format` is shadowing a Python builtin
@@ -1322,39 +1307,6 @@
 1	src/mouthkeys/spoken_send.py	FBT001	Boolean-typed positional argument in function definition
 1	src/mouthkeys/spoken_send.py	FBT002	Boolean default positional argument in function definition
 1	src/mouthkeys/spoken_send.py	RUF100	Unused `noqa` directive (unused: `FBT001`, `FBT002`)
-1	src/mouthkeys/stats_view.py	ANN001	Missing type annotation for function argument `_event`
-1	src/mouthkeys/stats_view.py	ANN001	Missing type annotation for function argument `days`
-1	src/mouthkeys/stats_view.py	ANN001	Missing type annotation for function argument `event`
-1	src/mouthkeys/stats_view.py	ANN001	Missing type annotation for function argument `parent`
-1	src/mouthkeys/stats_view.py	ANN001	Missing type annotation for function argument `values`
-1	src/mouthkeys/stats_view.py	ANN201	Missing return type annotation for public function `mouseMoveEvent`
-1	src/mouthkeys/stats_view.py	ANN201	Missing return type annotation for public function `paintEvent`
-1	src/mouthkeys/stats_view.py	ANN201	Missing return type annotation for public function `set_values`
-1	src/mouthkeys/stats_view.py	ANN204	Missing return type annotation for special method `__init__`
-1	src/mouthkeys/stats_view.py	DTZ011	`datetime.date.today()` used
-1	src/mouthkeys/stats_view.py	N802	Function name `mouseMoveEvent` should be lowercase
-1	src/mouthkeys/stats_view.py	N802	Function name `paintEvent` should be lowercase
-1	src/mouthkeys/stats_view.py	PLW3301	Nested `max` calls can be flattened
-3	src/mouthkeys/storage.py	ANN001	Missing type annotation for function argument `item_id`
-1	src/mouthkeys/storage.py	ANN001	Missing type annotation for function argument `limit`
-1	src/mouthkeys/storage.py	ANN001	Missing type annotation for function argument `offset`
-1	src/mouthkeys/storage.py	ANN001	Missing type annotation for function argument `query`
-1	src/mouthkeys/storage.py	ANN003	Missing type annotation for `**metadata`
-1	src/mouthkeys/storage.py	ANN201	Missing return type annotation for public function `all_rows`
-1	src/mouthkeys/storage.py	ANN201	Missing return type annotation for public function `audio_usage`
-1	src/mouthkeys/storage.py	ANN201	Missing return type annotation for public function `begin`
-1	src/mouthkeys/storage.py	ANN201	Missing return type annotation for public function `clear`
-1	src/mouthkeys/storage.py	ANN201	Missing return type annotation for public function `connect`
-1	src/mouthkeys/storage.py	ANN201	Missing return type annotation for public function `delete_audio`
-1	src/mouthkeys/storage.py	ANN201	Missing return type annotation for public function `forget`
-1	src/mouthkeys/storage.py	ANN201	Missing return type annotation for public function `get`
-1	src/mouthkeys/storage.py	ANN201	Missing return type annotation for public function `latest_text`
-1	src/mouthkeys/storage.py	ANN201	Missing return type annotation for public function `recording`
-1	src/mouthkeys/storage.py	ANN201	Missing return type annotation for public function `recover`
-1	src/mouthkeys/storage.py	ANN201	Missing return type annotation for public function `rows`
-1	src/mouthkeys/storage.py	ANN201	Missing return type annotation for public function `update`
-1	src/mouthkeys/storage.py	ANN204	Missing return type annotation for special method `__init__`
-1	src/mouthkeys/storage.py	PLC0415	`import` should be at the top-level of a file
 3	src/mouthkeys/transcribe.py	ANN001	Missing type annotation for function argument `audio`
 1	src/mouthkeys/transcribe.py	ANN001	Missing type annotation for function argument `compute_type`
 7	src/mouthkeys/transcribe.py	ANN001	Missing type annotation for function argument `config`

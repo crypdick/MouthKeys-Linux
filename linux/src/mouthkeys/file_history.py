@@ -5,16 +5,31 @@ import math
 import sqlite3
 import time
 import uuid
+from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
+from typing import TypedDict, cast
 
 from .config import state_dir
 
 MAX_RESULT = 20 * 1024 * 1024
 
 
-def validate_result(result):
+class FileResult(TypedDict):
+    text: str
+    duration: float
+    processing_seconds: float
+
+
+class FileHistoryEntry(TypedDict):
+    id: str
+    created: float
+    name: str
+    result: FileResult
+
+
+def validate_result(result: object) -> FileResult:
     if not isinstance(result, dict) or not isinstance(result.get("text"), str):
         raise ValueError("Invalid file transcription result")
     for name in ("duration", "processing_seconds"):
@@ -38,11 +53,11 @@ def validate_result(result):
             raise ValueError("Invalid segment timestamps")
     if len(json.dumps(result, allow_nan=False).encode()) > MAX_RESULT:
         raise ValueError("File result exceeds 20 MiB")
-    return result
+    return cast("FileResult", result)
 
 
 class FileHistory:
-    def __init__(self):
+    def __init__(self) -> None:
         self.path = state_dir() / "files.sqlite3"
         with self.connect() as connection:
             connection.execute("""CREATE TABLE IF NOT EXISTS results (
@@ -51,7 +66,7 @@ class FileHistory:
         self.path.chmod(0o600)
 
     @contextmanager
-    def connect(self):
+    def connect(self) -> Iterator[sqlite3.Connection]:
         connection = sqlite3.connect(self.path, timeout=3)
         connection.row_factory = sqlite3.Row
         try:
@@ -60,7 +75,7 @@ class FileHistory:
         finally:
             connection.close()
 
-    def add(self, filename, result, limit=50):
+    def add(self, filename: str | Path, result: object, limit: object = 50) -> str:
         validate_result(result)
         if type(limit) is not int or not 1 <= limit <= 10000:
             raise ValueError("File history limit must be 1–10000")
@@ -82,7 +97,7 @@ class FileHistory:
             )
         return item_id
 
-    def rows(self, query=""):
+    def rows(self, query: str = "") -> list[FileHistoryEntry]:
         with self.connect() as connection:
             rows = [
                 dict(row)
@@ -92,22 +107,27 @@ class FileHistory:
             ]
         folded = query.casefold()
         return [
-            {**row, "result": json.loads(row["result"])}
+            {
+                "id": row["id"],
+                "created": row["created"],
+                "name": row["name"],
+                "result": json.loads(row["result"]),
+            }
             for row in rows
             if folded in (row["name"] + row["result"]).casefold()
         ]
 
-    def delete(self, item_id):
+    def delete(self, item_id: str) -> None:
         uuid.UUID(item_id)
         with self.connect() as connection:
             connection.execute("DELETE FROM results WHERE id=?", (item_id,))
 
-    def clear(self):
+    def clear(self) -> None:
         with self.connect() as connection:
             connection.execute("DELETE FROM results")
 
     @staticmethod
-    def validate_entries(rows):
+    def validate_entries(rows: object) -> list[FileHistoryEntry]:
         if not isinstance(rows, list) or len(rows) > 10000:
             raise ValueError("Invalid file history entries")
         for row in rows:
@@ -126,10 +146,10 @@ class FileHistory:
             except (ValueError, OverflowError, OSError):
                 raise ValueError("Invalid file history date") from None
             validate_result(row["result"])
-        return rows
+        return cast("list[FileHistoryEntry]", rows)
 
-    def restore(self, rows):
-        self.validate_entries(rows)
+    def restore(self, rows: object) -> None:
+        rows = self.validate_entries(rows)
         with self.connect() as connection:
             for row in rows:
                 connection.execute(

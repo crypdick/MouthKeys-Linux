@@ -141,12 +141,8 @@
 1	src/mouthkeys/cli.py	attr-defined	"FileHistory" has no attribute "select"
 4	src/mouthkeys/cli.py	no-any-return	Returning Any from function declared to return "int | None"
 1	src/mouthkeys/cli.py	no-untyped-call	Call to untyped function "AssistantHistory" in typed context
-2	src/mouthkeys/cli.py	no-untyped-call	Call to untyped function "FileHistory" in typed context
-1	src/mouthkeys/cli.py	no-untyped-call	Call to untyped function "add" in typed context
 1	src/mouthkeys/cli.py	no-untyped-call	Call to untyped function "apply_startup" in typed context
 1	src/mouthkeys/cli.py	no-untyped-call	Call to untyped function "backup_preview" in typed context
-1	src/mouthkeys/cli.py	no-untyped-call	Call to untyped function "clear" in typed context
-2	src/mouthkeys/cli.py	no-untyped-call	Call to untyped function "delete" in typed context
 1	src/mouthkeys/cli.py	no-untyped-call	Call to untyped function "delete_model" in typed context
 1	src/mouthkeys/cli.py	no-untyped-call	Call to untyped function "download_diarization" in typed context
 1	src/mouthkeys/cli.py	no-untyped-call	Call to untyped function "ensure_daemon" in typed context
@@ -162,7 +158,6 @@
 1	src/mouthkeys/cli.py	no-untyped-call	Call to untyped function "request" in typed context
 1	src/mouthkeys/cli.py	no-untyped-call	Call to untyped function "resolve_profile" in typed context
 1	src/mouthkeys/cli.py	no-untyped-call	Call to untyped function "result_text" in typed context
-2	src/mouthkeys/cli.py	no-untyped-call	Call to untyped function "rows" in typed context
 1	src/mouthkeys/cli.py	no-untyped-call	Call to untyped function "run_benchmark" in typed context
 1	src/mouthkeys/cli.py	no-untyped-call	Call to untyped function "serve" in typed context
 1	src/mouthkeys/cli.py	no-untyped-call	Call to untyped function "transcribe_file" in typed context
@@ -252,10 +247,6 @@
 1	src/mouthkeys/engines.py	no-untyped-def	Function is missing a return type annotation
 12	src/mouthkeys/engines.py	no-untyped-def	Function is missing a type annotation
 3	src/mouthkeys/file_history.py	arg-type	Argument 1 to "isfinite" has incompatible type "Any | None"; expected "SupportsFloat | SupportsIndex"
-1	src/mouthkeys/file_history.py	no-untyped-call	Call to untyped function "validate_entries" of "FileHistory" in typed context
-2	src/mouthkeys/file_history.py	no-untyped-call	Call to untyped function "validate_result" in typed context
-3	src/mouthkeys/file_history.py	no-untyped-def	Function is missing a return type annotation
-6	src/mouthkeys/file_history.py	no-untyped-def	Function is missing a type annotation
 1	src/mouthkeys/file_history.py	operator	Unsupported left operand type for <= ("None")
 1	src/mouthkeys/file_history.py	operator	Unsupported operand types for <= ("int" and "None")
 1	src/mouthkeys/file_history.py	operator	Unsupported operand types for > ("int" and "None")
@@ -322,10 +313,8 @@
 1	src/mouthkeys/gui.py	attr-defined	"QWidget" has no attribute "rowCount"
 1	src/mouthkeys/gui.py	attr-defined	"QWidget" has no attribute "setCurrentCell"
 1	src/mouthkeys/gui.py	attr-defined	"QWidget" has no attribute "setItem"
-1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "ActivityChart" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "AssistantPage" in typed context
 4	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "AssistantTask" in typed context
-4	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "FileHistory" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "LearningPage" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "MicrophonePage" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "ModelBrowser" in typed context
@@ -333,7 +322,6 @@
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "Request" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "SetupPage" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "Window" in typed context
-1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "add" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "add_prompt_route" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "apply_startup" in typed context
 2	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "apply_theme" in typed context
@@ -341,10 +329,8 @@
 2	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "backup_action" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "backup_page" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "backup_preview" in typed context
-1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "clear" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "create_tray" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "defaults" of "Dictionary" in typed context
-1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "delete" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "delete_model" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "dictionary_page" in typed context
 2	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "draft_prompt_config" in typed context
@@ -385,7 +371,6 @@
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "refresh_words" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "request" in typed context
 2	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "result_text" in typed context
-1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "rows" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "run_prompt_test" in typed context
 5	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "save" in typed context
 2	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "save" of "Dictionary" in typed context
@@ -397,7 +382,6 @@
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "selected_id" in typed context
 17	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "send" in typed context
 3	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "session" in typed context
-2	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "set_values" in typed context
 3	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "setting_group" in typed context
 2	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "show_file_result" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "stats_page" in typed context
@@ -617,7 +601,6 @@
 6	src/mouthkeys/onboarding.py	no-untyped-def	Function is missing a return type annotation
 6	src/mouthkeys/onboarding.py	no-untyped-def	Function is missing a type annotation
 2	src/mouthkeys/operations.py	no-untyped-call	Call to untyped function "AssistantHistory" in typed context
-2	src/mouthkeys/operations.py	no-untyped-call	Call to untyped function "FileHistory" in typed context
 2	src/mouthkeys/operations.py	no-untyped-call	Call to untyped function "_prepare_backup" in typed context
 2	src/mouthkeys/operations.py	no-untyped-call	Call to untyped function "_read_import" in typed context
 1	src/mouthkeys/operations.py	no-untyped-call	Call to untyped function "apply_startup" in typed context
@@ -632,8 +615,7 @@
 2	src/mouthkeys/operations.py	no-untyped-call	Call to untyped function "load_routes" in typed context
 1	src/mouthkeys/operations.py	no-untyped-call	Call to untyped function "load_upstream_backup" in typed context
 1	src/mouthkeys/operations.py	no-untyped-call	Call to untyped function "read_backup" in typed context
-2	src/mouthkeys/operations.py	no-untyped-call	Call to untyped function "restore" in typed context
-1	src/mouthkeys/operations.py	no-untyped-call	Call to untyped function "rows" in typed context
+1	src/mouthkeys/operations.py	no-untyped-call	Call to untyped function "restore" in typed context
 1	src/mouthkeys/operations.py	no-untyped-call	Call to untyped function "save" of "Dictionary" in typed context
 1	src/mouthkeys/operations.py	no-untyped-call	Call to untyped function "save" of "PronunciationStore" in typed context
 1	src/mouthkeys/operations.py	no-untyped-call	Call to untyped function "save_entries" of "VocabularyStore" in typed context
@@ -643,7 +625,6 @@
 1	src/mouthkeys/operations.py	no-untyped-call	Call to untyped function "validate" of "Dictionary" in typed context
 1	src/mouthkeys/operations.py	no-untyped-call	Call to untyped function "validate" of "PronunciationStore" in typed context
 1	src/mouthkeys/operations.py	no-untyped-call	Call to untyped function "validate_entries" of "AssistantHistory" in typed context
-1	src/mouthkeys/operations.py	no-untyped-call	Call to untyped function "validate_entries" of "FileHistory" in typed context
 1	src/mouthkeys/operations.py	no-untyped-call	Call to untyped function "validate_entries" of "VocabularyStore" in typed context
 2	src/mouthkeys/operations.py	no-untyped-call	Call to untyped function "validate_profiles" in typed context
 1	src/mouthkeys/operations.py	no-untyped-call	Call to untyped function "validate_routes" in typed context
@@ -834,17 +815,10 @@
 5	src/mouthkeys/service.py	union-attr	Item "None" of "Any | None" has no attribute "start_target"
 1	src/mouthkeys/service.py	union-attr	Item "None" of "Any | None" has no attribute "switch_source"
 1	src/mouthkeys/service.py	var-annotated	Need type annotation for "attempted" (hint: "attempted: set[<type>] = ...")
-1	src/mouthkeys/service.py	var-annotated	Need type annotation for "row"
 9	src/mouthkeys/setup_languages.py	no-untyped-call	Call to untyped function "add" in typed context
 1	src/mouthkeys/setup_languages.py	no-untyped-call	Call to untyped function "languages" in typed context
 1	src/mouthkeys/setup_languages.py	no-untyped-def	Function is missing a return type annotation
 2	src/mouthkeys/setup_languages.py	no-untyped-def	Function is missing a type annotation
-1	src/mouthkeys/stats_view.py	no-untyped-call	Call to untyped function "set_values" in typed context
-4	src/mouthkeys/stats_view.py	no-untyped-def	Function is missing a type annotation
-1	src/mouthkeys/storage.py	no-untyped-call	Call to untyped function "delete_audio" in typed context
-9	src/mouthkeys/storage.py	no-untyped-def	Function is missing a return type annotation
-4	src/mouthkeys/storage.py	no-untyped-def	Function is missing a type annotation
-1	src/mouthkeys/storage.py	no-untyped-def	Function is missing a type annotation for one or more parameters
 1	src/mouthkeys/transcribe.py	no-untyped-call	Call to untyped function "NativeWorkerBackend" in typed context
 1	src/mouthkeys/transcribe.py	no-untyped-call	Call to untyped function "WhisperForcedAligner" in typed context
 3	src/mouthkeys/transcribe.py	no-untyped-call	Call to untyped function "_align_segments" in typed context

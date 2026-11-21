@@ -193,6 +193,37 @@ def test_merge_native_formatting_keeps_distinct_same_symbol_alias_groups(tmp_pat
     assert result["punctuation"][-1] == imported["punctuation"][0]
 
 
+@pytest.mark.parametrize(
+    ("section", "entries", "message"),
+    [
+        ("punctuation", {}, "punctuation must be a list"),
+        ("actions", [{"aliases": ["line"], "symbol": "\n", "typo": True}], "Invalid actions entry"),
+        (
+            "replacements",
+            [{"triggers": ["one"], "replacement": "first", "id": "invalid"}],
+            "Invalid replacement ID",
+        ),
+    ],
+)
+def test_native_dictionary_rejects_invalid_sections_before_saving(section, entries, message):
+    current = Dictionary.defaults()
+    Dictionary.save(current)
+    with pytest.raises(ValueError, match=message):
+        Dictionary.save(current | {section: entries})
+    assert Dictionary.load() == current
+
+
+def test_native_dictionary_rejects_duplicate_replacement_ids_even_with_different_triggers():
+    identifier = str(uuid.uuid4())
+    replacements = [
+        {"id": identifier, "triggers": ["one"], "replacement": "first"},
+        {"id": identifier.upper(), "triggers": ["two"], "replacement": "second"},
+    ]
+    with pytest.raises(ValueError, match="Duplicate replacement ID"):
+        Dictionary.save(Dictionary.defaults() | {"replacements": replacements})
+    assert not Dictionary.path().exists()
+
+
 def test_dictionary_lock_is_reentrant_and_cross_process_wait_is_bounded(monkeypatch):
     monkeypatch.setattr(data_lock, "LOCK_TIMEOUT", 0.02)
     lock_path = private_dir(config_path().parent) / ".dictionary-transfer.lock"

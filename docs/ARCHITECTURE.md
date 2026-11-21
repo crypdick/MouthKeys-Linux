@@ -19,6 +19,9 @@ then dispatches local work or uses `control` to contact the private Unix socket 
   `desktop_input` probes compositor window identity and runs clipboard and keyboard commands.
   `delivery` decides whether to use those commands and rechecks the destination before sending.
   Cancellation before delivery wins; unverified destination identity falls back to copy.
+- **Command line:** `cli_options` defines argument grammar; `cli` dispatches commands and keeps
+  results on stdout and diagnostics on stderr. `desktop_entry` owns XDG launcher and login files
+  shared by CLI, Settings, and backup restore.
 - **UI and optional integrations:** `gui`, `overlay`, `tray`, and `hotkeys` call the service.
   `x11_shortcuts` owns the native X11 connection and passive grabs. `hotkeys` serializes
   their events and releases an owned held recording when the listener stops. The Wayland

@@ -1,333 +1,345 @@
-import argparse
-import json
-import os
-import shutil
-import sys
-from dataclasses import asdict, replace
-from pathlib import Path
+"""Parse CLI options and dispatch commands, keeping stdout available for results."""
 
+import argparse
+import getpass
+import json
+import sys
+from collections.abc import Callable, Mapping
+from dataclasses import asdict, replace
+from importlib import import_module
+from pathlib import Path
+from typing import cast
+
+from . import control, desktop_entry, desktop_input
 from .cli_options import build_parser
 from .config import RANGES, Config
 
-
-def install_desktop(autostart=False):
-    executable = shutil.which("mouthkeys") or sys.argv[0]
-    executable = str(Path(executable).resolve())
-    # Desktop Entry Exec is not a shell; escape its reserved characters and field codes.
-    quoted = (
-        '"'
-        + executable.replace("\\", "\\\\")
-        .replace('"', '\\"')
-        .replace("`", "\\`")
-        .replace("$", "\\$")
-        .replace("%", "%%")
-        + '"'
-    )
-    data = Path(os.environ.get("XDG_DATA_HOME", str(Path.home() / ".local/share")))
-    applications = data / "applications"
-    applications.mkdir(parents=True, exist_ok=True)
-    entry = (
-        "[Desktop Entry]\nType=Application\nName=MouthKeys\n"
-        "Comment=Local voice to text\nIcon=audio-input-microphone\n"
-        f"Exec={quoted} gui\nTerminal=false\nCategories=AudioVideo;Audio;Utility;\n"
-    )
-    (applications / "mouthkeys.desktop").write_text(entry)
-    if autostart:
-        import importlib.util
-
-        config = Path(os.environ.get("XDG_CONFIG_HOME", str(Path.home() / ".config")))
-        directory = config / "autostart"
-        directory.mkdir(parents=True, exist_ok=True)
-        settings = Config.load()
-        command = (
-            "gui"
-            if settings.show_window_at_login == "on"
-            else (
-                "tray"
-                if settings.tray == "on" and importlib.util.find_spec("PySide6")
-                else "daemon"
-            )
-        )
-        (directory / "mouthkeys.desktop").write_text(entry.replace(" gui\n", f" {command}\n"))
-    return str(applications / "mouthkeys.desktop")
+MAX_TEXT_BYTES = 256 * 1024
 
 
-def apply_startup(config):
-    if config.launch_at_startup == "on":
-        install_desktop(autostart=True)
-    else:
-        directory = Path(os.environ.get("XDG_CONFIG_HOME", str(Path.home() / ".config")))
-        (directory / "autostart" / "mouthkeys.desktop").unlink(missing_ok=True)
+def _read_bounded(path: Path, label: str) -> bytes:
+    with path.open("rb") as source:
+        raw = source.read(MAX_TEXT_BYTES + 1)
+    if len(raw) > MAX_TEXT_BYTES:
+        raise ValueError(f"{label} exceeds 256 KiB")
+    return raw
 
 
-def read_app_map(path):
+def _read_app_map(path: Path | None) -> dict[str, object] | None:
     if path is None:
         return None
-    with path.open("rb") as source:
-        raw = source.read(256 * 1024 + 1)
-    if len(raw) > 256 * 1024:
-        raise ValueError("Application mapping exceeds 256 KiB")
-    mapping = json.loads(raw)
+    mapping = json.loads(_read_bounded(path, "Application mapping"))
     if not isinstance(mapping, dict):
-        raise ValueError("Application mapping must be a JSON object of macOS IDs to Linux IDs")
+        raise TypeError("Application mapping must be a JSON object of macOS IDs to Linux IDs")
     return mapping
 
 
-def _configure(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
-    config = asdict(Config.load())
-    if args.key:
-        if args.value is None:
-            parser.error("config KEY requires VALUE")
-        config[args.key] = int(args.value) if args.key in RANGES else args.value
-        updated = Config.from_mapping(config)
+def _configure(args: argparse.Namespace) -> int:
+    values = asdict(Config.load())
+    if args.key is not None:
+        values[args.key] = int(args.value) if args.key in RANGES else args.value
+        updated = Config.from_mapping(values)
         updated.save()
-        config = asdict(updated)
-        if args.key in ("delivery", "paste_backend", "insertion_mode"):
-            from .desktop_input import automatic_delivery_warning
-
-            if warning := automatic_delivery_warning(updated):
-                print(f"Warning: {warning}", file=sys.stderr)
+        values = asdict(updated)
+        if args.key in ("delivery", "paste_backend", "insertion_mode") and (
+            warning := desktop_input.automatic_delivery_warning(updated)
+        ):
+            print(f"Warning: {warning}", file=sys.stderr)
         if args.key in ("launch_at_startup", "show_window_at_login", "tray"):
-            apply_startup(Config.load())
-    elif args.value:
-        parser.error("config requires KEY VALUE")
-    print(json.dumps(config, indent=2))
+            desktop_entry.apply_startup(updated)
+    print(json.dumps(values, indent=2))
+    return 0
 
 
-def main(argv: list[str] | None = None) -> int | None:
+def _key_from_input(*, stdin: bool) -> str:
+    if stdin:
+        return sys.stdin.read(4098).removesuffix("\n")
+    if not sys.stdin.isatty():
+        raise ValueError("Use --stdin to supply a key without an interactive terminal")
+    return getpass.getpass("API key: ")
+
+
+def _credential(args: argparse.Namespace) -> int:
+    from .credentials import delete_key, store_key
+    from .profiles import resolve_profile
+
+    config = Config.load()
+    if args.profile is not None:
+        config = replace(config, ai_profile=args.profile)
+    config = resolve_profile(config)
+    if args.action == "set":
+        store_key(config, _key_from_input(stdin=args.stdin))
+        print("API key saved; select secret-service in target settings/profile to use it")
+    else:
+        if args.stdin:
+            raise ValueError("--stdin is only valid with credential set")
+        delete_key(config)
+        print("API key deleted")
+    return 0
+
+
+def _benchmark(args: argparse.Namespace) -> int:
+    from .benchmark import run_benchmark
+
+    changes = {
+        name: getattr(args, name)
+        for name in ("model", "engine", "device", "compute_type", "model_revision")
+        if getattr(args, name) is not None
+    }
+    config = replace(Config.load(), **changes).validate()
+    reference = (
+        _read_bounded(args.reference_file, "Benchmark reference").decode("utf-8")
+        if args.reference_file is not None
+        else None
+    )
+    result = run_benchmark(config, args.file, reference=reference, timeout=args.timeout)
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    return 0
+
+
+def _download_model(args: argparse.Namespace) -> int:
+    from .transcribe import download
+
+    config = Config.load()
+
+    def progress(event: Mapping[str, object]) -> None:
+        print(json.dumps({"download_progress": event}), file=sys.stderr, flush=True)
+
+    print(
+        download(
+            args.model or config.model,
+            config.engine,
+            config.compute_type,
+            revision=config.model_revision,
+            progress=progress,
+        )
+    )
+    return 0
+
+
+def _transcribe_file(args: argparse.Namespace) -> int:
+    from .file_transcription import export_result, result_text, transcribe_file
+
+    config = Config.load()
+
+    def file_progress(event: dict[str, object]) -> None:
+        if args.progress:
+            print("transcription_progress " + json.dumps(event), file=sys.stderr, flush=True)
+
+    options = {"on_progress": file_progress} if args.progress else {}
+    result = transcribe_file(args.file, config, **options)
+    if args.save_history and config.save_history == "on" and config.save_file_history == "on":
+        from .file_history import FileHistory
+
+        file_progress({"stage": "save"})
+        FileHistory().add(args.file.name, result, config.file_history_limit)
+    if args.output:
+        file_progress({"stage": "export"})
+        export_result(result, args.output, "json" if args.json else "txt")
+    else:
+        print(json.dumps(result, ensure_ascii=False) if args.json else result_text(result))
+    file_progress({"stage": "complete"})
+    return 0
+
+
+def _file_history(args: argparse.Namespace) -> int:
+    from .file_history import FileHistory
+
+    history = FileHistory()
+    if args.command == "file-history":
+        print(json.dumps(history.rows(args.query), ensure_ascii=False, indent=2))
+    elif args.id:
+        history.delete(args.id)
+    else:
+        history.clear()
+    return 0
+
+
+def _assistant_history(args: argparse.Namespace) -> int:
+    from .assistant_history import AssistantHistory
+
+    history = AssistantHistory()
+    result: object
+    if sum((args.new, args.select, args.rename is not None, args.delete)) > 1:
+        raise ValueError("Choose one chat action")
+    if args.new:
+        if not args.mode:
+            raise ValueError("--new requires --mode")
+        if Config.load().save_history != "on":
+            raise ValueError("Saved chats are disabled by save_history")
+        result = history.new(args.mode)
+    elif args.delete:
+        if not args.id or not args.yes:
+            raise ValueError("Deleting a chat requires --id and --yes")
+        history.delete(args.id)
+        result = {"deleted": args.id}
+    elif args.rename is not None:
+        if not args.id:
+            raise ValueError("--rename requires --id")
+        history.rename(args.id, args.rename)
+        result = history.get(args.id)
+    elif args.select:
+        if not args.id:
+            raise ValueError("--select requires --id")
+        result = history.select(args.id)
+    else:
+        result = history.get(args.id) if args.id else history.rows(args.mode)
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    return 0
+
+
+def _download_speakers(_args: argparse.Namespace) -> int:
+    from .file_transcription import download_diarization
+
+    print(download_diarization())
+    return 0
+
+
+def _models(args: argparse.Namespace) -> int:
+    from .engines import delete_model, model_catalog
+
+    config = Config.load()
+    if args.command == "models":
+        print(json.dumps(model_catalog(config.engine), indent=2))
+    else:
+        delete_model(args.model, config.engine, revision=config.model_revision)
+        print("Cached model deleted")
+    return 0
+
+
+def _backup_preview(args: argparse.Namespace) -> int:
+    from .operations import backup_preview
+
+    result = backup_preview(args.path, app_map=_read_app_map(args.app_map))
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    return 0
+
+
+def _dictionary(args: argparse.Namespace) -> int:
+    from .dictionary import Dictionary
+
+    if args.command == "dictionary-import":
+        Dictionary.import_file(args.path, mode=args.mode)
+    else:
+        Dictionary.export_file(args.path, format=args.format)
+    print(str(args.path))
+    return 0
+
+
+def _doctor(_args: argparse.Namespace) -> int:
+    result = desktop_input.doctor(Config.load())
+    print(json.dumps(result, indent=2))
+    return int(
+        result["session"] == "headless"
+        or bool(result["delivery_warning"])
+        or not all(result["commands"].values())
+    )
+
+
+def _install_desktop(args: argparse.Namespace) -> int:
+    if args.autostart:
+        replace(Config.load(), launch_at_startup="on").save()
+    print(desktop_entry.install_desktop(autostart=args.autostart))
+    return 0
+
+
+def _launch_desktop(args: argparse.Namespace) -> int:
+    module = import_module(
+        ".overlay_process" if args.command == "overlay" else "." + args.command, __package__
+    )
+    return cast("int", module.launch())
+
+
+def _serve(_args: argparse.Namespace) -> int:
+    from .daemon import serve
+
+    serve()
+    return 0
+
+
+def _request_data(args: argparse.Namespace) -> dict[str, object]:
+    data: dict[str, object] = {}
+    if identifier := getattr(args, "id", None):
+        data["id"] = identifier
+    command = args.command
+    if command == "microphone":
+        data.update(source=args.source, persist=args.persist)
+    if command in ("backup-import", "backup-export"):
+        data["path"] = str(args.path.resolve())
+    if command == "backup-import" and args.app_map is not None:
+        data["app_map"] = _read_app_map(args.app_map)
+    if command == "accept-edit":
+        data["return_to_target"] = args.return_to_target
+    if command in ("start", "toggle"):
+        data.update(mode=args.mode, selected_text=args.selected_text)
+        if args.label:
+            data["label"] = args.label
+        if args.profile is not None:
+            data["profile"] = args.profile
+    if command == "history":
+        data.update(query=args.query, limit=args.limit, offset=args.offset)
+    return data
+
+
+def _show_overlay() -> None:
+    try:
+        control.ensure_overlay()
+    # The CLI reports panel failures without masking the command result.
+    except Exception as exc:  # allow: exception-handling  # noqa: BLE001
+        print(f"MouthKeys panel: {exc}", file=sys.stderr)
+
+
+def _daemon_command(args: argparse.Namespace) -> int:
+    command = args.command
+    if command != "shutdown":
+        control.ensure_daemon()
+    action = {"clear-history": "clear", "microphone": "select_microphone"}.get(
+        command, command.replace("-", "_")
+    )
+    try:
+        result = control.request(action, **_request_data(args))
+    finally:
+        if command in ("start", "stop", "toggle", "warmup"):
+            _show_overlay()
+    print(json.dumps(result, indent=2))
+    return 0
+
+
+_HANDLERS: dict[str, Callable[[argparse.Namespace], int]] = {
+    "credential": _credential,
+    "benchmark": _benchmark,
+    "config": _configure,
+    "download": _download_model,
+    "transcribe": _transcribe_file,
+    "file-history": _file_history,
+    "delete-file-history": _file_history,
+    "assistant-history": _assistant_history,
+    "download-speakers": _download_speakers,
+    "models": _models,
+    "delete-model": _models,
+    "backup-preview": _backup_preview,
+    "dictionary-import": _dictionary,
+    "dictionary-export": _dictionary,
+    "doctor": _doctor,
+    "install-desktop": _install_desktop,
+    "overlay": _launch_desktop,
+    "gui": _launch_desktop,
+    "tray": _launch_desktop,
+    "hotkeys": _launch_desktop,
+    "daemon": _serve,
+}
+
+
+def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+    if args.command == "config" and args.key is not None and args.value is None:
+        parser.error("config KEY requires VALUE")
     try:
-        if args.command == "credential":
-            from .credentials import delete_key, store_key
-            from .profiles import resolve_profile
-
-            config = Config.load()
-            if args.profile is not None:
-                config = replace(config, ai_profile=args.profile)
-            config = resolve_profile(config)
-            if args.action == "set":
-                if args.stdin:
-                    key = sys.stdin.read(4098).removesuffix("\n")
-                else:
-                    import getpass
-
-                    if not sys.stdin.isatty():
-                        raise ValueError(
-                            "Use --stdin to supply a key without an interactive terminal"
-                        )
-                    key = getpass.getpass("API key: ")
-                store_key(config, key)
-                print("API key saved; select secret-service in target settings/profile to use it")
-            else:
-                if args.stdin:
-                    raise ValueError("--stdin is only valid with credential set")
-                delete_key(config)
-                print("API key deleted")
-        elif args.command == "benchmark":
-            from .benchmark import run_benchmark
-
-            changes = {
-                name: getattr(args, name)
-                for name in ("model", "engine", "device", "compute_type", "model_revision")
-                if getattr(args, name) is not None
-            }
-            config = replace(Config.load(), **changes).validate()
-            reference = None
-            if args.reference_file is not None:
-                with args.reference_file.open("rb") as source:
-                    raw = source.read(256 * 1024 + 1)
-                if len(raw) > 256 * 1024:
-                    raise ValueError("Benchmark reference exceeds 256 KiB")
-                reference = raw.decode("utf-8")
-            result = run_benchmark(config, args.file, reference=reference, timeout=args.timeout)
-            print(json.dumps(result, ensure_ascii=False, indent=2))
-        elif args.command == "config":
-            _configure(args, parser)
-        elif args.command == "download":
-            from .transcribe import download
-
-            config = Config.load()
-
-            def progress(event):
-                print(json.dumps({"download_progress": event}), file=sys.stderr, flush=True)
-
-            print(
-                download(
-                    args.model or config.model,
-                    config.engine,
-                    config.compute_type,
-                    revision=config.model_revision,
-                    progress=progress,
-                )
-            )
-        elif args.command == "transcribe":
-            from .file_transcription import export_result, result_text, transcribe_file
-
-            config = Config.load()
-
-            def file_progress(event):
-                if args.progress:
-                    print(
-                        "transcription_progress " + json.dumps(event), file=sys.stderr, flush=True
-                    )
-
-            options = {"on_progress": file_progress} if args.progress else {}
-            result = transcribe_file(args.file, config, **options)
-            if (
-                args.save_history
-                and config.save_history == "on"
-                and config.save_file_history == "on"
-            ):
-                from .file_history import FileHistory
-
-                file_progress({"stage": "save"})
-                FileHistory().add(args.file.name, result, config.file_history_limit)
-            if args.output:
-                file_progress({"stage": "export"})
-                export_result(result, args.output, "json" if args.json else "txt")
-            else:
-                print(json.dumps(result, ensure_ascii=False) if args.json else result_text(result))
-            file_progress({"stage": "complete"})
-        elif args.command in ("file-history", "delete-file-history"):
-            from .file_history import FileHistory
-
-            history = FileHistory()
-            if args.command == "file-history":
-                print(json.dumps(history.rows(args.query), ensure_ascii=False, indent=2))
-            elif args.id:
-                history.delete(args.id)
-            else:
-                history.clear()
-        elif args.command == "assistant-history":
-            from .assistant_history import AssistantHistory
-
-            history = AssistantHistory()
-            if sum((args.new, args.select, args.rename is not None, args.delete)) > 1:
-                raise ValueError("Choose one chat action")
-            if args.new:
-                if not args.mode:
-                    raise ValueError("--new requires --mode")
-                if Config.load().save_history != "on":
-                    raise ValueError("Saved chats are disabled by save_history")
-                result = history.new(args.mode)
-            elif args.delete:
-                if not args.id or not args.yes:
-                    raise ValueError("Deleting a chat requires --id and --yes")
-                history.delete(args.id)
-                result = {"deleted": args.id}
-            elif args.rename is not None:
-                if not args.id:
-                    raise ValueError("--rename requires --id")
-                history.rename(args.id, args.rename)
-                result = history.get(args.id)
-            elif args.select:
-                if not args.id:
-                    raise ValueError("--select requires --id")
-                result = history.select(args.id)
-            else:
-                result = history.get(args.id) if args.id else history.rows(args.mode)
-            print(json.dumps(result, ensure_ascii=False, indent=2))
-        elif args.command == "download-speakers":
-            from .file_transcription import download_diarization
-
-            print(download_diarization())
-        elif args.command in ("models", "delete-model"):
-            from .engines import delete_model, model_catalog
-
-            if args.command == "models":
-                print(json.dumps(model_catalog(Config.load().engine), indent=2))
-            else:
-                config = Config.load()
-                delete_model(args.model, config.engine, revision=config.model_revision)
-                print("Cached model deleted")
-        elif args.command == "backup-preview":
-            from .operations import backup_preview
-
-            result = backup_preview(args.path, app_map=read_app_map(args.app_map))
-            print(json.dumps(result, ensure_ascii=False, indent=2))
-        elif args.command.startswith("dictionary-"):
-            from .dictionary import Dictionary
-
-            if args.command == "dictionary-import":
-                Dictionary.import_file(args.path, mode=args.mode)
-            else:
-                Dictionary.export_file(args.path, format=args.format)
-            print(str(args.path))
-        elif args.command == "doctor":
-            from .desktop_input import doctor
-
-            result = doctor(Config.load())
-            print(json.dumps(result, indent=2))
-            return int(
-                result["session"] == "headless"
-                or bool(result["delivery_warning"])
-                or not all(result["commands"].values())
-            )
-        elif args.command == "install-desktop":
-            if args.autostart:
-                replace(Config.load(), launch_at_startup="on").save()
-            print(install_desktop(args.autostart))
-        elif args.command == "overlay":
-            from .overlay_process import launch
-
-            return launch()
-        elif args.command == "gui":
-            from .gui import launch
-
-            return launch()
-        elif args.command == "tray":
-            from .tray import launch
-
-            return launch()
-        elif args.command == "hotkeys":
-            from .hotkeys import launch
-
-            return launch()
-        elif args.command == "daemon":
-            from .daemon import serve
-
-            serve()
-        else:
-            from .control import ensure_daemon, request
-
-            if args.command != "shutdown":
-                ensure_daemon()
-            action = "clear" if args.command == "clear-history" else args.command.replace("-", "_")
-            try:
-                data = {"id": args.id} if hasattr(args, "id") and args.id else {}
-                if args.command == "microphone":
-                    action = "select_microphone"
-                    data.update(source=args.source, persist=args.persist)
-                if hasattr(args, "path"):
-                    data["path"] = str(args.path.resolve())
-                if args.command == "backup-import" and args.app_map is not None:
-                    data["app_map"] = read_app_map(args.app_map)
-                if args.command == "accept-edit":
-                    data["return_to_target"] = args.return_to_target
-                if hasattr(args, "mode"):
-                    data.update(mode=args.mode, selected_text=args.selected_text)
-                    if args.label:
-                        data["label"] = args.label
-                    if args.profile is not None:
-                        data["profile"] = args.profile
-                if args.command == "history":
-                    data.update(query=args.query, limit=args.limit, offset=args.offset)
-                result = request(action, **data)
-            finally:
-                if args.command in ("start", "stop", "toggle", "warmup"):
-                    from .control import ensure_overlay
-
-                    try:
-                        ensure_overlay()
-                    # The CLI reports the failure on stderr.
-                    except Exception as exc:  # allow: exception-handling  # noqa: BLE001
-                        print(f"MouthKeys panel: {exc}", file=sys.stderr)
-            print(json.dumps(result, indent=2))
-        return 0
+        return _HANDLERS.get(args.command, _daemon_command)(args)
     except KeyboardInterrupt:
         return 130
-    # The CLI reports the failure on stderr.
+    # The CLI reports command failures on stderr.
     except Exception as exc:  # allow: exception-handling  # noqa: BLE001
         print(f"MouthKeys: {exc}", file=sys.stderr)
         return 1

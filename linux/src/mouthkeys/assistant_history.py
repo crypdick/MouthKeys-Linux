@@ -5,6 +5,7 @@ import sqlite3
 import time
 import uuid
 from contextlib import contextmanager
+from typing import Any
 
 from .config import state_dir
 
@@ -156,11 +157,11 @@ class AssistantHistory:
             db.close()
 
     @staticmethod
-    def _mode(mode):
+    def _mode(mode: object) -> None:
         if mode not in ("command", "edit"):
             raise ValueError("Invalid assistant mode")
 
-    def rows(self, mode=None):
+    def rows(self, mode: str | None = None) -> list[dict[str, Any]]:
         if mode is not None:
             self._mode(mode)
         with self.connect() as db:
@@ -173,7 +174,7 @@ class AssistantHistory:
                 )
             ]
 
-    def get(self, item_id):
+    def get(self, item_id: str) -> dict[str, Any]:
         uuid.UUID(item_id)
         with self.connect() as db:
             db.execute("BEGIN")
@@ -205,7 +206,7 @@ class AssistantHistory:
                 pass
         return self.new(mode)
 
-    def new(self, mode):
+    def new(self, mode: str) -> dict[str, Any]:
         self._mode(mode)
         item_id = str(uuid.uuid4())
         with self.connect() as db:
@@ -221,20 +222,20 @@ class AssistantHistory:
             )
         return self.get(item_id)
 
-    def select(self, item_id):
+    def select(self, item_id: str) -> dict[str, Any]:
         row = self.get(item_id)
         with self.connect() as db:
             db.execute("INSERT OR REPLACE INTO current VALUES (?, ?)", (row["mode"], item_id))
         return row
 
-    def rename(self, item_id, title):
+    def rename(self, item_id: str, title: object) -> None:
         if not isinstance(title, str) or not title.strip() or len(title) > 100:
             raise ValueError("Chat title must contain 1–100 characters")
         self.get(item_id)
         with self.connect() as db:
             db.execute("UPDATE sessions SET title=? WHERE id=?", (title.strip(), item_id))
 
-    def delete(self, item_id):
+    def delete(self, item_id: str) -> None:
         uuid.UUID(item_id)
         with self.connect() as db:
             db.execute("DELETE FROM sessions WHERE id=?", (item_id,))

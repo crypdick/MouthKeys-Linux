@@ -85,7 +85,7 @@ def test_upstream_import_preserves_history_metadata_and_merges_existing_data(tmp
     pronunciation_path.write_text("existing Linux data")
     Config(delivery="clipboard", command_confirm="on", launch_at_startup="on").save()
     monkeypatch.setattr(
-        "mouthkeys.cli.apply_startup", lambda config: pytest.fail("startup touched")
+        "mouthkeys.desktop_entry.apply_startup", lambda config: pytest.fail("startup touched")
     )
     monkeypatch.setattr(
         "mouthkeys.file_history.FileHistory.__init__",

@@ -1,12 +1,13 @@
 import copy
 import json
-import subprocess
 import threading
 import time
 import uuid
 import wave
+from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from pathlib import Path
+from typing import cast
 
 from . import __version__, desktop_input
 from .accessibility import read_snapshot
@@ -14,11 +15,13 @@ from .audio import CaptureSession, CaptureTeardownError, check_audio, live_meter
 from .config import Config, private_dir, runtime_dir
 from .control import MAX_MESSAGE
 from .delivery import Delivery
-from .desktop import MediaSession, choose_source, play_sound, source_candidates
+from .desktop import MediaSession, choose_source, play_sound
 from .formatting import enabled, format_text, parse_send
 from .learning import CorrectionLearner
+from .microphone import MicrophoneSelection, Recording, SwitchOutcome, selection
 from .postprocess import process
 from .pronunciation import PronunciationStore
+from .recording_destination import snapshot_for_stop
 from .storage import History
 from .transcribe import Transcriber
 
@@ -52,6 +55,39 @@ class DictationJob:
     edit_consumed: bool = False
 
 
+@dataclass
+class FocusGate:
+    ready: threading.Event = field(default_factory=threading.Event)
+    valid: bool = True
+
+
+def _recording_input(data: Mapping[str, object]) -> tuple[str, str, str]:
+    mode = data.get("mode", "dictation")
+    if not isinstance(mode, str) or mode not in (
+        "dictation",
+        "command",
+        "edit",
+        "training",
+        "pronunciation",
+    ):
+        raise ValueError("Unknown recording mode")
+    selected = data.get("selected_text", "")
+    if not isinstance(selected, str) or len(selected) > 100000:
+        raise ValueError("Selected text exceeds 100000 characters")
+    label = data.get("label", "")
+    if mode != "pronunciation":
+        return mode, selected, ""
+    if (
+        not isinstance(label, str)
+        or not label.strip()
+        or len(label) > 128
+        or len(label.split()) > 5
+        or not label.isprintable()
+    ):
+        raise ValueError("Pronunciation label must contain 1–5 words, up to 128 characters")
+    return mode, selected, label.strip()
+
+
 class Controller:
     def __init__(self, history=None, transcriber=None, delivery=None, recorder=CaptureSession):
         self.history = history or History()
@@ -59,9 +95,8 @@ class Controller:
         self.transcriber = transcriber or Transcriber()
         self.delivery = delivery or Delivery()
         self.recorder_factory = recorder
-        self.session_source = None
-        self.source_quarantine = {}
         self.lock = threading.RLock()
+        self.microphone = MicrophoneSelection(self.lock)
         self.phase = "idle"
         self.message = "Ready"
         self.item_id = None
@@ -109,7 +144,7 @@ class Controller:
                 "kind": kind,
             }
 
-    def status(self):
+    def status(self) -> dict[str, object]:
         with self.lock:
             return {
                 "version": __version__,
@@ -125,7 +160,7 @@ class Controller:
                 "preview": self.preview_text,
                 "meter": self.meter if self.phase == "recording" else {},
                 "microphone": self.config.audio_source if hasattr(self, "config") else "default",
-                "session_microphone": self.session_source,
+                "session_microphone": self.microphone.session_source,
                 "phase": self.phase,
                 "message": self.message,
                 "id": self.item_id,
@@ -135,11 +170,11 @@ class Controller:
     def command(self, action, **data):
         # A stop acknowledgment must not precede its focus snapshot. The worker
         # resolves focus outside the state lock; a delayed lookup falls back to copy.
-        gate = {"ready": threading.Event(), "valid": True}
+        gate = FocusGate()
         result = self._command(action, _focus_gate=gate, **data)
         if action in ("stop", "toggle") and result.get("phase") == "stopping":
-            if not gate["ready"].wait(timeout=4):
-                gate["valid"] = False
+            if not gate.ready.wait(timeout=4):
+                gate.valid = False
         return result
 
     def _command(self, action, _focus_gate, **data):
@@ -253,180 +288,83 @@ class Controller:
                 return self.status()
             raise ValueError(f"Unknown command: {action}")
 
-    def _source_config(self, config):
-        if self.session_source is not None:
-            config = replace(config, audio_source=self.session_source)
-        now = time.monotonic()
-        self.source_quarantine = {
-            source: until for source, until in self.source_quarantine.items() if until > now
-        }
-        selected = choose_source(config)
-        if selected in self.source_quarantine:
-            candidates = source_candidates(config, excluded=self.source_quarantine)
-            if not candidates:
-                raise ValueError("No available microphone outside failed/Never lists")
-            selected = candidates[0]
-        return replace(config, audio_source=selected)
-
-    def _select_microphone(self, data):
-        source, persist = data.get("source"), data.get("persist", False)
-        if (
-            not isinstance(source, str)
-            or not source.strip()
-            or len(source) > 500
-            or not source.isprintable()
-            or type(persist) is not bool
-        ):
-            raise ValueError("Microphone needs a printable source name and boolean persist")
+    def _select_microphone(self, data: Mapping[str, object]) -> dict[str, object]:
+        source, persist = selection(data)
         with self.lock:
             if self.interrupted:
                 raise ValueError("Service is shutting down")
             if self.phase in ("starting", "switching", "stopping"):
                 raise ValueError(f"Busy ({self.phase}); wait before choosing microphone")
             saved = Config.load()
-            selected = choose_source(replace(saved, audio_source=source))
+            requested = choose_source(replace(saved, audio_source=source))
             recorder, job = self.recorder, self.job
             active = self.phase == "recording"
-            if not active or selected == self.config.audio_source:
-                if persist:
-                    replace(saved, audio_source=source).save()
-                    self.session_source = None
-                else:
-                    self.session_source = source
+            if not active or requested == self.config.audio_source:
+                self.microphone.remember(source, saved, persist=persist)
                 if not active:
                     self.message = "Microphone selected for next recording"
                 return self.status()
-            if not hasattr(recorder, "switch_source"):
-                raise ValueError("Capture adapter does not support microphone switching")
-            previous = self.config.audio_source
+            switch_source = getattr(recorder, "switch_source", None)
+            if not callable(switch_source):
+                raise ValueError("Capture adapter does not support microphone switching")  # noqa: TRY004 - command error
+            # The recording phase can be reached only after creating its job.
+            job = cast("DictationJob", job)
+            fallback = replace(saved, audio_source=self.config.audio_source)
             self.phase, self.message = "switching", "Switching microphone; capture briefly pauses"
             job.phase = "switching"
             self.send_armed_at = None
             self.send_disarmed_text = self.preview_text
-        deadline = time.monotonic() + 8
-        attempted = set()
-        current = selected
-        error = None
-        while time.monotonic() < deadline and len(attempted) < 16:
+
+        def switching_current() -> bool:
             with self.lock:
-                if self.recorder is not recorder or job.cancel_event.is_set() or self.interrupted:
-                    return self.status()
-            attempted.add(current)
-            try:
-                transition = recorder.switch_source(
-                    current, timeout=min(5, max(0.01, deadline - time.monotonic()))
+                return (
+                    self.recorder is recorder
+                    and not job.cancel_event.is_set()
+                    and not self.interrupted
                 )
-                with self.lock:
-                    if self.recorder is not recorder or job.cancel_event.is_set():
-                        return self.status()
-                    self.config = replace(self.config, audio_source=current)
-                    job.config = replace(job.config, audio_source=current)
-                    self.source_quarantine.pop(current, None)
-                    if isinstance(transition, dict) and transition.get("failed_source"):
-                        failed_source = transition["failed_source"]
-                        self.source_quarantine[failed_source] = time.monotonic() + 60
-                        self.source_quarantine = dict(list(self.source_quarantine.items())[-64:])
-                        self.report_error(
-                            f"Previous microphone {failed_source} failed; switched to {current}. "
-                            + transition["error"]
-                        )
-                    self.meter = {}
-                    self.last_voice_at = time.monotonic()
-                    self.phase = "recording"
-                    job.phase = "recording"
-                    self.message = f"Listening on {current}; microphone switch has a capture gap"
-                    if current == selected:
-                        if persist:
-                            try:
-                                replace(Config.load(), audio_source=source).save()
-                                self.session_source = None
-                            except (OSError, ValueError, TypeError) as exc:
-                                self.session_source = source
-                                self.report_error(
-                                    "Microphone switched for this session; "
-                                    f"preference not saved. {exc}"
-                                )
-                        else:
-                            self.session_source = source
-                    else:
-                        self.report_error(f"Selected microphone failed; resumed {current}. {error}")
-                    return self.status()
-            # The job or IPC response reports the failure; avoid duplicating private data in logs.
-            except Exception as exc:  # allow: exception-handling  # noqa: BLE001
-                error = exc
-                with self.lock:
-                    if (
-                        self.recorder is not recorder
-                        or job.cancel_event.is_set()
-                        or self.interrupted
-                    ):
-                        return self.status()
-                    failed_source = exc.source if isinstance(exc, CaptureTeardownError) else current
-                    self.source_quarantine[failed_source] = time.monotonic() + 60
-                    self.source_quarantine = dict(list(self.source_quarantine.items())[-64:])
-                if isinstance(exc, CaptureTeardownError):
-                    break
-                try:
-                    candidates = source_candidates(
-                        replace(saved, audio_source=previous),
-                        excluded=attempted | set(self.source_quarantine),
-                    )
-                except (OSError, ValueError, subprocess.SubprocessError):
-                    candidates = []
-                if not candidates:
-                    break
-                current = candidates[0]
+
+        outcome = self.microphone.switch(requested, fallback, switch_source, switching_current)
         with self.lock:
-            if self.recorder is recorder and not job.cancel_event.is_set():
-                # Preserve and transcribe audio already heard; do not deliver to a
-                # destination chosen during an unsuccessful device transition.
-                self.report_error(f"Microphone switch failed; recovering recorded audio. {error}")
-                self._stop(None)
-        return self.status()
+            if outcome is not None and switching_current():
+                self._capture_switched(job, outcome, requested)
+                if outcome.source == requested:
+                    self._remember_microphone(source, saved, persist=persist)
+            return self.status()
 
-    def _open_capture(self, job):
-        config = job.config
-        deadline = time.monotonic() + 8
-        tried = set(self.source_quarantine)
-        source = config.audio_source
-        last_error = None
-        attempts = 0
-        while time.monotonic() < deadline and attempts < 16:
-            if job.cancel_event.is_set() or self.interrupted:
-                raise RuntimeError("Microphone start cancelled")
-            tried.add(source)
-            attempts += 1
-            chosen = replace(config, audio_source=source)
-            try:
-                if self.recorder_factory is CaptureSession:
-                    capture = self.recorder_factory(
-                        chosen,
-                        job.audio_path,
-                        cancel_event=job.cancel_event,
-                        timeout=min(5, max(0.01, deadline - time.monotonic())),
-                    )
-                else:
-                    capture = self.recorder_factory(chosen, job.audio_path)
-                with self.lock:
-                    self.source_quarantine.pop(source, None)
-                return capture, chosen
-            # The job or IPC response reports the failure; avoid duplicating private data in logs.
-            except Exception as exc:  # allow: exception-handling
-                last_error = exc
-                if job.cancel_event.is_set() or self.interrupted:
-                    raise
-                self.source_quarantine[source] = time.monotonic() + 60
-                self.source_quarantine = dict(list(self.source_quarantine.items())[-64:])
-                try:
-                    candidates = source_candidates(config, excluded=tried)
-                except (OSError, ValueError, subprocess.SubprocessError):
-                    candidates = []
-                if not candidates:
-                    break
-                source = candidates[0]
-        raise RuntimeError(str(last_error or "Microphone startup budget exhausted")) from last_error
+    def _capture_switched(self, job: DictationJob, outcome: SwitchOutcome, requested: str) -> None:
+        current = outcome.source
+        if current is None:
+            # Recover existing audio without selecting a new delivery destination.
+            self.report_error(
+                f"Microphone switch failed; recovering recorded audio. {outcome.error}"
+            )
+            self._stop(None)
+            return
+        self.config = replace(self.config, audio_source=current)
+        job.config = replace(job.config, audio_source=current)
+        self.microphone.mark_ready(current)
+        if outcome.failed_previous:
+            failed, error = outcome.failed_previous
+            self.microphone.mark_failed(failed)
+            self.report_error(
+                f"Previous microphone {failed} failed; switched to {current}. {error}"
+            )
+        self.meter = {}
+        self.last_voice_at = time.monotonic()
+        self.phase = "recording"
+        job.phase = "recording"
+        self.message = f"Listening on {current}; microphone switch has a capture gap"
+        if current != requested:
+            self.report_error(f"Selected microphone failed; resumed {current}. {outcome.error}")
 
-    def _start_recording(self, data):
+    def _remember_microphone(self, source: str, saved: Config, *, persist: bool) -> None:
+        try:
+            self.microphone.remember(source, Config.load() if persist else saved, persist=persist)
+        except (OSError, ValueError, TypeError) as exc:
+            self.microphone.remember(source, saved, persist=False)
+            self.report_error(f"Microphone switched for this session; preference not saved. {exc}")
+
+    def _start_recording(self, data: Mapping[str, object]) -> dict[str, object]:
         with self.lock:
             if self.interrupted:
                 raise ValueError("Service is shutting down")
@@ -435,21 +373,7 @@ class Controller:
             from .profiles import load_profiles
             from .routing import load_routes
 
-            mode = data.get("mode", "dictation")
-            selected_text = data.get("selected_text", "")
-            if mode not in ("dictation", "command", "edit", "training", "pronunciation"):
-                raise ValueError("Unknown recording mode")
-            if not isinstance(selected_text, str) or len(selected_text) > 100000:
-                raise ValueError("Selected text exceeds 100000 characters")
-            label = data.get("label", "")
-            if mode == "pronunciation" and (
-                not isinstance(label, str)
-                or not label.strip()
-                or len(label) > 128
-                or len(label.split()) > 5
-                or not all(character.isprintable() for character in label)
-            ):
-                raise ValueError("Pronunciation label must contain 1–5 words, up to 128 characters")
+            mode, selected_text, label = _recording_input(data)
             config = Config.load()
             assistant_context = None
             assistant_executions = None
@@ -468,7 +392,7 @@ class Controller:
                 raise ValueError("Execution context requires inline assistant history")
             if len(self._pending_jobs()) >= config.queue_limit:
                 raise ValueError("Dictation queue is full; wait for earlier recordings")
-            config = self._source_config(config)
+            config = self.microphone.startup_config(config)
             profiles = load_profiles()
             routes = load_routes(profiles)
             self.meter = {}
@@ -485,7 +409,7 @@ class Controller:
             for previous in self._pending_jobs():
                 previous.suppress_send = True
             self.item_id = str(uuid.uuid4())
-            self._new_job(
+            job: DictationJob = self._new_job(
                 mode,
                 selected_text,
                 profiles=profiles,
@@ -493,52 +417,71 @@ class Controller:
                 assistant_context=assistant_context,
                 assistant_executions=assistant_executions,
             )
-            self.job.held_activation = data.get("held") is True
-            self.job.label = label.strip() if mode == "pronunciation" else ""
-            if (
-                self.config.target_policy == "start"
-                or self.config.return_to_start == "on"
-                or mode == "edit"
-            ) and hasattr(self.delivery, "capture_target"):
-                try:
-                    self.job.start_target = self.delivery.capture_target(self.config)
-                # Unknown focus disables automatic delivery.
-                except Exception:  # allow: exception-handling  # noqa: BLE001
-                    self.job.start_target = None  # Optional desktop probing fails closed.
-                if mode == "edit" and not selected_text and isinstance(self.job.start_target, dict):
-                    captured = self.job.start_target.get("field", {})
-                    begin, end = (
-                        captured.get("selection_start", 0),
-                        captured.get("selection_end", 0),
-                    )
-                    if captured.get("complete") is not False:
-                        self.job.selected_text = captured.get("text", "")[begin:end]
-            self.job.prompt_override = data.get("profile")
-            if self.job.prompt_override is not None:
-                from .routing import select_prompt
-
-                try:
-                    self.job.config = select_prompt(
-                        self.config,
-                        override=self.job.prompt_override,
-                        mode=mode if mode in ("dictation", "edit", "command") else "dictation",
-                        profiles=self.job.profiles,
-                    )
-                except Exception:
-                    self.job.done.set()
-                    raise
+            job.held_activation = data.get("held") is True
+            job.label = label
+            self._capture_start_target(job)
+            self._select_recording_prompt(job, data.get("profile"))
             self.assistant_proposal = None
             self.assistant_stream = None
             self.cancelled = False
             if self.config.save_history == "on":
                 self.history.begin(self.item_id)
-            job = self.job
             self.phase, self.message = "starting", "Opening microphone"
             job.phase = "starting"
-        capture = None
+        return self._open_recording(job, config)
+
+    def _capture_start_target(self, job: DictationJob) -> None:
+        if not (
+            self.config.target_policy == "start"
+            or self.config.return_to_start == "on"
+            or job.mode == "edit"
+        ) or not hasattr(self.delivery, "capture_target"):
+            return
+        try:
+            job.start_target = self.delivery.capture_target(self.config)
+        # Unknown focus disables automatic delivery.
+        except Exception:  # allow: exception-handling  # noqa: BLE001
+            job.start_target = None
+        if job.mode == "edit" and not job.selected_text and isinstance(job.start_target, dict):
+            captured = job.start_target.get("field", {})
+            if captured.get("complete") is not False:
+                begin, end = captured.get("selection_start", 0), captured.get("selection_end", 0)
+                job.selected_text = captured.get("text", "")[begin:end]
+
+    def _select_recording_prompt(self, job: DictationJob, override: object) -> None:
+        if override is None:
+            return
+        from .routing import select_prompt
+
+        try:
+            job.config = select_prompt(
+                self.config,
+                override=override,
+                mode=job.mode if job.mode in ("dictation", "edit", "command") else "dictation",
+                profiles=job.profiles,
+            )
+        except Exception:
+            job.done.set()
+            raise
+        job.prompt_override = cast("str", override)  # Validated by select_prompt.
+
+    def _open_recording(self, job: DictationJob, config: Config) -> dict[str, object]:
+        def start(chosen: Config, timeout: float) -> Recording:
+            factory = self.recorder_factory
+            capture: Recording
+            if factory is CaptureSession:
+                capture = factory(
+                    chosen, job.audio_path, cancel_event=job.cancel_event, timeout=timeout
+                )
+            else:
+                capture = factory(chosen, job.audio_path)
+            return capture
+
         try:
             self.media.pause(config)
-            capture, chosen = self._open_capture(job)
+            capture, chosen = self.microphone.open(
+                job.config, start, lambda: job.cancel_event.is_set() or self.interrupted
+            )
             with self.lock:
                 if not job.cancel_event.is_set() and not self.interrupted:
                     self.recorder = capture
@@ -553,7 +496,6 @@ class Controller:
                     play_sound(chosen)
                     return self.status()
             capture.stop()
-            capture = None
         # The job or IPC response reports the failure; avoid duplicating private data in logs.
         except Exception as exc:  # allow: exception-handling
             with self.lock:
@@ -856,7 +798,7 @@ class Controller:
         for segment in (runtime_dir() / "private-recordings").glob("*.wav"):
             segment.unlink(missing_ok=True)
 
-    def _stop(self, target, focus_gate=None):
+    def _stop(self, target: object, focus_gate: FocusGate | None = None) -> None:
         recorder, self.recorder = self.recorder, None
         self.recorded_seconds = (
             time.monotonic() - self.started if self.started else self.job.duration
@@ -871,64 +813,25 @@ class Controller:
         )
         self.worker.start()
 
-    def _stopped(self, job, recorder, target, focus_gate):
-        auto_paste_expected = target == "capture-focus"
+    def _stopped(
+        self, job: DictationJob, recorder: Recording, target: object, focus_gate: FocusGate | None
+    ) -> None:
         try:
-            if auto_paste_expected:
-                try:
-                    if job.config.target_policy == "start" or job.config.return_to_start == "on":
-                        target = job.start_target
-                    elif hasattr(self.delivery, "capture_target"):
-                        target = self.delivery.capture_target(job.config)
-                    else:
-                        target = self.delivery.focus()
-                # Unknown focus disables automatic delivery.
-                except Exception:  # allow: exception-handling  # noqa: BLE001
-                    target = None
-            metadata_target = target
-            needs_metadata = (
-                job.config.save_history == "on"
-                or job.config.ai_enabled == "on"
-                or job.mode in ("edit", "command")
+            destination = snapshot_for_stop(
+                self.delivery, job.config, target, start_target=job.start_target, mode=job.mode
             )
-            if (
-                needs_metadata
-                and metadata_target is None
-                and hasattr(self.delivery, "target_metadata")
-            ):
-                try:
-                    metadata_target = (
-                        self.delivery.capture_target(job.config)
-                        if hasattr(self.delivery, "capture_target")
-                        else self.delivery.focus()
-                    )
-                # An unavailable desktop must not block audio shutdown.
-                except Exception:  # allow: exception-handling  # noqa: BLE001
-                    metadata_target = None
-            if enabled(job.config, "smart_capitalization") or enabled(
-                job.config, "space_between_dictations"
-            ):
-                try:
-                    from .accessibility import read_context
-
-                    job.context = read_context()
-                # Formatting context is optional; continue without it.
-                except Exception:  # allow: exception-handling  # noqa: BLE001
-                    job.context = None  # Optional context must never prevent microphone shutdown.
+            job.context = destination.context
             if focus_gate:
-                focus_gate["ready"].set()
+                focus_gate.ready.set()
             try:
                 recorder.stop()
             finally:
                 self.stop_done.set()
                 self.media.resume()
                 play_sound(job.config, stop=True)
-            if needs_metadata and hasattr(self.delivery, "target_metadata"):
-                try:
-                    job.metadata = self.delivery.target_metadata(metadata_target)
-                # Metadata lookup failure must not block transcription.
-                except Exception:  # allow: exception-handling  # noqa: BLE001, S110
-                    pass  # Destination metadata is optional; never block transcription.
+            metadata = destination.metadata(self.delivery)
+            if metadata is not None:
+                job.metadata = metadata
         # The job or IPC response reports the failure; avoid duplicating private data in logs.
         except Exception as exc:  # allow: exception-handling  # noqa: BLE001
             with self.lock:
@@ -957,9 +860,8 @@ class Controller:
             else:
                 self._job_status(job, "queued", "Waiting for earlier dictation")
                 self._update(job, "transcribing")
-        if focus_gate and not focus_gate["valid"]:
-            target = None
-        self._finish(job, target, auto_paste_expected=auto_paste_expected)
+        target = None if focus_gate and not focus_gate.valid else destination.target
+        self._finish(job, target, auto_paste_expected=destination.automatic)
 
     def _manual_delivery(self, action, data):
         with self.lock:

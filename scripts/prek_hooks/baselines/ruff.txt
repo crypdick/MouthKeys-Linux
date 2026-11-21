@@ -719,46 +719,6 @@
 1	src/mouthkeys/overlay.py	PLC0415	`import` should be at the top-level of a file
 1	src/mouthkeys/overlay.py	PLR0912	Too many branches (19 > 12)
 1	src/mouthkeys/overlay.py	PLR0915	Too many statements (73 > 50)
-2	src/mouthkeys/portal_shortcuts.py	ANN001	Missing type annotation for function argument `_iface`
-2	src/mouthkeys/portal_shortcuts.py	ANN001	Missing type annotation for function argument `_user_data`
-1	src/mouthkeys/portal_shortcuts.py	ANN001	Missing type annotation for function argument `callback`
-2	src/mouthkeys/portal_shortcuts.py	ANN001	Missing type annotation for function argument `conn`
-1	src/mouthkeys/portal_shortcuts.py	ANN001	Missing type annotation for function argument `key`
-1	src/mouthkeys/portal_shortcuts.py	ANN001	Missing type annotation for function argument `mask`
-1	src/mouthkeys/portal_shortcuts.py	ANN001	Missing type annotation for function argument `message`
-1	src/mouthkeys/portal_shortcuts.py	ANN001	Missing type annotation for function argument `method`
-2	src/mouthkeys/portal_shortcuts.py	ANN001	Missing type annotation for function argument `object_path`
-3	src/mouthkeys/portal_shortcuts.py	ANN001	Missing type annotation for function argument `parameters`
-2	src/mouthkeys/portal_shortcuts.py	ANN001	Missing type annotation for function argument `results`
-2	src/mouthkeys/portal_shortcuts.py	ANN001	Missing type annotation for function argument `sender`
-2	src/mouthkeys/portal_shortcuts.py	ANN001	Missing type annotation for function argument `signal`
-1	src/mouthkeys/portal_shortcuts.py	ANN001	Missing type annotation for function argument `signature`
-1	src/mouthkeys/portal_shortcuts.py	ANN001	Missing type annotation for function argument `token`
-1	src/mouthkeys/portal_shortcuts.py	ANN001	Missing type annotation for function argument `value`
-1	src/mouthkeys/portal_shortcuts.py	ANN201	Missing return type annotation for public function `helper`
-1	src/mouthkeys/portal_shortcuts.py	ANN201	Missing return type annotation for public function `launch`
-1	src/mouthkeys/portal_shortcuts.py	ANN201	Missing return type annotation for public function `preferred_trigger`
-1	src/mouthkeys/portal_shortcuts.py	ANN202	Missing return type annotation for private function `activated`
-1	src/mouthkeys/portal_shortcuts.py	ANN202	Missing return type annotation for private function `bound`
-1	src/mouthkeys/portal_shortcuts.py	ANN202	Missing return type annotation for private function `configured_entries`
-1	src/mouthkeys/portal_shortcuts.py	ANN202	Missing return type annotation for private function `created`
-1	src/mouthkeys/portal_shortcuts.py	ANN202	Missing return type annotation for private function `fail`
-1	src/mouthkeys/portal_shortcuts.py	ANN202	Missing return type annotation for private function `request`
-1	src/mouthkeys/portal_shortcuts.py	ANN202	Missing return type annotation for private function `response`
-1	src/mouthkeys/portal_shortcuts.py	ANN202	Missing return type annotation for private function `setup_timeout`
-2	src/mouthkeys/portal_shortcuts.py	ARG001	Unused function argument: `conn`
-1	src/mouthkeys/portal_shortcuts.py	ARG001	Unused function argument: `object_path`
-1	src/mouthkeys/portal_shortcuts.py	ARG001	Unused function argument: `results`
-2	src/mouthkeys/portal_shortcuts.py	ARG001	Unused function argument: `sender`
-1	src/mouthkeys/portal_shortcuts.py	ARG001	Unused function argument: `signal`
-1	src/mouthkeys/portal_shortcuts.py	C901	`helper` is too complex (18 > 15)
-1	src/mouthkeys/portal_shortcuts.py	C901	`launch` is too complex (16 > 15)
-6	src/mouthkeys/portal_shortcuts.py	PLC0415	`import` should be at the top-level of a file
-1	src/mouthkeys/portal_shortcuts.py	PLR0912	Too many branches (15 > 12)
-1	src/mouthkeys/portal_shortcuts.py	PLR0915	Too many statements (56 > 50)
-1	src/mouthkeys/portal_shortcuts.py	PLR0915	Too many statements (63 > 50)
-1	src/mouthkeys/portal_shortcuts.py	PLR1702	Too many nested blocks (6 > 5)
-1	src/mouthkeys/portal_shortcuts.py	SIM105	Use `contextlib.suppress(Exception)` instead of `try`-`except`-`pass`
 1	src/mouthkeys/postprocess.py	ANN001	Missing type annotation for function argument `cancel_event`
 2	src/mouthkeys/postprocess.py	ANN001	Missing type annotation for function argument `config`
 1	src/mouthkeys/postprocess.py	ANN001	Missing type annotation for function argument `on_delta`

@@ -1,21 +1,26 @@
-"""Explicit XDG GlobalShortcuts setup, per official portal and shortcuts specs.
-
-Standalone GI helper owns the portal session; no mandatory GI dependency in uv.
-Consent belongs to the compositor. Never fake success if portal is unavailable.
-"""
+"""Run the isolated GlobalShortcuts helper and dispatch its events."""
 
 import importlib.util
 import json
 import os
 import select
 import subprocess
-import sys
 import time
-import uuid
+import typing
+from collections.abc import Iterator
+from contextlib import suppress
+from math import isfinite
 from pathlib import Path
 
+from .config import Config
+from .control import request
+from .hotkeys import Activation, bindings
+from .portal_helper import MAX_MESSAGE_BYTES, ShortcutEntry
+from .processes import python_command
+from .x11_shortcuts import ShortcutEvent
 
-def preferred_trigger(mask, key):
+
+def preferred_trigger(mask: int, key: str) -> str:
     if key.startswith("button"):
         raise ValueError(
             "Portal supports keyboard shortcuts only; use X11 or desktop mouse bindings"
@@ -26,248 +31,140 @@ def preferred_trigger(mask, key):
     return "+".join([*modifiers, key])
 
 
-def launch():
-    from .config import Config
-    from .control import request
-    from .hotkeys import Activation, bindings
-    from .processes import python_command
+def _entries(config: Config) -> list[ShortcutEntry]:
+    return [
+        {"id": f"{action}_{index}", "action": action, "trigger": preferred_trigger(mask, key)}
+        for index, (action, mask, key) in enumerate(bindings(config))
+    ]
 
+
+def _helper_command() -> list[str]:
+    system_python = Path("/usr/bin/python3")
+    if importlib.util.find_spec("gi") is None and system_python.is_file():
+        helper = Path(__file__).resolve().with_name("portal_helper.py")
+        return [str(system_python), "-I", str(helper)]
+    return python_command("mouthkeys.portal_helper")
+
+
+def _frames(fd: int) -> Iterator[list[bytes]]:
+    buffered = b""
+    while True:
+        if not select.select([fd], [], [], 0.25)[0]:
+            yield []
+            continue
+        chunk = os.read(fd, 4096)
+        if not chunk:
+            if buffered:
+                raise RuntimeError("Incomplete shortcut event")
+            return
+        *lines, buffered = (buffered + chunk).split(b"\n")
+        if len(buffered) > MAX_MESSAGE_BYTES or any(
+            len(line) > MAX_MESSAGE_BYTES for line in lines
+        ):
+            raise RuntimeError("Oversized shortcut event")
+        yield lines
+
+
+def _event(line: bytes, actions: dict[str, str]) -> ShortcutEvent:
+    data = json.loads(line)
+    if not isinstance(data, dict):
+        raise TypeError("Invalid portal shortcut event")
+    match data:
+        case {"error": str(error)}:
+            raise RuntimeError(error)
+    identity, action, down, timestamp = (
+        data.get("id"),
+        data.get("action"),
+        data.get("down"),
+        data.get("at"),
+    )
+    if (
+        not isinstance(identity, str)
+        or not isinstance(action, str)
+        or actions.get(identity) != action
+        or not isinstance(down, bool)
+        or isinstance(timestamp, bool)
+        or not isinstance(timestamp, (int, float))
+    ):
+        raise ValueError("Invalid portal shortcut event")
+    try:
+        at = float(timestamp)
+    except OverflowError:
+        raise ValueError("Invalid portal shortcut timestamp") from None
+    if not isfinite(at):
+        raise ValueError("Invalid portal shortcut timestamp")
+    return action, down, at, identity
+
+
+def _monitor(
+    child: subprocess.Popen[bytes],
+    config: Config,
+    activation: Activation,
+    entries: list[ShortcutEntry],
+) -> Config | None:
+    # The child was created with both streams set to PIPE.
+    stdin = typing.cast("typing.BinaryIO", child.stdin)
+    stdout = typing.cast("typing.BinaryIO", child.stdout)
+    payload = (json.dumps(entries) + "\n").encode()
+    if len(payload) > MAX_MESSAGE_BYTES:
+        raise ValueError("Oversized portal shortcut configuration")
+    stdin.write(payload)
+    stdin.close()
+    actions = {entry["id"]: entry["action"] for entry in entries}
+    checked_at = 0.0
+    for batch in _frames(stdout.fileno()):
+        for line in batch:
+            activation.event(*_event(line, actions))
+        now = time.monotonic()
+        if now - checked_at >= 1:
+            checked_at = now
+            refreshed = Config.load()
+            if refreshed.shortcut_backend != "portal" or (
+                not activation.pressed
+                and (refreshed.hotkey_mode != config.hotkey_mode or _entries(refreshed) != entries)
+            ):
+                return refreshed
+    if child.wait(timeout=2):
+        raise RuntimeError("GlobalShortcuts portal unavailable, cancelled, or denied")
+    return None
+
+
+def _stop(child: subprocess.Popen[bytes]) -> None:
+    # The child was created with both streams set to PIPE.
+    stdin = typing.cast("typing.BinaryIO", child.stdin)
+    stdout = typing.cast("typing.BinaryIO", child.stdout)
+    try:
+        with stdout, suppress(BrokenPipeError):
+            stdin.close()
+    finally:
+        if child.poll() is None:
+            child.terminate()
+            try:
+                child.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                child.kill()
+                child.wait(timeout=2)
+
+
+def launch() -> int:
     config = Config.load()
-
-    def configured_entries(value):
-        return [
-            {"id": f"{action}_{index}", "action": action, "trigger": preferred_trigger(mask, key)}
-            for index, (action, mask, key) in enumerate(bindings(value))
-        ]
-
-    args = [*python_command("mouthkeys.portal_shortcuts"), "--helper"]
-    if importlib.util.find_spec("gi") is None and Path("/usr/bin/python3").is_file():
-        args = ["/usr/bin/python3", "-I", str(Path(__file__).resolve()), "--helper"]
     activation = Activation(config.hotkey_mode, request)
     while config.shortcut_backend == "portal":
-        entries = configured_entries(config)
-        child = subprocess.Popen(args, stdin=subprocess.PIPE, stdout=subprocess.PIPE, bufsize=0)  # noqa: S603
-        changed = False
-        checked_at = 0
-        buffer = b""
+        entries = _entries(config)
+        child = subprocess.Popen(  # noqa: S603 - fixed packaged helper command
+            _helper_command(),
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+        )
         try:
-            child.stdin.write((json.dumps(entries) + "\n").encode())
-            child.stdin.close()
-            while True:
-                ready = select.select([child.stdout], [], [], 0.25)[0]
-                if ready:
-                    chunk = os.read(child.stdout.fileno(), 4096)
-                    if not chunk:
-                        break
-                    buffer += chunk
-                    if len(buffer) > 65536:
-                        raise RuntimeError("Oversized shortcut event")
-                    while b"\n" in buffer:
-                        line, buffer = buffer.split(b"\n", 1)
-                        value = json.loads(line)
-                        if "error" in value:
-                            raise RuntimeError(value["error"])
-                        activation.event(value["action"], value["down"], value["at"], value["id"])
-                if time.monotonic() - checked_at >= 1:
-                    checked_at = time.monotonic()
-                    refreshed = Config.load()
-                    changed = refreshed.shortcut_backend != "portal" or (
-                        not activation.pressed
-                        and (
-                            configured_entries(refreshed) != entries
-                            or refreshed.hotkey_mode != config.hotkey_mode
-                        )
-                    )
-                    if changed:
-                        config = refreshed
-                        activation.mode = config.hotkey_mode
-                        break
-            if not changed:
-                if child.wait(timeout=2):
-                    raise RuntimeError("GlobalShortcuts portal unavailable, cancelled, or denied")
-                return 0
+            updated = _monitor(child, config, activation, entries)
         finally:
-            activation.finish()
-            child.stdout.close()
-            if child.poll() is None:
-                child.terminate()
-                try:
-                    child.wait(timeout=2)
-                except subprocess.TimeoutExpired:
-                    child.kill()
-                    child.wait(timeout=2)
-    return 0
-
-
-def helper():
-    import gi
-
-    gi.require_version("Gio", "2.0")
-    from gi.repository import Gio, GLib
-
-    entries = json.loads(sys.stdin.readline(65536))
-    by_id = {entry["id"]: entry["action"] for entry in entries}
-    connection = Gio.bus_get_sync(Gio.BusType.SESSION, None)
-    loop = GLib.MainLoop()
-    pending = {}
-    state = {"session": None, "ready": False}
-    interface = "org.freedesktop.portal.GlobalShortcuts"
-    destination = "org.freedesktop.portal.Desktop"
-    path = "/org/freedesktop/portal/desktop"
-
-    def fail(message):
-        print(json.dumps({"error": message}), flush=True)  # noqa: T201
-        loop.quit()
-
-    def request(method, signature, parameters, token, callback):
-        sender = connection.get_unique_name()[1:].replace(".", "_")
-        expected = path + "/request/" + sender + "/" + token
-        pending[expected] = callback
-        result = connection.call_sync(
-            destination,
-            path,
-            interface,
-            method,
-            GLib.Variant(signature, parameters),
-            None,
-            Gio.DBusCallFlags.NONE,
-            2000,
-            None,
-        ).unpack()[0]
-        if result != expected:
-            pending[result] = pending.pop(expected)
-
-    def response(conn, sender, object_path, _iface, signal, parameters, _user_data):
-        callback = pending.pop(object_path, None)
-        if callback:
-            code, results = parameters.unpack()
-            if code != 0:
-                fail("GlobalShortcuts setup cancelled or denied")
-            else:
-                try:
-                    callback(results)
-                # The portal client reports errors via its own response protocol.
-                except Exception as exc:  # allow: exception-handling  # noqa: BLE001
-                    fail(str(exc))
-
-    def bound(results):
-        state["ready"] = True
-
-    def created(results):
-        state["session"] = results["session_handle"]
-        token = "mouthkeys_bind_" + uuid.uuid4().hex
-        shortcuts = [
-            (
-                entry["id"],
-                {
-                    "description": GLib.Variant("s", "MouthKeys " + entry["action"]),
-                    "preferred_trigger": GLib.Variant("s", entry["trigger"]),
-                },
-            )
-            for entry in entries
-        ]
-        request(
-            "BindShortcuts",
-            "(oa(sa{sv})sa{sv})",
-            (state["session"], shortcuts, "", {"handle_token": GLib.Variant("s", token)}),
-            token,
-            bound,
-        )
-
-    def activated(conn, sender, object_path, _iface, signal, parameters, _user_data):
-        session, shortcut, *_ = parameters.unpack()
-        if state["ready"] and session == state["session"] and shortcut in by_id:
-            print(  # noqa: T201
-                json.dumps(
-                    {
-                        "action": by_id[shortcut],
-                        "id": shortcut,
-                        "down": signal == "Activated",
-                        "at": time.monotonic(),
-                    }
-                ),
-                flush=True,
-            )
-
-    def setup_timeout():
-        if not state["ready"]:
-            fail("GlobalShortcuts setup timed out")
-        return False
-
-    connection.signal_subscribe(
-        destination,
-        "org.freedesktop.portal.Request",
-        "Response",
-        None,
-        None,
-        Gio.DBusSignalFlags.NONE,
-        response,
-        None,
-    )
-    for signal in ("Activated", "Deactivated"):
-        connection.signal_subscribe(
-            destination, interface, signal, path, None, Gio.DBusSignalFlags.NONE, activated, None
-        )
-    connection.signal_subscribe(
-        destination,
-        "org.freedesktop.portal.Session",
-        "Closed",
-        None,
-        None,
-        Gio.DBusSignalFlags.NONE,
-        lambda *_: loop.quit(),
-        None,
-    )
-    token = "mouthkeys_create_" + uuid.uuid4().hex
-    request(
-        "CreateSession",
-        "(a{sv})",
-        (
-            {
-                "handle_token": GLib.Variant("s", token),
-                "session_handle_token": GLib.Variant("s", "mouthkeys_" + uuid.uuid4().hex),
-            },
-        ),
-        token,
-        created,
-    )
-    GLib.timeout_add_seconds(120, setup_timeout)
-    try:
-        loop.run()
-    finally:
-        for pending_path in list(pending):
             try:
-                connection.call_sync(
-                    destination,
-                    pending_path,
-                    "org.freedesktop.portal.Request",
-                    "Close",
-                    None,
-                    None,
-                    Gio.DBusCallFlags.NONE,
-                    300,
-                    None,
-                )
-            # The portal session may already be detached during cleanup.
-            except Exception:  # allow: exception-handling  # noqa: BLE001, S110
-                pass
-        if state["session"]:
-            connection.call_sync(
-                destination,
-                state["session"],
-                "org.freedesktop.portal.Session",
-                "Close",
-                None,
-                None,
-                Gio.DBusCallFlags.NONE,
-                500,
-                None,
-            )
-
-
-if __name__ == "__main__":
-    try:
-        helper()
-    except Exception as exc:  # noqa: BLE001
-        print(json.dumps({"error": "GlobalShortcuts portal: " + str(exc)}), flush=True)  # noqa: T201
-        raise SystemExit(1) from None
+                activation.finish()
+            finally:
+                _stop(child)
+        if updated is None:
+            break
+        config = updated
+        activation.mode = config.hotkey_mode
+    return 0

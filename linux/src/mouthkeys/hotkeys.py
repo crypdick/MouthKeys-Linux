@@ -16,7 +16,7 @@ import threading
 import time
 from collections.abc import Mapping
 from types import FrameType
-from typing import Protocol, cast, runtime_checkable
+from typing import Protocol, runtime_checkable
 
 from . import profiles
 from .config import Config, runtime_dir, state_dir
@@ -252,7 +252,7 @@ def launch() -> int:
             if config.shortcut_backend == "portal":
                 from .portal_shortcuts import launch as portal
 
-                return cast("int", portal())
+                return portal()
             return _run_x11(config)
         finally:
             if previous_handler is not None:

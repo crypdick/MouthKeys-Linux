@@ -8,6 +8,7 @@ from mouthkeys.config import Config
 
 QtCore = pytest.importorskip("PySide6.QtCore")
 Qt = QtCore.Qt
+QMouseEvent = pytest.importorskip("PySide6.QtGui").QMouseEvent
 QApplication = pytest.importorskip("PySide6.QtWidgets").QApplication
 overlay = import_module("mouthkeys.overlay")
 
@@ -117,14 +118,25 @@ def test_overlay_clamps_drag_and_retains_it_between_shortcuts(panel_placement):
     area = QtCore.QRect(0, 0, 1600, 900)
     screens.append(SimpleNamespace(availableGeometry=lambda: area))
     panel.set_status({"phase": "recording", "id": "a"})
-    panel.mousePressEvent(
-        SimpleNamespace(
-            button=lambda: Qt.MouseButton.LeftButton,
-            globalPosition=lambda: QtCore.QPointF(panel.frameGeometry().center()),
+    events = QtCore.QEvent.Type
+    center = QtCore.QPointF(panel.frameGeometry().center())
+
+    def mouse(kind, point, button=Qt.MouseButton.LeftButton):
+        return QMouseEvent(
+            kind,
+            QtCore.QPointF(),
+            point,
+            button,
+            Qt.MouseButton.LeftButton,
+            Qt.KeyboardModifier.NoModifier,
         )
-    )
-    panel.mouseMoveEvent(SimpleNamespace(globalPosition=lambda: QtCore.QPointF(0, 355)))
-    panel.mouseReleaseEvent(None)
+
+    panel.mousePressEvent(mouse(events.MouseButtonPress, center, Qt.MouseButton.RightButton))
+    panel.mouseMoveEvent(mouse(events.MouseMove, QtCore.QPointF(0, 355), Qt.MouseButton.NoButton))
+    assert panel.frameGeometry() == shown[0]
+    panel.mousePressEvent(mouse(events.MouseButtonPress, center))
+    panel.mouseMoveEvent(mouse(events.MouseMove, QtCore.QPointF(0, 355), Qt.MouseButton.NoButton))
+    panel.mouseReleaseEvent(mouse(events.MouseButtonRelease, center))
     dragged = panel.frameGeometry()
     assert area.contains(dragged)
     assert dragged.left() == area.left()
@@ -133,7 +145,7 @@ def test_overlay_clamps_drag_and_retains_it_between_shortcuts(panel_placement):
     panel.set_status({"phase": "recording", "id": "b"})
 
     assert shown[-1] == dragged
-    panel.mouseDoubleClickEvent(None)
+    panel.mouseDoubleClickEvent(mouse(events.MouseButtonDblClick, center))
     assert panel.frameGeometry() == shown[0]
 
 

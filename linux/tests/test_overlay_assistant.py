@@ -1,6 +1,7 @@
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QPalette
+from PySide6.QtGui import QCloseEvent, QPalette
 
+from mouthkeys import overlay_assistant, qt_control
 from mouthkeys.assistant_history import AssistantHistory
 from mouthkeys.config import Config
 from mouthkeys.overlay import Overlay
@@ -85,7 +86,7 @@ def test_expanded_review_has_recent_new_followup_and_live_status(monkeypatch):
     second = store.new("edit")
     store.rename(second["id"], "Second chat")
     widget = panel(monkeypatch)
-    host = OverlayAssistant(widget)
+    host = OverlayAssistant(widget.renderer.colors, widget.poll)
     widget.assistant_window = host
     assistant = host.assistant_page
     assistant.mode.setCurrentIndex(assistant.mode.findData("edit"))
@@ -116,7 +117,7 @@ def test_expanded_review_has_recent_new_followup_and_live_status(monkeypatch):
 
 def test_disabled_passive_panel_still_updates_explicit_review(monkeypatch):
     widget = panel(monkeypatch)
-    host = OverlayAssistant(widget)
+    host = OverlayAssistant(widget.renderer.colors, widget.poll)
     widget.assistant_window = host
     Config(recording_panel="off").save()
     status = {
@@ -128,3 +129,43 @@ def test_disabled_passive_panel_still_updates_explicit_review(monkeypatch):
     assert host.assistant_page.result.toPlainText() == "Review remains available"
     assert widget.data == status
     assert not widget.isVisible()
+
+
+def test_closing_review_keeps_pending_requests_and_refreshes_panel_on_completion(monkeypatch):
+    widget = panel(monkeypatch)
+    updates = []
+    received = []
+
+    class PendingRequest(qt_control.Request):
+        def start(self):
+            pass
+
+    def request(action, **data):
+        if action == "failure":
+            raise OSError("Assistant service unavailable")
+        return data
+
+    monkeypatch.setattr(overlay_assistant, "Request", PendingRequest)
+    monkeypatch.setattr(qt_control, "request", request)
+    host = OverlayAssistant(widget.renderer.colors, lambda: updates.append("poll"))
+    host.send("request", {"id": "example"}, received.append)
+    (pending,) = host.jobs
+
+    event = QCloseEvent()
+    host.closeEvent(event)
+    assert not event.isAccepted()
+    assert pending in host.jobs
+    pending.run()
+    pending.finished.emit()
+    assert received == [{"result": {"id": "example"}}]
+    assert updates == ["poll"]
+    assert not host.jobs
+
+    for action in ("failure", "success"):
+        host.send(action)
+        (pending,) = host.jobs
+        pending.run()
+        pending.finished.emit()
+    assert host.assistant_page.feedback.text() == "Assistant service unavailable"
+    assert updates == ["poll"] * 3
+    assert not host.jobs

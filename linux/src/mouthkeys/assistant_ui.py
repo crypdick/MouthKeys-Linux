@@ -4,6 +4,7 @@ import copy
 import json
 import threading
 import uuid
+from collections.abc import Mapping
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QThread, Signal
@@ -564,11 +565,11 @@ class AssistantPage(QWidget):
         ):
             self.next_request = lambda: self.run_command(automatic=True)
 
-    def update_status(self, status):
+    def update_status(self, status: Mapping[str, object]) -> None:
         if self.jobs:
             return
         stream = status.get("assistant_stream")
-        if stream and stream.get("mode") in ("edit", "command"):
+        if isinstance(stream, dict) and stream.get("mode") in ("edit", "command"):
             self.proposal = None
             self.request_context = None
             self.chain_config = None
@@ -591,7 +592,7 @@ class AssistantPage(QWidget):
             self.cancel_request_button.setEnabled(False)
         identity = (status.get("id"), proposal)
         if (
-            proposal
+            isinstance(proposal, dict)
             and proposal.get("mode") in ("command", "edit")
             and identity != self.last_proposal
         ):
@@ -680,6 +681,7 @@ class AssistantPage(QWidget):
         def complete(result):
             self.command_steps += 1
             self.pending_result = {"command": command, "working_directory": directory, **result}
+            # Replaying a finished proposal must never execute the same command twice.
             self.proposal = None
             saved = True
             try:
@@ -703,8 +705,6 @@ class AssistantPage(QWidget):
                 suffix += " — output limit reached"
             if saved:
                 self.feedback.setText(f"Exit status {result['returncode']}{suffix}")
-            # Replaying a finished proposal must never execute the same command twice.
-            self.proposal = None
             if (
                 saved
                 and not cancelled.is_set()

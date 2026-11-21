@@ -6,6 +6,7 @@ import pytest
 
 QApplication = pytest.importorskip("PySide6.QtWidgets").QApplication
 settings_gui = import_module("mouthkeys.gui")
+qt_control = import_module("mouthkeys.qt_control")
 
 
 def test_taskbar_hint_is_configurable_and_separate_from_tray(monkeypatch):
@@ -98,7 +99,7 @@ def test_download_retries_unavailable_model_only_after_success(monkeypatch, tmp_
     controller.worker.join(2)
     assert not controller.worker.is_alive()
     assert "Model unavailable" in controller.status()["message"]
-    monkeypatch.setattr(gui, "request", controller.command)
+    monkeypatch.setattr(qt_control, "request", controller.command)
     # Exercise real QProcess completion without network or model inference.
     script = (
         f"from pathlib import Path; Path({str(ready)!r}).touch()"
@@ -199,7 +200,7 @@ def test_offscreen_controller_renders_history_and_saves_settings(monkeypatch):
             ]
         raise AssertionError(f"Unexpected GUI request: {action}")
 
-    monkeypatch.setattr(gui, "request", request)
+    monkeypatch.setattr(qt_control, "request", request)
     window = gui.Window()
     window.timer.stop()
     deadline = time.monotonic() + 3

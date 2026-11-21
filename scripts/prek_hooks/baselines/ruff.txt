@@ -744,7 +744,6 @@
 1	src/mouthkeys/literal_formatting.py	FBT001	Boolean-typed positional argument in function definition
 2	src/mouthkeys/local_api.py	ANN001	Missing type annotation for function argument `address`
 1	src/mouthkeys/local_api.py	ANN001	Missing type annotation for function argument `audio`
-1	src/mouthkeys/local_api.py	ANN001	Missing type annotation for function argument `controller`
 1	src/mouthkeys/local_api.py	ANN001	Missing type annotation for function argument `data`
 1	src/mouthkeys/local_api.py	ANN001	Missing type annotation for function argument `entry`
 1	src/mouthkeys/local_api.py	ANN001	Missing type annotation for function argument `native`
@@ -769,7 +768,6 @@
 1	src/mouthkeys/local_api.py	ANN201	Missing return type annotation for public function `process_request`
 1	src/mouthkeys/local_api.py	ANN201	Missing return type annotation for public function `replacement_id`
 1	src/mouthkeys/local_api.py	ANN201	Missing return type annotation for public function `setup`
-1	src/mouthkeys/local_api.py	ANN201	Missing return type annotation for public function `start`
 1	src/mouthkeys/local_api.py	ANN201	Missing return type annotation for public function `transcribe`
 1	src/mouthkeys/local_api.py	ANN204	Missing return type annotation for special method `__init__`
 1	src/mouthkeys/local_api.py	C901	`dispatch` is too complex (29 > 15)
@@ -1149,7 +1147,7 @@
 2	src/mouthkeys/routing.py	PLC0415	`import` should be at the top-level of a file
 1	src/mouthkeys/routing.py	PLR0913	Too many arguments in function definition (6 > 5)
 1	src/mouthkeys/service.py	ANN001	Missing type annotation for function argument `_focus_gate`
-5	src/mouthkeys/service.py	ANN001	Missing type annotation for function argument `action`
+4	src/mouthkeys/service.py	ANN001	Missing type annotation for function argument `action`
 1	src/mouthkeys/service.py	ANN001	Missing type annotation for function argument `assistant_context`
 1	src/mouthkeys/service.py	ANN001	Missing type annotation for function argument `assistant_executions`
 1	src/mouthkeys/service.py	ANN001	Missing type annotation for function argument `auto_paste_expected`
@@ -1180,18 +1178,11 @@
 3	src/mouthkeys/service.py	ANN001	Missing type annotation for function argument `text`
 1	src/mouthkeys/service.py	ANN001	Missing type annotation for function argument `thoughts`
 1	src/mouthkeys/service.py	ANN001	Missing type annotation for function argument `transcriber`
-1	src/mouthkeys/service.py	ANN002	Missing type annotation for `*_`
-3	src/mouthkeys/service.py	ANN003	Missing type annotation for `**data`
+2	src/mouthkeys/service.py	ANN003	Missing type annotation for `**data`
 1	src/mouthkeys/service.py	ANN003	Missing type annotation for `**metadata`
 1	src/mouthkeys/service.py	ANN201	Missing return type annotation for public function `command`
-1	src/mouthkeys/service.py	ANN201	Missing return type annotation for public function `ensure_daemon`
-1	src/mouthkeys/service.py	ANN201	Missing return type annotation for public function `ensure_overlay`
-1	src/mouthkeys/service.py	ANN201	Missing return type annotation for public function `handle`
 1	src/mouthkeys/service.py	ANN201	Missing return type annotation for public function `interrupt`
 1	src/mouthkeys/service.py	ANN201	Missing return type annotation for public function `report_error`
-1	src/mouthkeys/service.py	ANN201	Missing return type annotation for public function `request`
-1	src/mouthkeys/service.py	ANN201	Missing return type annotation for public function `serve`
-1	src/mouthkeys/service.py	ANN201	Missing return type annotation for public function `service_actions`
 1	src/mouthkeys/service.py	ANN201	Missing return type annotation for public function `status`
 1	src/mouthkeys/service.py	ANN201	Missing return type annotation for public function `tick`
 1	src/mouthkeys/service.py	ANN202	Missing return type annotation for private function `_accept_edit`
@@ -1221,7 +1212,6 @@
 1	src/mouthkeys/service.py	ANN202	Missing return type annotation for private function `delta`
 1	src/mouthkeys/service.py	ANN202	Missing return type annotation for private function `proposal_size`
 1	src/mouthkeys/service.py	ANN202	Missing return type annotation for private function `reserve_send`
-1	src/mouthkeys/service.py	ANN202	Missing return type annotation for private function `shutdown`
 1	src/mouthkeys/service.py	ANN202	Missing return type annotation for private function `stream`
 1	src/mouthkeys/service.py	ANN202	Missing return type annotation for private function `thinking`
 1	src/mouthkeys/service.py	ANN204	Missing return type annotation for special method `__init__`
@@ -1232,7 +1222,7 @@
 1	src/mouthkeys/service.py	C901	`_select_microphone` is too complex (21 > 15)
 1	src/mouthkeys/service.py	C901	`_start_recording` is too complex (28 > 15)
 1	src/mouthkeys/service.py	C901	`_stopped` is too complex (18 > 15)
-16	src/mouthkeys/service.py	PLC0415	`import` should be at the top-level of a file
+14	src/mouthkeys/service.py	PLC0415	`import` should be at the top-level of a file
 2	src/mouthkeys/service.py	PLR0911	Too many return statements (15 > 6)
 1	src/mouthkeys/service.py	PLR0912	Too many branches (20 > 12)
 1	src/mouthkeys/service.py	PLR0912	Too many branches (23 > 12)
@@ -1249,10 +1239,8 @@
 1	src/mouthkeys/service.py	PLR0915	Too many statements (89 > 50)
 4	src/mouthkeys/service.py	PLR1702	Too many nested blocks (6 > 5)
 1	src/mouthkeys/service.py	SIM102	Use a single `if` statement instead of nested `if` statements
-1	src/mouthkeys/service.py	SIM105	Use `contextlib.suppress(BrokenPipeError, ConnectionResetError)` instead of `try`-`except`-`pass`
 3	src/mouthkeys/service.py	SIM105	Use `contextlib.suppress(Exception)` instead of `try`-`except`-`pass`
-1	src/mouthkeys/service.py	SIM105	Use `contextlib.suppress(OSError)` instead of `try`-`except`-`pass`
-3	src/mouthkeys/service.py	TRY300	Consider moving this statement to an `else` block
+1	src/mouthkeys/service.py	TRY300	Consider moving this statement to an `else` block
 1	src/mouthkeys/setup_languages.py	ANN001	Missing type annotation for function argument `engine`
 1	src/mouthkeys/setup_languages.py	ANN001	Missing type annotation for function argument `label`
 1	src/mouthkeys/setup_languages.py	ANN001	Missing type annotation for function argument `language_code`
@@ -1403,7 +1391,7 @@
 1	tests/test_bluetooth_capture.py	SIM115	Use a context manager for opening files
 6	tests/test_capture.py	PLC0415	`import` should be at the top-level of a file
 2	tests/test_capture.py	SIM115	Use a context manager for opening files
-18	tests/test_cli.py	PLC0415	`import` should be at the top-level of a file
+14	tests/test_cli.py	PLC0415	`import` should be at the top-level of a file
 1	tests/test_cli.py	SIM105	Use `contextlib.suppress(FileNotFoundError, ConnectionRefusedError)` instead of `try`-`except`-`pass`
 6	tests/test_credentials.py	PLC0415	`import` should be at the top-level of a file
 1	tests/test_credentials.py	PT011	`pytest.raises(ValueError)` is too broad, set the `match` parameter or use a more specific exception

@@ -19,6 +19,7 @@ from .config import Config
 from .data_lock import dictionary_lock
 from .dictionary import Dictionary
 from .operations import statistics
+from .service import Controller
 
 MAX_BODY = 25 * 1024 * 1024
 
@@ -324,7 +325,7 @@ class Server(ThreadingHTTPServer):
             self.request_slots.release()
 
 
-def start(controller):
+def start(controller: Controller) -> Server | None:
     config = Config.load()
     if config.api_enabled != "on":
         return None

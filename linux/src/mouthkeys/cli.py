@@ -285,11 +285,11 @@ def main(argv: list[str] | None = None) -> int | None:
 
             return launch()
         elif args.command == "daemon":
-            from .service import serve
+            from .daemon import serve
 
             serve()
         else:
-            from .service import ensure_daemon, request
+            from .control import ensure_daemon, request
 
             if args.command != "shutdown":
                 ensure_daemon()
@@ -316,7 +316,7 @@ def main(argv: list[str] | None = None) -> int | None:
                 result = request(action, **data)
             finally:
                 if args.command in ("start", "stop", "toggle", "warmup"):
-                    from .service import ensure_overlay
+                    from .control import ensure_overlay
 
                     try:
                         ensure_overlay()

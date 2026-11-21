@@ -28,8 +28,8 @@ from pathlib import Path
 if not sys.flags.isolated:
     raise SystemExit("Run this probe with python -I from an isolated wheel environment")
 
+from mouthkeys.control import request
 from mouthkeys.native_worker import isolate_network
-from mouthkeys.service import request
 
 temporary = tempfile.TemporaryDirectory(prefix="mouthkeys-wheel-probe-")
 root = Path(temporary.name)

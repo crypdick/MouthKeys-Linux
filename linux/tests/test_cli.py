@@ -9,18 +9,17 @@ from pathlib import Path
 
 import pytest
 
+from mouthkeys import control
 from mouthkeys.cli import main
 from mouthkeys.config import Config, config_path, runtime_dir
-from mouthkeys.service import request
+from mouthkeys.control import ensure_overlay, request
 
 
 def test_microphone_cli_preserves_session_and_persistent_selection(monkeypatch, capsys):
-    from mouthkeys import service
-
     calls = []
-    monkeypatch.setattr(service, "ensure_daemon", lambda: None)
+    monkeypatch.setattr(control, "ensure_daemon", lambda: None)
     monkeypatch.setattr(
-        service, "request", lambda action, **data: calls.append((action, data)) or {}
+        control, "request", lambda action, **data: calls.append((action, data)) or {}
     )
     assert main(["microphone", "usb"]) == 0
     assert main(["microphone", "default", "--persist"]) == 0
@@ -54,12 +53,12 @@ def test_dictionary_cli_portable_roundtrip_and_merge(tmp_path, capsys):
 
 
 def test_benchmark_cli_uses_overrides_without_daemon_or_saved_config(monkeypatch, tmp_path, capsys):
-    from mouthkeys import benchmark, service
+    from mouthkeys import benchmark
 
     calls = []
     reference = tmp_path / "reference.txt"
     reference.write_text("hello fluid voice")
-    monkeypatch.setattr(service, "ensure_daemon", lambda: pytest.fail("Benchmark started daemon"))
+    monkeypatch.setattr(control, "ensure_daemon", lambda: pytest.fail("Benchmark started daemon"))
     monkeypatch.setattr(
         benchmark,
         "run_benchmark",
@@ -109,7 +108,7 @@ def test_backup_preview_cli_never_constructs_history_or_starts_daemon(
 ):
     from dataclasses import asdict
 
-    from mouthkeys import service, storage
+    from mouthkeys import storage
     from mouthkeys.config import Config, config_path
     from mouthkeys.dictionary import Dictionary
 
@@ -125,7 +124,7 @@ def test_backup_preview_cli_never_constructs_history_or_starts_daemon(
             }
         )
     )
-    monkeypatch.setattr(service, "ensure_daemon", lambda: pytest.fail("Preview started daemon"))
+    monkeypatch.setattr(control, "ensure_daemon", lambda: pytest.fail("Preview started daemon"))
     monkeypatch.setattr(storage, "History", lambda *a, **kw: pytest.fail("Preview opened history"))
     assert main(["backup-preview", str(path)]) == 0
     result = json.loads(capsys.readouterr().out)
@@ -136,12 +135,10 @@ def test_backup_preview_cli_never_constructs_history_or_starts_daemon(
 
 
 def test_cli_reports_version_without_starting_service(monkeypatch, capsys):
-    from mouthkeys import service
-
     def unexpected():
         raise AssertionError("Version must not start a service")
 
-    monkeypatch.setattr(service, "ensure_daemon", unexpected)
+    monkeypatch.setattr(control, "ensure_daemon", unexpected)
     with pytest.raises(SystemExit) as error:
         main(["--version"])
     assert error.value.code == 0
@@ -241,8 +238,6 @@ def test_real_daemon_ipc_duplicate_start_malformed_request_and_shutdown():
 def test_overlay_launcher_skips_headless_and_existing_panel(monkeypatch):
     import fcntl
 
-    from mouthkeys.service import ensure_overlay
-
     def unexpected(*args, **kwargs):
         raise AssertionError("Must not launch a desktop process")
 
@@ -283,28 +278,24 @@ def test_installed_command_from_untrusted_directory_starts_safe_daemon(tmp_path)
 
 
 def test_failed_shortcut_still_starts_feedback_panel(monkeypatch, capsys):
-    from mouthkeys import service
-
     launched = []
-    monkeypatch.setattr(service, "ensure_daemon", lambda: None)
-    monkeypatch.setattr(service, "ensure_overlay", lambda: launched.append(True))
+    monkeypatch.setattr(control, "ensure_daemon", lambda: None)
+    monkeypatch.setattr(control, "ensure_overlay", lambda: launched.append(True))
 
     def fail(*args, **kwargs):
         raise RuntimeError("Busy (loading)")
 
-    monkeypatch.setattr(service, "request", fail)
+    monkeypatch.setattr(control, "request", fail)
     assert main(["toggle"]) == 1
     assert launched == [True]
     assert "Busy (loading)" in capsys.readouterr().err
 
 
 def test_reviewed_edit_cli_preserves_explicit_target_and_focus_choice(monkeypatch, capsys):
-    from mouthkeys import service
-
     calls = []
-    monkeypatch.setattr(service, "ensure_daemon", lambda: None)
+    monkeypatch.setattr(control, "ensure_daemon", lambda: None)
     monkeypatch.setattr(
-        service, "request", lambda action, **data: calls.append((action, data)) or {}
+        control, "request", lambda action, **data: calls.append((action, data)) or {}
     )
     assert main(["accept-edit", "--id", "captured-job", "--return-to-target"]) == 0
     assert calls == [("accept_edit", {"id": "captured-job", "return_to_target": True})]
@@ -313,12 +304,12 @@ def test_reviewed_edit_cli_preserves_explicit_target_and_focus_choice(monkeypatc
 def test_socket_errors_persist_feedback_for_panel():
     import threading
 
-    from mouthkeys.service import Controller, Handler, Server
+    from mouthkeys.daemon import Server
+    from mouthkeys.service import Controller
 
     controller = Controller()
     controller.phase = "loading"
-    with Server(str(runtime_dir() / "control.sock"), Handler) as server:
-        server.controller = controller
+    with Server(str(runtime_dir() / "control.sock"), controller) as server:
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
         try:

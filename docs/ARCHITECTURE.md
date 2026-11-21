@@ -2,7 +2,8 @@
 
 [MouthKeys Linux](../linux/README.md#recording-and-architecture) is a local dictation app. The
 installed entry point, `mouthkeys.cli.main`, parses arguments with `cli_options.build_parser`,
-then dispatches local work or contacts the private Unix socket served by `service.Server`.
+then dispatches local work or uses `control` to contact the private Unix socket served by
+`daemon.Server`. The socket host owns lifecycle, not the recording queue.
 
 - **Recording:** `service.Controller` owns capture and a FIFO of `DictationJob`s. `audio.CaptureSession`
   wraps the process owned by `capture`. `transcribe.Transcriber` serializes inference, with optional

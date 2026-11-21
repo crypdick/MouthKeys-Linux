@@ -35,10 +35,10 @@ from PySide6.QtWidgets import (
 
 from . import __version__
 from .config import CHOICES, RANGES, Config, config_path, state_dir
+from .control import ensure_daemon, ensure_overlay, request
 from .delivery import automatic_delivery_warning, session
 from .file_transcription_ui import FileTranscriptionPage
 from .processes import python_command
-from .service import ensure_daemon, ensure_overlay, request
 
 COMPUTE_TYPES = [
     "default",

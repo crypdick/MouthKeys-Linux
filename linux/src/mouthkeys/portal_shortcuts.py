@@ -28,9 +28,9 @@ def preferred_trigger(mask, key):
 
 def launch():
     from .config import Config
+    from .control import request
     from .hotkeys import Activation, bindings
     from .processes import python_command
-    from .service import request
 
     config = Config.load()
 

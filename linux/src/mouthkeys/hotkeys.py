@@ -330,7 +330,7 @@ class X11:
 
 
 def launch():
-    from .service import ensure_daemon, request
+    from .control import ensure_daemon, request
 
     config = Config.load()
     if config.shortcut_backend == "desktop":

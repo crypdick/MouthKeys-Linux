@@ -199,7 +199,7 @@ def create_tray(window=None):
 
 
 def launch():
-    from .service import ensure_daemon, ensure_overlay
+    from .control import ensure_daemon, ensure_overlay
 
     with (runtime_dir() / "tray.lock").open("w") as lock:
         try:

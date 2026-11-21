@@ -3,6 +3,6 @@
 1830	linux/src/mouthkeys/gui.py
 696	linux/src/mouthkeys/native_asr.py
 557	linux/src/mouthkeys/overlay.py
-1652	linux/src/mouthkeys/service.py
+1518	linux/src/mouthkeys/service.py
 544	linux/src/mouthkeys/upstream_backup.py
 488	linux/tests/smoke_native.py

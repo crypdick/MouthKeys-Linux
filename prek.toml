@@ -155,8 +155,9 @@ priority = 2
 [[repos.hooks]]
 id = "pytest"
 name = "Headless pytest and branch coverage"
-entry = "env QT_QPA_PLATFORM=offscreen uv run --directory linux --locked --extra gui pytest"
+entry = "uv run --project linux --locked --extra gui python -m scripts.prek_hooks.run_tests"
 language = "system"
 pass_filenames = false
 always_run = true
 priority = 100
+verbose = true

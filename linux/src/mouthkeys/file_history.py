@@ -9,17 +9,27 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import TypedDict, cast
+from typing import NotRequired, TypedDict, cast
 
 from .config import state_dir
 
 MAX_RESULT = 20 * 1024 * 1024
 
 
+class FileSegment(TypedDict):
+    text: str
+    start: float
+    end: float
+    speaker: NotRequired[int | None]
+
+
 class FileResult(TypedDict):
     text: str
     duration: float
     processing_seconds: float
+    segments: NotRequired[list[FileSegment]]
+    speaker_turns: NotRequired[list[dict[str, object]] | None]
+    confidence: NotRequired[float | None]
 
 
 class FileHistoryEntry(TypedDict):
@@ -29,7 +39,7 @@ class FileHistoryEntry(TypedDict):
     result: FileResult
 
 
-def validate_result(result: object) -> FileResult:
+def parse_file_result(result: object) -> FileResult:
     if not isinstance(result, dict) or not isinstance(result.get("text"), str):
         raise ValueError("Invalid file transcription result")
     for name in ("duration", "processing_seconds"):
@@ -51,9 +61,14 @@ def validate_result(result: object) -> FileResult:
             or not 0 <= start <= end
         ):
             raise ValueError("Invalid segment timestamps")
-    if len(json.dumps(result, allow_nan=False).encode()) > MAX_RESULT:
-        raise ValueError("File result exceeds 20 MiB")
     return cast("FileResult", result)
+
+
+def validate_result(result: object) -> FileResult:
+    value = parse_file_result(result)
+    if len(json.dumps(value, allow_nan=False).encode()) > MAX_RESULT:
+        raise ValueError("File result exceeds 20 MiB")
+    return value
 
 
 class FileHistory:

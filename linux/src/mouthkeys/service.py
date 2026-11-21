@@ -1,10 +1,5 @@
 import copy
-import fcntl
 import json
-import os
-import signal
-import socket
-import socketserver
 import subprocess
 import threading
 import time
@@ -16,18 +11,16 @@ from pathlib import Path
 from . import __version__
 from .accessibility import read_snapshot
 from .audio import CaptureSession, CaptureTeardownError, check_audio, live_meter
-from .config import Config, private_dir, runtime_dir, state_dir
+from .config import Config, private_dir, runtime_dir
+from .control import MAX_MESSAGE
 from .delivery import Delivery, automatic_delivery_warning
 from .desktop import MediaSession, choose_source, play_sound, source_candidates
 from .formatting import enabled, format_text, parse_send
 from .learning import CorrectionLearner
 from .postprocess import process
-from .processes import python_command
 from .pronunciation import PronunciationStore
 from .storage import History
 from .transcribe import Transcriber
-
-MAX_MESSAGE = 1024 * 1024
 
 
 @dataclass
@@ -1619,151 +1612,3 @@ def _short_silence(path):
             return False
         samples = np.frombuffer(source.readframes(source.getnframes()), dtype="<i2")
     return bool(len(samples)) and int(np.max(np.abs(samples.astype(np.int32)))) <= 1
-
-
-class Handler(socketserver.StreamRequestHandler):
-    def handle(self):
-        self.connection.settimeout(5)
-        try:
-            line = self.rfile.readline(MAX_MESSAGE + 1)
-            if len(line) > MAX_MESSAGE or not line.endswith(b"\n"):
-                raise ValueError("Request too large or incomplete")
-            data = json.loads(line)
-            action = data.pop("action")
-            if action == "shutdown":
-                self.server.controller.interrupt()
-                result = self.server.controller.status()
-                threading.Thread(target=self.server.shutdown, daemon=True).start()
-            else:
-                result = self.server.controller.command(action, **data)
-            response = {"ok": True, "result": result}
-        # The job or IPC response reports the failure; avoid duplicating private data in logs.
-        except Exception as exc:  # allow: exception-handling  # noqa: BLE001
-            if locals().get("action") in ("start", "stop", "toggle", "warmup"):
-                self.server.controller.report_error(str(exc))
-            response = {"ok": False, "error": str(exc)}
-        try:
-            self.wfile.write(json.dumps(response).encode() + b"\n")
-        except (BrokenPipeError, ConnectionResetError):
-            pass
-
-
-class Server(socketserver.ThreadingUnixStreamServer):
-    daemon_threads = True
-
-    def service_actions(self):
-        self.controller.tick()
-
-
-def serve():
-    os.umask(0o077)
-    root = runtime_dir()
-    with (root / "daemon.lock").open("w") as lock:
-        try:
-            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
-            return  # Another launcher won the startup race.
-        path = root / "control.sock"
-        path.unlink(missing_ok=True)
-        for stale in (root / "private-recordings").glob("*.wav"):
-            stale.unlink(missing_ok=True)
-        controller = Controller()
-        api = None
-        try:
-            from .local_api import start
-
-            api = start(controller)
-        # The job or IPC response reports the failure; avoid duplicating private data in logs.
-        except Exception as exc:  # allow: exception-handling  # noqa: BLE001
-            controller.report_error(f"Local API unavailable: {exc}")
-        with Server(str(path), Handler) as server:
-            server.controller = controller
-
-            def shutdown(*_):
-                controller.interrupt()
-                threading.Thread(target=server.shutdown, daemon=True).start()
-
-            signal.signal(signal.SIGTERM, shutdown)
-            signal.signal(signal.SIGINT, shutdown)
-            try:
-                server.serve_forever(poll_interval=0.025)
-            finally:
-                path.unlink(missing_ok=True)
-                if api is not None:
-                    api.shutdown()
-                    api.server_close()
-
-
-def request(action, **data):
-    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
-        sock.settimeout(
-            20 if action in ("shutdown", "start", "toggle", "select_microphone") else 10
-        )
-        sock.connect(str(runtime_dir() / "control.sock"))
-        sock.sendall(json.dumps({"action": action, **data}).encode() + b"\n")
-        with sock.makefile("rb") as stream:
-            line = stream.readline(MAX_MESSAGE + 1)
-        if len(line) > MAX_MESSAGE:
-            raise RuntimeError("Response too large")
-        result = json.loads(line)
-        if not result["ok"]:
-            raise RuntimeError(result["error"])
-        return result["result"]
-
-
-def ensure_daemon():
-    try:
-        request("status")
-        return
-    except (FileNotFoundError, ConnectionRefusedError):
-        pass
-    log = state_dir() / "daemon.log"
-    with log.open("a") as output:
-        log.chmod(0o600)
-        subprocess.Popen(  # noqa: S603
-            python_command("mouthkeys", "daemon"),
-            stdin=subprocess.DEVNULL,
-            stdout=output,
-            stderr=output,
-            start_new_session=True,
-        )
-    deadline = time.monotonic() + 5
-    while time.monotonic() < deadline:
-        try:
-            request("status")
-            return
-        except (FileNotFoundError, ConnectionRefusedError):
-            time.sleep(0.05)
-    raise RuntimeError(f"Daemon did not start; see {log}")
-
-
-def ensure_overlay():
-    """Optional desktop feedback; CLI-only installations remain usable."""
-    import importlib.util
-
-    if Config.load().recording_panel == "off":
-        return
-    if not (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")):
-        return
-    if importlib.util.find_spec("PySide6") is None:
-        return
-    with (runtime_dir() / "overlay.lock").open("a") as lock:
-        try:
-            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
-            with socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM) as wake:
-                wake.settimeout(0.1)
-                try:
-                    wake.sendto(b"wake", str(runtime_dir() / "overlay-wake.sock"))
-                except OSError:
-                    pass  # An initializing panel does its own immediate first poll.
-            return
-    with (state_dir() / "overlay.log").open("a") as output:
-        Path(output.name).chmod(0o600)
-        subprocess.Popen(  # noqa: S603
-            python_command("mouthkeys", "overlay"),
-            stdin=subprocess.DEVNULL,
-            stdout=output,
-            stderr=output,
-            start_new_session=True,
-        )

@@ -14,6 +14,7 @@ from fractions import Fraction
 from pathlib import Path
 
 from .config import cache_dir, private_dir
+from .file_history import FileResult
 from .transcribe import Transcriber
 
 RELEASES = "https://github.com/k2-fsa/sherpa-onnx/releases/download"
@@ -257,18 +258,18 @@ def transcribe_file(path, config, *, transcriber=None, max_seconds=None, on_prog
     }
 
 
-def result_text(result):
+def result_text(result: FileResult) -> str:
     if not result.get("speaker_turns"):
         return result["text"]
     return "\n".join(
         f"[{segment['start']:.2f}–{segment['end']:.2f}] "
-        f"Speaker {segment['speaker'] + 1 if segment.get('speaker') is not None else '?'}: "
+        f"Speaker {speaker + 1 if (speaker := segment.get('speaker')) is not None else '?'}: "
         f"{segment['text']}"
         for segment in result["segments"]
     )
 
 
-def export_result(result, path, format="json"):
+def export_result(result: FileResult, path: str | Path, format: str = "json") -> None:
     if format not in ("json", "txt"):
         raise ValueError("Export format must be json or txt")
     path = Path(path)

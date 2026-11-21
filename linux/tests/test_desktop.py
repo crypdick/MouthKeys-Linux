@@ -191,7 +191,7 @@ def test_tray_cannot_quit_during_file_transcription():
 
     tips = []
     fake = SimpleNamespace(
-        window=SimpleNamespace(jobs=set(), download=None, file_process=object()),
+        window=SimpleNamespace(busy=True),
         quitting=False,
         setToolTip=tips.append,
     )

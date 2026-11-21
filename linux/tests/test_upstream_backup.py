@@ -444,12 +444,13 @@ def test_imported_endpoint_never_reuses_environment_key_or_unrelated_discovery(
         }
 
 
-def test_upstream_gib_budget_never_rounds_down_retention():
+def test_upstream_audio_settings_cannot_restore_retention():
     document = upstream_document()
     document["settings"]["audioHistoryBudgetGB"] = 4
+    document["settings"]["saveAudioWithTranscriptionHistory"] = True
     converted, _ = convert_upstream_backup(document, Config(), Dictionary.defaults(), [], [])
-    assert converted["config"]["audio_budget_mb"] == 4295
-    assert converted["config"]["audio_budget_mb"] * 1_000_000 >= 4 * 1_073_741_824
+    assert "audio_budget_mb" not in converted["config"]
+    assert "save_audio" not in converted["config"]
 
 
 @pytest.mark.parametrize("aliases", [[], ["", " ", "\t", " \n "]])

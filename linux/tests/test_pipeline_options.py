@@ -199,8 +199,8 @@ def test_privacy_opt_out_never_writes_transcript_history():
     assert app.delivery.calls[-1] == "Hello world"
 
 
-def test_save_audio_preserves_previous_success_with_budget_bound():
-    Config(save_audio="on").save()
+def test_successive_recordings_discard_audio():
+    Config().save()
     app = controller()
     first = app.command("start")["id"]
     app.command("stop")
@@ -208,7 +208,8 @@ def test_save_audio_preserves_previous_success_with_budget_bound():
     second = app.command("start")["id"]
     app.command("stop")
     finish(app)
-    assert all(app.history.recording(item).exists() for item in (first, second))
+    assert all(not app.history.recording(item).exists() for item in (first, second))
+    assert list(app.job.audio_path.parent.glob("*.wav")) == []
 
 
 def test_skip_silent_recordings_is_explicit_and_does_not_load_model():

@@ -68,7 +68,6 @@ def bindings(config):
         ("toggle", config.toggle_shortcut),
         ("cancel", config.cancel_shortcut),
         ("paste", config.paste_shortcut_key),
-        ("reprocess", config.reprocess_shortcut_key),
         ("command", getattr(config, "command_shortcut_key", "")),
         ("edit", getattr(config, "edit_shortcut_key", "")),
     ):

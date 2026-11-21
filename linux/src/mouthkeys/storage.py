@@ -7,7 +7,7 @@ from .config import private_dir, state_dir
 
 
 class History:
-    """Private local history. Audio recovery is bounded by a storage budget."""
+    """Private transcript history. Legacy recordings are removed during recovery."""
 
     def __init__(self, root: Path | None = None):
         self.root = private_dir(root or state_dir())
@@ -105,44 +105,10 @@ class History:
         return row["text"]
 
     def recover(self):
+        self.delete_audio()
         with self.connect() as conn:
-            conn.execute("""UPDATE history SET status='failed', error='Interrupted; reprocess audio'
+            conn.execute("""UPDATE history SET status='failed', error='Interrupted; audio discarded'
                 WHERE status IN ('recording', 'transcribing')""")
-
-    def prune_audio(self, keep: str):
-        with self.connect() as conn:
-            rows = conn.execute(
-                "SELECT id FROM history WHERE status IN "
-                "('copied', 'paste_requested', 'insert_requested', 'pasted', "
-                "'transcribed', 'send_requested', 'cancelled')"
-            )
-            for row in rows:
-                if row["id"] != keep:
-                    self.recording(row["id"]).unlink(missing_ok=True)
-
-    def prune_budget(self, budget_bytes):
-        """Prune oldest inactive audio, including failures; preserve transcript rows."""
-        with self.connect() as conn:
-            active = {
-                row["id"]
-                for row in conn.execute(
-                    "SELECT id FROM history WHERE status IN ('recording', 'transcribing')"
-                )
-            }
-            created = {
-                row["id"]: row["created"] for row in conn.execute("SELECT id, created FROM history")
-            }
-        files = []
-        for path in self.audio.glob("*.wav"):
-            if path.stem not in active:
-                stat = path.stat()
-                files.append((created.get(path.stem, stat.st_mtime), path, stat.st_size))
-        total = sum(size for _, _, size in files)
-        for _, path, size in sorted(files):
-            if total <= budget_bytes:
-                break
-            path.unlink(missing_ok=True)
-            total -= size
 
     def recording(self, item_id: str):
         # IDs arrive over IPC; never let a history request escape the recordings directory.
@@ -157,7 +123,7 @@ class History:
             path.unlink()
 
 
-# Additive schema migration keeps existing transcripts and recordings untouched.
+# Additive schema migration keeps existing transcripts untouched.
 METADATA = {
     "raw_text": "TEXT NOT NULL DEFAULT ''",
     "duration": "REAL NOT NULL DEFAULT 0",

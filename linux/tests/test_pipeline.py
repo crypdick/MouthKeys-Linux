@@ -85,18 +85,19 @@ def finish(controller):
     assert controller.status()["phase"] == "idle"
 
 
-def test_dictation_persists_before_delivery_and_keeps_latest_audio(controller):
+def test_dictation_persists_before_delivery_and_discards_audio(controller):
     first = controller.command("toggle")["id"]
     controller.command("toggle")
     finish(controller)
     assert controller.history.rows()[0]["status"] == "copied"
     assert controller.status()["notice"] is None
-    assert controller.history.recording(first).exists()
+    assert not controller.history.recording(first).exists()
     second = controller.command("start")["id"]
     controller.command("stop")
     finish(controller)
     assert not controller.history.recording(first).exists()
-    assert controller.history.recording(second).exists()
+    assert not controller.history.recording(second).exists()
+    assert list(controller.job.audio_path.parent.glob("*.wav")) == []
     assert len(controller.history.rows()) == 2
 
 
@@ -145,34 +146,29 @@ def test_cancel_during_inference_suppresses_late_paste(controller):
     assert controller.history.rows()[0]["status"] == "cancelled"
 
 
-def test_delivery_failure_keeps_text_and_audio_for_reprocess(controller):
+def test_delivery_failure_keeps_text_but_discards_audio(controller):
     controller.delivery.error = RuntimeError("Clipboard unavailable")
-    item = controller.command("start")["id"]
+    controller.command("start")
+    path = controller.job.audio_path
+    assert path.exists()
     controller.command("stop")
     finish(controller)
     row = controller.history.rows()[0]
     assert row["status"] == "failed"
     assert row["text"] == controller.transcriber.text
-    assert controller.history.recording(item).exists()
-    controller.delivery.error = None
-    controller.command("reprocess", id=item)
-    finish(controller)
-    assert controller.delivery.calls[-1][2] is None
-    assert controller.history.rows()[0]["status"] == "copied"
+    assert not path.exists()
 
 
-def test_model_failure_and_empty_speech_are_recoverable(controller):
-    controller.transcriber.error = RuntimeError("Download model first")
-    item = controller.command("start")["id"]
+@pytest.mark.parametrize("error", [RuntimeError("Download model first"), None])
+def test_model_failure_and_empty_speech_discard_audio(controller, error):
+    controller.transcriber.error = error
+    controller.transcriber.text = ""
+    controller.command("start")
+    path = controller.job.audio_path
     controller.command("stop")
     finish(controller)
-    assert "Download model" in controller.history.rows()[0]["error"]
-    assert controller.history.recording(item).exists()
-    controller.transcriber.error = None
-    controller.transcriber.text = ""
-    controller.command("reprocess", id=item)
-    finish(controller)
-    assert "No speech" in controller.history.rows()[0]["error"]
+    assert controller.history.rows()[0]["status"] == "failed"
+    assert not path.exists()
     assert not controller.delivery.calls
 
 
@@ -228,18 +224,19 @@ def test_capture_stop_failure_retains_audio(controller):
     assert "Capture hung" in controller.message
     assert controller.phase == "idle"
     assert controller.recorder is None
-    assert controller.history.recording(controller.item_id).exists()
+    assert not controller.job.audio_path.exists()
 
 
-def test_restart_marks_interrupted_audio_recoverable(controller):
+def test_restart_deletes_legacy_audio_but_preserves_transcripts(controller):
     item = str(uuid.uuid4())
     controller.history.begin(item)
-    write_audio(controller.history.recording(item))
+    controller.history.update(item, "transcribing", "already recognized")
+    path = controller.history.recording(item)
+    write_audio(path)
     restarted = Controller(controller.history, controller.transcriber, controller.delivery)
     assert restarted.history.rows()[0]["status"] == "failed"
-    restarted.command("reprocess")
-    finish(restarted)
-    assert restarted.history.rows()[0]["status"] == "copied"
+    assert restarted.history.rows()[0]["text"] == "already recognized"
+    assert not path.exists()
 
 
 def test_history_clear_removes_recordings_and_transcripts(controller):
@@ -254,32 +251,6 @@ def test_history_clear_removes_recordings_and_transcripts(controller):
 def test_history_rejects_path_traversal(controller):
     with pytest.raises(ValueError):
         controller.command("reprocess", id="../../outside")
-
-
-@pytest.mark.parametrize("outcome", ["failure", "cancel", "restart"])
-def test_reprocess_never_destroys_original_transcript_or_audio(controller, outcome):
-    original_id = controller.command("start")["id"]
-    controller.command("stop")
-    finish(controller)
-    original_row = controller.history.rows()[0]
-    original_audio = controller.history.recording(original_id).read_bytes()
-    controller.transcriber.entered.clear()
-    controller.transcriber.release.clear()
-    if outcome == "failure":
-        controller.transcriber.error = RuntimeError("Model unavailable")
-    retry_id = controller.command("reprocess", id=original_id)["id"]
-    assert retry_id != original_id
-    assert controller.transcriber.entered.wait(2)
-    if outcome == "cancel":
-        controller.command("cancel")
-    if outcome == "restart":
-        controller.history.recover()
-        controller.command("cancel")
-    controller.transcriber.release.set()
-    finish(controller)
-    rows = {row["id"]: row for row in controller.history.rows()}
-    assert rows[original_id] == original_row
-    assert controller.history.recording(original_id).read_bytes() == original_audio
 
 
 def test_private_files(controller):
@@ -465,8 +436,8 @@ def test_status_responsive_during_committed_delivery(controller):
 
 
 @pytest.mark.parametrize("during_inference", [False, True])
-def test_shutdown_preserves_audio_without_late_delivery(controller, during_inference):
-    item = controller.command("start")["id"]
+def test_shutdown_discards_audio_without_late_delivery(controller, during_inference):
+    controller.command("start")
     if during_inference:
         controller.transcriber.release.clear()
         controller.command("stop")
@@ -480,44 +451,9 @@ def test_shutdown_preserves_audio_without_late_delivery(controller, during_infer
         assert not controller.worker.is_alive()
     else:
         assert recorder.stopped
-    assert controller.history.recording(item).exists()
+    assert not controller.job.audio_path.exists()
     assert controller.history.rows()[0]["status"] == "failed"
     assert not controller.delivery.calls
-    restarted = Controller(controller.history, controller.transcriber, controller.delivery)
-    restarted.command("reprocess", id=item)
-    finish(restarted)
-    assert restarted.history.rows()[0]["status"] == "copied"
-
-
-def test_audio_budget_prunes_old_failures_but_keeps_text_and_active_audio(controller):
-    history = controller.history
-    ids = [str(uuid.uuid4()) for _ in range(3)]
-    for index, item in enumerate(ids):
-        history.begin(item)
-        history.recording(item).write_bytes(b"x" * 100)
-        if index < 2:
-            history.update(item, "failed", text=f"Transcript {index}")
-        with history.connect() as conn:
-            conn.execute("UPDATE history SET created=? WHERE id=?", (index, item))
-    history.prune_budget(100)
-    assert not history.recording(ids[0]).exists()
-    assert history.recording(ids[1]).exists()
-    assert history.recording(ids[2]).exists()  # Active capture is outside the recovery budget.
-    assert len(history.rows()) == 3
-    assert history.latest_text() == "Transcript 1"
-
-
-def test_idle_maintenance_enforces_changed_audio_budget(controller, monkeypatch):
-    monkeypatch.setattr("mouthkeys.service.time.monotonic", lambda: 5.0)
-    Config(audio_budget_mb=1).save()
-    for index in range(2):
-        item = str(uuid.uuid4())
-        controller.history.begin(item)
-        controller.history.recording(item).write_bytes(b"x" * 700000)
-        controller.history.update(item, "failed", text=f"Transcript {index}")
-    controller.tick()
-    assert sum(p.stat().st_size for p in controller.history.audio.glob("*.wav")) <= 1000000
-    assert len(controller.history.rows()) == 2
 
 
 def test_explicit_stop_snapshots_focus_before_acknowledging(controller):
@@ -576,3 +512,40 @@ def test_error_identifiers_are_distinct_across_daemon_restarts(controller):
     restarted = Controller(controller.history, controller.transcriber, controller.delivery)
     restarted.report_error("Source unplugged")
     assert restarted.status()["notice"]["serial"] != first
+
+
+def test_audio_cleanup_survives_native_reset_failure(controller):
+    controller.command("start")
+    job = controller.job
+    controller.command("cancel")
+    finish(controller)
+    write_audio(job.audio_path)
+    controller.transcriber.stream_key = (job.audio_path,)
+
+    def fail_reset():
+        raise RuntimeError("Native worker unavailable")
+
+    controller.transcriber.reset_stream = fail_reset
+    job.done.clear()
+    with pytest.raises(RuntimeError, match="Native worker unavailable"):
+        controller._finish(job, None)
+    assert job.done.is_set()
+    assert not job.audio_path.exists()
+
+
+def test_old_config_cannot_reenable_audio_retention():
+    import json
+
+    from mouthkeys.config import config_path
+
+    Config().save()
+    path = config_path()
+    values = json.loads(path.read_text())
+    values.update(save_audio="on", audio_budget_mb=4000, reprocess_shortcut_key="super+r")
+    path.write_text(json.dumps(values))
+    loaded = Config.load()
+    loaded.save()
+    assert (
+        not {"save_audio", "audio_budget_mb", "reprocess_shortcut_key"}
+        & json.loads(path.read_text()).keys()
+    )

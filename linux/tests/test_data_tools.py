@@ -1,7 +1,6 @@
 import json
 import sqlite3
 import uuid
-import zipfile
 from dataclasses import asdict, replace
 from datetime import date, datetime, timedelta
 
@@ -9,7 +8,7 @@ import pytest
 
 from mouthkeys.config import CHOICES, RANGES, Config
 from mouthkeys.dictionary import Dictionary
-from mouthkeys.operations import backup_export, backup_import, export_audio, statistics
+from mouthkeys.operations import backup_export, backup_import, statistics
 from mouthkeys.storage import History
 
 
@@ -133,19 +132,6 @@ def test_backup_roundtrip_merges_without_deleting_audio_and_excludes_secrets(tmp
     assert len(history.all_rows()) == 2
 
 
-def test_audio_archive_manifest_is_portable_and_private(tmp_path):
-    history = History()
-    item = entry(history, "transcript")
-    history.recording(item).write_bytes(b"audio")
-    path = tmp_path / "audio.zip"
-    export_audio(history, path)
-    assert path.stat().st_mode & 0o777 == 0o600
-    with zipfile.ZipFile(path) as archive:
-        assert archive.read(f"audio/{item}.wav") == b"audio"
-        assert archive.read(f"text/{item}.txt") == b"transcript"
-        assert json.loads(archive.read("manifest.jsonl"))["id"] == item
-
-
 def test_stats_streak_skips_weekends_only_if_configured():
     history = History()
     monday = date(2026, 11, 9)
@@ -209,12 +195,26 @@ def test_invalid_backup_numbers_rejected_before_mutation(tmp_path, field, value)
     assert len(history.all_rows()) == 1
 
 
-def test_direct_insert_success_audio_prunes_like_other_delivery_statuses():
+def test_recovery_removes_all_legacy_audio_without_deleting_text():
     history = History()
     first, second = entry(history), entry(history)
     history.update(first, "insert_requested", "first")
     history.recording(first).write_bytes(b"old")
     history.recording(second).write_bytes(b"latest")
-    history.prune_audio(second)
+    history.recover()
     assert not history.recording(first).exists()
-    assert history.recording(second).exists()
+    assert not history.recording(second).exists()
+    assert history.get(first)["text"] == "first"
+
+
+def test_old_backup_cannot_reenable_recording_retention(tmp_path):
+    history = History()
+    item = entry(history, "keep transcript")
+    path = tmp_path / "legacy.json"
+    backup_export(history, path)
+    data = json.loads(path.read_text())
+    data["config"].update(save_audio="on", audio_budget_mb=4000, reprocess_shortcut_key="super+r")
+    path.write_text(json.dumps(data))
+    backup_import(history, path)
+    assert history.get(item)["text"] == "keep transcript"
+    assert not hasattr(Config.load(), "save_audio")

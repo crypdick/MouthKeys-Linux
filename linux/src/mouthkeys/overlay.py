@@ -81,7 +81,6 @@ class Overlay(QWidget):
             ("history", "Open history", 6, 29),
             ("copy", "Copy transcript", 6, 83),
             ("cancel", "Cancel / dismiss", 388, 29),
-            ("reprocess", "Reprocess retained audio", 388, 83),
         ):
             button = QPushButton(self)
             button.setIconSize(QSize(20, 20))
@@ -154,7 +153,6 @@ class Overlay(QWidget):
             ("history", 6, 14 if compact else 29),
             ("copy", 6, 60 if compact else 83),
             ("cancel", 388, 14 if compact else 29),
-            ("reprocess", 388, 60 if compact else 83),
         ):
             self.buttons[action].setGeometry(
                 round(x * self.panel_scale),
@@ -215,11 +213,7 @@ class Overlay(QWidget):
             else (
                 {"id": item_id}
                 if item_id
-                else (
-                    {"id": self.data["id"]}
-                    if action in ("copy", "reprocess") and self.data.get("id")
-                    else {}
-                )
+                else ({"id": self.data["id"]} if action == "copy" and self.data.get("id") else {})
             )
         )
         job = Request(action, data, parent=self)
@@ -267,11 +261,6 @@ class Overlay(QWidget):
             copy.setEnabled(bool(row.get("text")))
             copy.triggered.connect(
                 lambda checked=False, item_id=row["id"]: self.send("copy", item_id=item_id)
-            )
-            retry = submenu.addAction("Reprocess audio")
-            retry.setEnabled(not self.active)
-            retry.triggered.connect(
-                lambda checked=False, item_id=row["id"]: self.send("reprocess", item_id=item_id)
             )
         menu.addSeparator()
         menu.addAction("Open assistant / recent chats", self.open_assistant)
@@ -420,7 +409,6 @@ class Overlay(QWidget):
         if data["phase"] == "recording":
             self.seconds = data.get("seconds", 0)
         self.buttons["copy"].setEnabled(not active and bool(data.get("preview")))
-        self.buttons["reprocess"].setEnabled(not active)
         self.update()
 
     def animate(self):

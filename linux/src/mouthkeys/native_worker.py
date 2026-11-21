@@ -234,7 +234,7 @@ def worker_main():
             # Inference exceptions may echo model output; diagnostics stay structural.
             response = {
                 "error": f"Native speech operation failed ({type(exc).__name__}); "
-                "verify engine settings or reprocess retained audio"
+                "verify engine settings and record again"
             }
         _write_message(output, response)
 
@@ -289,7 +289,7 @@ class NativeWorkerBackend:
             ) from None
         except (EOFError, OSError, ValueError):
             self.close()
-            raise RuntimeError("Native speech worker exited; audio can be reprocessed") from None
+            raise RuntimeError("Native speech worker exited; record again") from None
         if "error" in response:
             raise RuntimeError(response["error"])
         self.words = response.get("words", [])
@@ -306,13 +306,11 @@ class NativeWorkerBackend:
             except TimeoutError:
                 self.close()
                 raise RuntimeError(
-                    "Native speech input timed out; worker stopped. Audio can be reprocessed."
+                    "Native speech input timed out; worker stopped. Record again."
                 ) from None
             except OSError:
                 self.close()
-                raise RuntimeError(
-                    "Native speech worker exited; audio can be reprocessed"
-                ) from None
+                raise RuntimeError("Native speech worker exited; record again") from None
             return self._response()
 
     def segments(self, samples, config):

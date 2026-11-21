@@ -159,7 +159,9 @@ class Recorder:
         except subprocess.TimeoutExpired:
             os.killpg(self.process.pid, signal.SIGKILL)
             self.process.wait(timeout=3)
-            raise RuntimeError("Microphone did not stop; saved audio may need recovery") from None
+            raise RuntimeError(
+                "Microphone did not stop; temporary audio will be discarded"
+            ) from None
         finally:
             error = self.error()
             self.errors.close()
@@ -182,7 +184,7 @@ class CaptureSession:
     PCM prefix never changes: concurrent preview and native streaming cursors remain
     valid. Switching has a real microphone restart gap; no silence is invented.
     One private runtime segment is bounded by the recording limit and removed on
-    stop or the next daemon launch; only canonical audio is retained for recovery.
+    stop or the next daemon launch. Canonical audio is temporary too.
     """
 
     def __init__(self, config, path, *, recorder=Recorder, cancel_event=None, timeout=5):

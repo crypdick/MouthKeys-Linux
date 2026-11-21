@@ -78,6 +78,8 @@ def isolated_environment(tmp_path, monkeypatch):
     for key in ("DISPLAY", "WAYLAND_DISPLAY", "XDG_SESSION_TYPE"):
         monkeypatch.delenv(key, raising=False)
     monkeypatch.setenv("QT_QPA_PLATFORM", "offscreen")
+    # Desktop GTK themes may initialize a display even with Qt offscreen.
+    monkeypatch.setenv("QT_QPA_PLATFORMTHEME", "")
     # Never let tests accidentally use a real microphone/clipboard or synthesize keys.
     import subprocess
 

@@ -326,7 +326,7 @@ def test_real_synthetic_ffmpeg_switch_keeps_both_sources(monkeypatch, tmp_path):
     assert samples.count(b"\x33\x44") >= 320
 
 
-def test_shutdown_during_start_retains_recovery_audio_without_delivery():
+def test_shutdown_during_start_discards_audio_without_delivery():
     entered, release = threading.Event(), threading.Event()
 
     def record(config, path):
@@ -348,7 +348,7 @@ def test_shutdown_during_start_retains_recovery_audio_without_delivery():
     assert not worker.is_alive()
     assert result[0]["phase"] == "interrupted"
     assert app.history.rows()[0]["status"] == "failed"
-    assert app.job.audio_path.exists()
+    assert not app.job.audio_path.exists()
     assert not app.delivery.calls
 
 
@@ -383,10 +383,17 @@ def test_unplugged_old_microphone_does_not_quarantine_untried_replacement():
     assert "old" in app.source_quarantine
     assert "healthy" not in app.source_quarantine
     assert "Old microphone unplugged" in app.notice["message"]
+
+    def transcribe(path, config):
+        with wave.open(str(path), "rb") as wav:
+            assert wav.readframes(16000) == original + replacement
+        return "recognized"
+
+    app.transcriber.transcribe = transcribe
     app.command("stop")
     finish(app)
-    with wave.open(str(app.job.audio_path), "rb") as wav:
-        assert wav.readframes(16000) == original + replacement
+    assert not app.job.audio_path.exists()
+    assert app.history.rows()[0]["text"] == "recognized"
 
 
 def test_unknown_old_capture_teardown_does_not_open_replacement(tmp_path):
@@ -498,6 +505,7 @@ def test_unconfirmed_recorder_shutdown_blocks_new_capture_until_retry(monkeypatc
     assert app.item_id == item_id
     assert app.recorder is None
     assert app.job.done.is_set()
+    assert not app.job.audio_path.exists()
     assert capture.closed
     if retry_action == "cancel":
         assert not app.delivery.calls
@@ -505,3 +513,31 @@ def test_unconfirmed_recorder_shutdown_blocks_new_capture_until_retry(monkeypatc
     else:
         assert app.delivery.calls[0][2] is None
         assert app.history.rows()[0]["status"] == "copied"
+
+
+def test_shutdown_discards_segment_even_when_capture_teardown_fails():
+    class Segment:
+        def __init__(self, config, path, **kwargs):
+            write_audio(path)
+
+        def stop(self):
+            raise RuntimeError("Cannot confirm capture shutdown")
+
+        def finished(self):
+            return False
+
+    app = controller(lambda config, path: CaptureSession(config, path, recorder=Segment))
+    app.command("start")
+    capture = app.recorder
+    segment = capture.segment
+    assert segment.exists()
+    try:
+        app.interrupt()
+        assert not segment.exists()
+        assert not app.job.audio_path.exists()
+        assert app.history.rows()[0]["status"] == "failed"
+    finally:
+        # Release fake capture's writer and thread without exercising real devices.
+        capture.capture = None
+        capture.segment = None
+        capture.stop()

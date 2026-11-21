@@ -44,7 +44,6 @@ class Config:
     paste_backend: str = "auto"
     paste_shortcut: str = "ctrl+shift+v"
     max_seconds: int = 300
-    audio_budget_mb: int = 4000
     recording_panel: str = "on"
     engine: str = "whisper"
     remove_filler_words: str = "off"
@@ -67,7 +66,6 @@ class Config:
     ai_prompt: str = "Clean up dictated text without changing meaning. Return only corrected text."
     ai_custom_prompt_only: str = "off"
     save_history: str = "on"
-    save_audio: str = "off"
     live_preview: str = "on"
     skip_silent_recordings: str = "off"
     theme: str = "system"
@@ -138,7 +136,6 @@ class Config:
     toggle_shortcut: str = "super+alt+space"
     cancel_shortcut: str = "super+alt+escape"
     paste_shortcut_key: str = ""
-    reprocess_shortcut_key: str = ""
     ai_models_endpoint: str = ""
     ai_reasoning_parameter: str = ""
     ai_reasoning_value: str = ""
@@ -192,7 +189,7 @@ class Config:
         path = config_path()
         if not path.exists():
             return cls()
-        return cls(**json.loads(path.read_text())).validate()
+        return cls(**without_audio_retention(json.loads(path.read_text()))).validate()
 
     def save(self):
         self.validate()
@@ -216,7 +213,6 @@ RANGES = {
     "asr_max_tokens": (1, 4096),
     "file_history_limit": (1, 10000),
     "max_seconds": (1, 3600),
-    "audio_budget_mb": (1, 1000000),
     "overlay_size": (75, 150),
     "overlay_bottom_offset": (0, 1000),
     "preview_chars": (40, 2000),
@@ -241,7 +237,6 @@ OPTIONAL = {
     "ai_reasoning_value",
     "sound_stop_file",
     "paste_shortcut_key",
-    "reprocess_shortcut_key",
     "ai_key_env",
     "ai_profile",
     "ai_model",
@@ -316,7 +311,6 @@ for _name in (
     "send_after_pause",
     "ai_enabled",
     "save_history",
-    "save_audio",
     "live_preview",
     "skip_silent_recordings",
     "overlay_border",
@@ -335,3 +329,12 @@ for _name in (
     "show_window_at_login",
 ):
     CHOICES[_name] = ["on", "off"]
+
+
+def without_audio_retention(values):
+    """Ignore retired options in existing configs and backups; reject other unknown keys."""
+    return {
+        k: v
+        for k, v in values.items()
+        if k not in {"save_audio", "audio_budget_mb", "reprocess_shortcut_key"}
+    }

@@ -184,7 +184,7 @@ def setting_group(key):
         "live_preview",
     ):
         return "Appearance"
-    if key.startswith("save_") or key in ("audio_budget_mb", "typing_wpm", "weekends_break_streak"):
+    if key.startswith("save_") or key in ("typing_wpm", "weekends_break_streak"):
         return "History & stats"
     if key in (
         "tray",
@@ -280,7 +280,7 @@ class Window(QWidget):
                 "Custom Dictionary",
                 "File Transcription",
                 "Stats",
-                "Backup & Audio",
+                "Backup",
                 "Help & Diagnostics",
                 "AI Prompts",
                 "Command / Edit",
@@ -347,7 +347,7 @@ class Window(QWidget):
             "No History Yet\n\nYour transcriptions will appear here. Start dictating to begin."
         )
         row = QHBoxLayout()
-        for text, action in (("Copy", "copy"), ("Reprocess audio", "reprocess")):
+        for text, action in (("Copy", "copy"),):
             button = QPushButton(text)
             button.clicked.connect(
                 lambda checked=False, action=action: self.selected_action(action)
@@ -361,11 +361,7 @@ class Window(QWidget):
         row.addWidget(delete)
         history_layout.addLayout(row)
         extras = QHBoxLayout()
-        for text, handler in (
-            ("Load more", self.load_more),
-            ("Open audio", self.open_audio),
-            ("Export transcript + audio", self.export_pair),
-        ):
+        for text, handler in (("Load more", self.load_more),):
             button = QPushButton(text)
             button.clicked.connect(handler)
             extras.addWidget(button)
@@ -448,7 +444,6 @@ class Window(QWidget):
             ]
         labels = {
             "max_seconds": "Maximum recording length",
-            "audio_budget_mb": "Audio storage budget",
             "recording_panel": "Recording panel",
             "ai_key_env": "AI API key environment variable",
             "ai_credential_source": "AI credential source",
@@ -459,7 +454,6 @@ class Window(QWidget):
             "send_after_pause": "Send after a pause",
             "spoken_send_key": "Send key",
             "save_history": "Save transcription history",
-            "save_audio": "Save all history audio",
             "microphone_preferred": "Preferred microphones (ordered, comma-separated)",
             "microphone_fallback": "Last-resort microphones (ordered, comma-separated)",
             "microphone_never": "Never use microphones (comma-separated)",
@@ -488,10 +482,6 @@ class Window(QWidget):
             ),
             "max_seconds": (
                 "At the limit, recording stops and text is copied without automatic paste."
-            ),
-            "audio_budget_mb": (
-                "Oldest recovery audio, including failures, is deleted above this budget. "
-                "Transcripts stay. 1,000 MB = 1 GB."
             ),
             "recording_panel": (
                 "Hide the panel if your compositor tiles it or takes keyboard focus. "
@@ -529,10 +519,6 @@ class Window(QWidget):
                 "Off removes completed attempts after delivery; failed raw text is"
                 " not retained either."
             ),
-            "save_audio": (
-                "Off retains only recovery audio and latest successful recording; "
-                "on keeps audio within budget."
-            ),
             "restore_clipboard": (
                 "Restoration occurs only after supported automatic paste and only "
                 "if clipboard ownership is unchanged."
@@ -549,7 +535,7 @@ class Window(QWidget):
             if key in RANGES:
                 field = QSpinBox()
                 field.setRange(*RANGES[key])
-                if key in ("max_seconds", "audio_budget_mb"):
+                if key == "max_seconds":
                     field.setSuffix(" seconds" if key == "max_seconds" else " MB")
                 field.setValue(value)
             elif key in choices:
@@ -761,37 +747,10 @@ class Window(QWidget):
         item_id = self.selected_id()
         if (
             item_id
-            and QMessageBox.question(
-                self, "Delete transcript", "Delete selected transcript and audio?"
-            )
+            and QMessageBox.question(self, "Delete transcript", "Delete selected transcript?")
             == QMessageBox.StandardButton.Yes
         ):
             self.send("delete", {"id": item_id}, callback=lambda _: self.refresh_history())
-
-    def open_audio(self):
-        from PySide6.QtCore import QUrl
-        from PySide6.QtGui import QDesktopServices
-
-        from .storage import History
-
-        item_id = self.selected_id()
-        if item_id:
-            path = History().recording(item_id)
-            if path.exists():
-                QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
-            else:
-                self.status.setText("No retained audio for this entry")
-
-    def export_pair(self):
-        item_id = self.selected_id()
-        if item_id:
-            path, _ = QFileDialog.getSaveFileName(
-                self, "Export transcript and audio", "dictation.zip", "ZIP (*.zip)"
-            )
-            if path:
-                self.send(
-                    "export_audio", {"id": item_id, "path": path}, callback=self.operation_result
-                )
 
     def operation_result(self, response):
         self.status.setText(str(response.get("error", response.get("result", "Done"))))
@@ -1432,36 +1391,20 @@ class Window(QWidget):
         note = QLabel(
             "Back up settings, dictionary, and transcript history. API keys "
             "are excluded. Restore merges history by UUID; it does not delete "
-            "existing recordings. Import previews native and upstream backups, including "
-            "unsupported platform settings. Audio exports are separate ZIP files."
+            "existing transcripts. Import previews native and upstream backups, including "
+            "unsupported platform settings. Recordings are not retained."
         )
         note.setWordWrap(True)
         layout.addWidget(note)
         for text, handler in (
             ("Export backup", lambda: self.backup_action(False)),
             ("Import backup", lambda: self.backup_action(True)),
-            ("Export all audio + transcripts", self.export_all_audio),
-            ("Delete all saved audio", self.delete_all_audio),
-            ("Refresh audio usage", self.audio_usage),
         ):
             button = QPushButton(text)
             button.clicked.connect(handler)
             layout.addWidget(button)
-        self.audio_usage_label = QLabel("Audio usage: refresh to inspect")
-        layout.addWidget(self.audio_usage_label)
         layout.addStretch()
         return page
-
-    def audio_usage(self):
-        def update(response):
-            if "result" in response:
-                value = response["result"]
-                self.audio_usage_label.setText(
-                    f"{value['bytes'] / 1000000:.1f} MB / "
-                    f"{Config.load().audio_budget_mb} MB budget · {value['recordings']} recordings"
-                )
-
-        self.send("audio_usage", callback=update)
 
     def backup_action(self, importing):
         if importing:
@@ -1518,27 +1461,11 @@ class Window(QWidget):
         if path:
             self.send("backup_export", {"path": path}, callback=self.operation_result)
 
-    def export_all_audio(self):
-        path, _ = QFileDialog.getSaveFileName(
-            self, "Export audio", "mouthkeys-audio.zip", "ZIP (*.zip)"
-        )
-        if path:
-            self.send("export_audio", {"path": path}, callback=self.operation_result)
-
-    def delete_all_audio(self):
-        if (
-            QMessageBox.question(
-                self, "Delete saved audio", "Delete all audio while keeping transcripts?"
-            )
-            == QMessageBox.StandardButton.Yes
-        ):
-            self.send("delete_audio", callback=lambda _: self.audio_usage())
-
     def help_page(self):
         page = QWidget()
         layout = QVBoxLayout(page)
         note = QLabel(
-            "Bind mouthkeys toggle / start / stop / cancel / paste / reprocess"
+            "Bind mouthkeys toggle / start / stop / cancel / paste"
             " in i3 or desktop keyboard settings. Hold-to-talk can use "
             "separate key-press start and key-release stop bindings. Optional "
             "speech engines need their package extras and explicit model "
@@ -2045,9 +1972,7 @@ class Window(QWidget):
 
     def clear_history(self):
         if (
-            QMessageBox.question(
-                self, "Clear history", "Delete all transcripts and retained audio?"
-            )
+            QMessageBox.question(self, "Clear history", "Delete all transcripts?")
             == QMessageBox.StandardButton.Yes
         ):
             self.send("clear")
@@ -2092,8 +2017,7 @@ class Window(QWidget):
                 if visible:
                     self.show()
             self.status.setText(
-                "Saved; recording settings apply next time. Panel visibility applies now; "
-                "audio budget is checked while idle."
+                "Saved; recording settings apply next time. Panel visibility applies now."
             )
             if previous.audio_source != updated.audio_source:
                 self.send("select_microphone", {"source": updated.audio_source, "persist": True})

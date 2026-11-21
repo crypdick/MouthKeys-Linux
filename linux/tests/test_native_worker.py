@@ -126,7 +126,7 @@ def test_unexpected_worker_exit_is_actionable(monkeypatch):
     monkeypatch.setattr(
         native_worker.select, "select", lambda read, write, *args: (read, write, [])
     )
-    with pytest.raises(RuntimeError, match="audio can be reprocessed"):
+    with pytest.raises(RuntimeError, match="record again"):
         backend._response()
     assert backend.process.killed
 

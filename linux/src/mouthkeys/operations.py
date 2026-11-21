@@ -5,13 +5,12 @@ import math
 import os
 import tempfile
 import uuid
-import zipfile
 from collections import Counter
 from dataclasses import asdict
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
-from .config import Config
+from .config import Config, without_audio_retention
 
 
 def write_private(path, data):
@@ -109,26 +108,6 @@ def statistics(history, config=None, today=None):
     }
 
 
-def export_audio(history, path, item_id=None):
-    rows = [history.get(item_id)] if item_id else history.all_rows()
-    with tempfile.NamedTemporaryFile(dir=Path(path).parent, delete=False) as stream:
-        temporary = Path(stream.name)
-    try:
-        with zipfile.ZipFile(temporary, "w", zipfile.ZIP_DEFLATED) as archive:
-            manifest = []
-            for row in rows:
-                audio = history.recording(row["id"])
-                if audio.exists():
-                    archive.write(audio, f"audio/{audio.name}")
-                    archive.writestr(f"text/{row['id']}.txt", row["text"])
-                    manifest.append({**row, "audio": f"audio/{audio.name}"})
-            archive.writestr("manifest.jsonl", "\n".join(json.dumps(r) for r in manifest))
-        temporary.replace(path)
-    finally:
-        temporary.unlink(missing_ok=True)
-    return str(path)
-
-
 def backup_export(history, path):
     from .assistant_history import AssistantHistory
     from .dictionary import Dictionary
@@ -172,7 +151,7 @@ def _prepare_backup(data):
         current_config = asdict(Config.load())
     except (OSError, ValueError, TypeError):
         current_config = asdict(Config())
-    config = Config(**{**current_config, **data["config"]}).validate()
+    config = Config(**without_audio_retention({**current_config, **data["config"]})).validate()
     rows = data["history"]
     if not isinstance(rows, list) or len(rows) > 1000000:
         raise ValueError("Invalid backup history")
@@ -370,7 +349,7 @@ def handle_action(history, action, data, allow_mutation=True):
         return history.audio_usage()
     if action == "backup_preview":
         return backup_preview(data["path"], app_map=data.get("app_map"))
-    if action not in {"delete", "delete_audio", "export_audio", "backup_export", "backup_import"}:
+    if action not in {"delete", "delete_audio", "backup_export", "backup_import"}:
         return NotImplemented
     if not allow_mutation:
         raise ValueError("Wait until dictation finishes before changing or exporting history")
@@ -381,8 +360,6 @@ def handle_action(history, action, data, allow_mutation=True):
     if action == "delete_audio":
         history.delete_audio(data.get("id"))
         return history.audio_usage()
-    if action == "export_audio":
-        return export_audio(history, data["path"], data.get("id"))
     if action == "backup_export":
         return backup_export(history, data["path"])
     return backup_import(

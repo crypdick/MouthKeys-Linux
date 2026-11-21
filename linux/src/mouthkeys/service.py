@@ -2,7 +2,6 @@ import copy
 import fcntl
 import json
 import os
-import shutil
 import signal
 import socket
 import socketserver
@@ -89,7 +88,6 @@ class Controller:
         self.notice = None
         self.notice_serial = 0
         self.notice_token = uuid.uuid4().hex
-        self.pruned_at = float("-inf")
         self.media = MediaSession()
         self.recorded_seconds = 0
         self.send_armed_at = None
@@ -243,30 +241,6 @@ class Controller:
                 raise ValueError(f"Busy ({self.phase}); wait or cancel before {action}")
             if self._pending_jobs():
                 raise ValueError(f"Busy (queued); wait or cancel before {action}")
-            if action == "reprocess":
-                item_id = data.get("id") or self.item_id
-                if not item_id:
-                    rows = self.history.rows()
-                    item_id = rows[0]["id"] if rows else None
-                if not item_id or not self.history.recording(item_id).exists():
-                    raise ValueError("No retained audio for this entry")
-                self.config = Config.load()
-                # A retry is a new attempt: failure/cancellation must not erase the original.
-                self.preview_text = ""
-                retry_id = str(uuid.uuid4())
-                self.item_id = retry_id
-                job = self._new_job()
-                try:
-                    shutil.copyfile(self.history.recording(item_id), job.audio_path)
-                except OSError:
-                    job.done.set()
-                    job.audio_path.unlink(missing_ok=True)
-                    raise
-                if self.config.save_history == "on":
-                    self.history.begin(retry_id)
-                self.cancelled = False
-                self._transcribe(None)  # Reprocessing never pastes into an old destination.
-                return self.status()
             if action == "warmup":
                 self.config = Config.load()
                 self.cancelled = False
@@ -594,8 +568,7 @@ class Controller:
                         error="" if cancelled else str(exc),
                     )
                     self.message = "Microphone start cancelled" if cancelled else str(exc)
-                if job.config.save_history == "off" or cancelled:
-                    job.audio_path.unlink(missing_ok=True)
+                job.audio_path.unlink(missing_ok=True)
                 job.done.set()
                 if not self.interrupted:
                     self.phase = "idle"
@@ -606,8 +579,7 @@ class Controller:
             with self.lock:
                 if not self.interrupted:
                     self._update(job, "cancelled")
-                if job.config.save_history == "off" or not self.interrupted:
-                    job.audio_path.unlink(missing_ok=True)
+                job.audio_path.unlink(missing_ok=True)
                 job.done.set()
                 if not self.interrupted:
                     self.phase, self.message = "idle", "Microphone start cancelled"
@@ -815,9 +787,7 @@ class Controller:
                 )
 
         pending = self._pending_jobs()
-        audio_path = self.history.recording(self.item_id)
-        if self.config.save_history == "off":
-            audio_path = private_dir(runtime_dir() / "private-recordings") / f"{self.item_id}.wav"
+        audio_path = private_dir(runtime_dir() / "private-recordings") / f"{self.item_id}.wav"
         self.job = DictationJob(
             self.item_id,
             self.config,
@@ -870,27 +840,22 @@ class Controller:
                 job.cancel_event.set()
                 rows = self.history.rows(limit=10000)
                 row = next((r for r in rows if r["id"] == job.item_id), {})
-                if job.config.save_history == "off":
-                    job.audio_path.unlink(missing_ok=True)
-                else:
-                    self._update(
-                        job,
-                        "failed",
-                        row.get("text", ""),
-                        "Interrupted; reprocess audio",
-                    )
-            self.phase, self.message = "interrupted", "Interrupted; audio retained for reprocessing"
+                self._update(job, "failed", row.get("text", ""), "Interrupted; audio discarded")
+            self.phase, self.message = "interrupted", "Interrupted; audio discarded"
         if recorder is not None:
             try:
                 recorder.stop()
             except Exception:
-                pass  # The partial file remains available to recovery.
+                pass  # Cleanup below also discards partial audio.
         # An already-stopping worker owns its recorder. Let it finalize the WAV, without
         # waiting for model inference or making a second concurrent stop call.
         self.stop_done.wait(timeout=11)
         self.media.resume()
-        if hasattr(self, "config") and self.config.save_history == "off" and self.item_id:
-            self.job.audio_path.unlink(missing_ok=True)
+        for job in self.jobs:
+            job.audio_path.unlink(missing_ok=True)
+        # Failed capture teardown may still own an open segment; unlink its name too.
+        for segment in (runtime_dir() / "private-recordings").glob("*.wav"):
+            segment.unlink(missing_ok=True)
 
     def _stop(self, target, focus_gate=None):
         recorder, self.recorder = self.recorder, None
@@ -976,8 +941,7 @@ class Controller:
                         return  # Capture still owns audio and pending-job completion.
                     self._update(job, "failed", error=str(exc))
                     self._job_status(job, "idle", str(exc))
-                    if job.config.save_history == "off":
-                        job.audio_path.unlink(missing_ok=True)
+                    job.audio_path.unlink(missing_ok=True)
                 job.done.set()
             return
         with self.lock:
@@ -1188,16 +1152,6 @@ class Controller:
             raise ValueError("Assistant proposal exceeds status limit; request a shorter response")
         return proposal
 
-    def _transcribe(self, target):
-        job = self.job
-        if job is None or job.item_id != self.item_id or job.done.is_set():
-            job = self._new_job()
-        self.phase, self.message = "queued", "Waiting for earlier dictation"
-        self.started = None
-        self._update(job, "transcribing")
-        self.worker = threading.Thread(target=self._finish, args=(job, target), daemon=True)
-        self.worker.start()
-
     def _finish(self, job, target, *, auto_paste_expected=False):
         text = ""
         alignment = None
@@ -1244,7 +1198,7 @@ class Controller:
                         self.preview_text = ""
                     self._update(job, "failed", error="No speech detected")
                     retained = (
-                        "audio retained for reprocessing"
+                        "audio discarded"
                         if config.save_history == "on"
                         else "history disabled; audio discarded"
                     )
@@ -1310,8 +1264,6 @@ class Controller:
                         ai_processing_error=ai_warning,
                         ai_processing_model=config.ai_model if assistant_requested else "",
                     )
-                    if config.save_audio == "off" and config.save_history == "on":
-                        self.history.prune_audio(job.item_id)
                     if self.job is job:
                         self.assistant_proposal = proposal
                         self.assistant_stream = None
@@ -1487,8 +1439,6 @@ class Controller:
                 if self.interrupted:
                     return
                 self._update(job, result, text, error=send_warning)
-                if config.save_audio == "off" and config.save_history == "on":
-                    self.history.prune_audio(job.item_id)
                 message = (
                     "Send requested — no text inserted"
                     if result == "send_requested"
@@ -1534,26 +1484,26 @@ class Controller:
                         **({"ai_processing_error": assistant_error} if assistant_error else {}),
                     )
                     retained = (
-                        "Saved in history; audio retained for reprocessing."
+                        "Saved in history; audio discarded."
                         if config.save_history == "on"
                         else "History disabled; audio discarded."
                     )
                     self._job_status(job, "idle", f"{exc}. {retained}")
         finally:
-            key = getattr(self.transcriber, "stream_key", None)
-            if job.cancelled and key and key[0] == job.audio_path:
-                with self.model_lock:
-                    self._reset_stream_if_owned(job)
-            with self.lock:
-                if not self.interrupted:
-                    if config.save_history == "off":
-                        job.audio_path.unlink(missing_ok=True)
-                    if self.job is job:
-                        self.assistant_stream = None
-                        self.dictation_delivery = False
-                        self.phase = "idle"
-                    self._prune_budget()
-                job.done.set()
+            try:
+                key = getattr(self.transcriber, "stream_key", None)
+                if job.cancelled and key and key[0] == job.audio_path:
+                    with self.model_lock:
+                        self._reset_stream_if_owned(job)
+            finally:
+                with self.lock:
+                    job.audio_path.unlink(missing_ok=True)
+                    if not self.interrupted:
+                        if self.job is job:
+                            self.assistant_stream = None
+                            self.dictation_delivery = False
+                            self.phase = "idle"
+                    job.done.set()
 
     def _preview(self, item_id, config):
         try:
@@ -1596,18 +1546,8 @@ class Controller:
         if key and key[0] == job.audio_path and hasattr(self.transcriber, "reset_stream"):
             self.transcriber.reset_stream()
 
-    def _prune_budget(self):
-        try:
-            budget = Config.load().audio_budget_mb * 1000000
-        except (OSError, ValueError, TypeError):
-            return  # Invalid settings must not stop the daemon or guess a deletion budget.
-        self.history.prune_budget(budget)
-
     def tick(self):
         with self.lock:
-            if self.phase == "idle" and time.monotonic() - self.pruned_at >= 60:
-                self._prune_budget()
-                self.pruned_at = time.monotonic()
             if self.phase == "recording":
                 try:
                     meter = live_meter(self.job.audio_path)
@@ -1682,7 +1622,7 @@ class Handler(socketserver.StreamRequestHandler):
                 result = self.server.controller.command(action, **data)
             response = {"ok": True, "result": result}
         except Exception as exc:
-            if locals().get("action") in ("start", "stop", "toggle", "reprocess", "warmup"):
+            if locals().get("action") in ("start", "stop", "toggle", "warmup"):
                 self.server.controller.report_error(str(exc))
             response = {"ok": False, "error": str(exc)}
         try:

@@ -33,7 +33,6 @@ BOOL_SETTINGS = {
     "copyTranscriptionToClipboard": "copy_to_clipboard",
     "overlayOuterBorderEnabled": "overlay_border",
     "saveTranscriptionHistory": "save_history",
-    "saveAudioWithTranscriptionHistory": "save_audio",
     "notifyAIProcessingFailures": "show_ai_alerts",
     "showMicrophoneChangeAlerts": "show_microphone_alerts",
     "showPasteCheckAlerts": "show_paste_alerts",
@@ -238,13 +237,6 @@ def _convert_upstream_backup(
             raise ValueError("Invalid upstream recording sound volume")
         changes["sound_volume"] = round(value * 100)
         handled.add("transcriptionSoundVolume")
-    if settings.get("audioHistoryBudgetGB") is not None:
-        value = settings["audioHistoryBudgetGB"]
-        if type(value) not in (int, float) or not math.isfinite(value) or value <= 0:
-            raise ValueError("Invalid upstream audio budget")
-        # Upstream GiB; Linux pruning uses decimal MB. Never round retention down.
-        changes["audio_budget_mb"] = math.ceil(value * 1_073_741_824 / 1_000_000)
-        handled.add("audioHistoryBudgetGB")
     if settings.get("spokenSendKey") in ("enter", "shiftEnter"):
         changes["spoken_send_key"] = {"enter": "return", "shiftEnter": "shift+return"}[
             settings["spokenSendKey"]

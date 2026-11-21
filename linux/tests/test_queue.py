@@ -49,13 +49,13 @@ def join(*workers):
 
 
 def test_back_to_back_capture_keeps_config_audio_order_and_visible_session_separate():
-    Config(model="first", delivery="x11", save_audio="on").save()
+    Config(model="first", delivery="x11").save()
     controller = app()
     first = controller.command("start")["id"]
     controller.command("stop")
     first_worker = controller.worker
     assert controller.transcriber.entered.wait(2)
-    Config(model="second", delivery="clipboard", save_audio="on").save()
+    Config(model="second", delivery="clipboard").save()
     second = controller.command("start")["id"]
     assert second != first
     assert controller.status()["phase"] == "recording"
@@ -76,10 +76,11 @@ def test_back_to_back_capture_keeps_config_audio_order_and_visible_session_separ
         ("second", None),
     ]
     assert controller.status()["id"] == second
+    assert list(controller.job.audio_path.parent.glob("*.wav")) == []
     assert controller.status()["pending_jobs"] == 0
     assert controller.status()["phase"] == "idle"
-    assert controller.history.recording(first).exists()
-    assert controller.history.recording(second).exists()
+    assert not controller.history.recording(first).exists()
+    assert not controller.history.recording(second).exists()
 
 
 def test_cancel_newest_does_not_cancel_or_overwrite_previous_job():

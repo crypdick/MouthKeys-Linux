@@ -32,7 +32,6 @@ class Tray(QSystemTrayIcon):
         self.toggle_action = menu.addAction("Record / Stop", lambda: self.send("toggle"))
         menu.addAction("Cancel recording", lambda: self.send("cancel"))
         menu.addAction("Copy last transcript", lambda: self.send("copy"))
-        menu.addAction("Reprocess last recording", lambda: self.send("reprocess"))
         self.microphones = menu.addMenu("Microphone")
         self.microphones.aboutToShow.connect(self.refresh_microphones)
         menu.addSeparator()

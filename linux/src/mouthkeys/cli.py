@@ -122,7 +122,7 @@ def main(argv=None):
             command.add_argument("--query", default="")
             command.add_argument("--limit", type=int, default=100)
             command.add_argument("--offset", type=int, default=0)
-    for action in ("copy", "paste", "reprocess", "delete"):
+    for action in ("copy", "paste", "delete"):
         commands.add_parser(action).add_argument(
             "--id", required=action == "delete", help="History entry UUID (required for delete)"
         )
@@ -172,7 +172,7 @@ def main(argv=None):
     commands.add_parser("download-speakers", help="Explicitly download diarization models")
     commands.add_parser("models", help="List locally known models and cache status")
     commands.add_parser("delete-model").add_argument("model")
-    for action in ("backup-export", "backup-import", "backup-preview", "export-audio"):
+    for action in ("backup-export", "backup-import", "backup-preview"):
         command = commands.add_parser(action)
         command.add_argument("path", type=Path)
         if action == "backup-import":
@@ -181,8 +181,6 @@ def main(argv=None):
             command.add_argument(
                 "--app-map", type=Path, help="JSON object mapping macOS app IDs to Linux identities"
             )
-        if action == "export-audio":
-            command.add_argument("--id")
     commands.add_parser("delete-audio").add_argument("--yes", action="store_true", required=True)
     for action in ("dictionary-import", "dictionary-export"):
         command = commands.add_parser(action)
@@ -432,7 +430,7 @@ def main(argv=None):
                     data.update(query=args.query, limit=args.limit, offset=args.offset)
                 result = request(action, **data)
             finally:
-                if args.command in ("start", "stop", "toggle", "reprocess", "warmup"):
+                if args.command in ("start", "stop", "toggle", "warmup"):
                     from .service import ensure_overlay
 
                     try:

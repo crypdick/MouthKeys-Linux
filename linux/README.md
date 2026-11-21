@@ -80,7 +80,6 @@ Bind an absolute executable path from `command -v mouthkeys`:
 | Start/stop | `mouthkeys toggle` | Super+Alt+Space |
 | Cancel | `mouthkeys cancel` | Super+Alt+Escape |
 | Paste latest now | `mouthkeys paste` | Separate shortcut |
-| Retry retained audio | `mouthkeys reprocess` | Separate shortcut |
 
 Sway/i3 examples, replacing the path where necessary:
 
@@ -128,8 +127,7 @@ a duration-limit stop copies without selecting a new automatic-paste destination
 `preview_interval_ms` defaults to 2000. Whisper/provisional-window engines retain completed segments
 ending at least two seconds before the snapshot and decode forward from the uncommitted boundary.
 Unresolved windows grow rather than skip speech. Stop reuses a useful in-flight/cached tail, without
-re-decoding committed text. Boundary accuracy can differ from a whole-recording retry; Reprocess
-starts fresh. NeMo's cache-aware path instead advances native encoder/decoder caches; its frontend
+re-decoding committed text. Boundary accuracy can differ from whole-recording decoding. NeMo's cache-aware path instead advances native encoder/decoder caches; its frontend
 still recomputes the observed prefix for correct STFT boundaries. Native inference cannot always be
 interrupted immediately; cancelled work must finish or time out, with delivery suppressed and caches
 reset before reuse. `native_timeout_seconds` bounds the isolated native worker.
@@ -137,7 +135,7 @@ reset before reuse. `native_timeout_seconds` bounds the isolated native worker.
 The overlay is a separate optional Qt process, intended not to take focus. It shows provisional text,
 waveform, timer, words/WPM, microphone, and optional battery. Regular/compact, top/bottom, size,
 offset, preview length, border, sensitivity, and theme are configurable. History offers inline
-copy/reinsert/reprocess; failure recovery offers copy/retry. Drag to move; double-click to reset.
+copy/reinsert; delivery failures offer transcript copy. Drag to move; double-click to reset.
 Compositors control placement/stacking. **Review AI / chats** (also in the panel menu) explicitly opens
 an expanded, focusable assistant window for conversations, follow-up instructions, execution output,
 and review controls. The passive recording panel keeps its no-focus flags; opening the expanded
@@ -231,7 +229,7 @@ while the activating gesture remains held. Starting a newer recording suppresses
 Send. Configured field/window/compositor continuity is checked again before the key; unsupported
 Wayland destinations, clipboard-only delivery, and duration-limit stops do not send.
 
-## Models, microphones, and recovery
+## Models and microphones
 
 App Settings exposes every Config option in categories; `mouthkeys config` lists current values.
 Model/language/device/precision/microphone controls also accept supported custom paths/names. A model
@@ -329,7 +327,7 @@ mouthkeys microphone SOURCE --persist  # also save for future daemon sessions
 
 Switching restarts capture and has a real brief gap. Already captured PCM is preserved in order in
 the same recording; no silence or word timings are fabricated. A failed switch tries another allowed
-input, otherwise retained audio is recovered without automatic delivery. One bounded private segment
+input, otherwise processing finishes without automatic delivery. One bounded private segment
 temporarily exists alongside the canonical recording and is removed on stop/next startup after a crash.
 If old capture shutdown cannot be confirmed, new capture stays blocked; retry Stop/Cancel after the
 device recovers rather than opening overlapping microphone processes.
@@ -358,7 +356,7 @@ from `tray`, and the window manager/compositor decides how to honor it.
 Help includes a bounded diagnostic-log viewer and a prefilled issue draft; it never sends feedback
 without the user submitting it.
 
-### History and private recovery
+### History and temporary audio
 
 History is in `$XDG_STATE_HOME/mouthkeys` (normally `~/.local/state/mouthkeys`), configuration in
 `$XDG_CONFIG_HOME/mouthkeys`, models in `$XDG_CACHE_HOME/mouthkeys`. The user-private control socket
@@ -367,10 +365,14 @@ are private; transcript/audio/export files are private. Diagnostic logs do not i
 transcripts. Clipboard managers and destination applications have their own retention policies.
 
 History includes searchable text/app/window metadata, duration/counts, and raw/final text. Raw text
-is persisted before optional AI and final text before desktop delivery. Recovery retains the latest
-successful audio plus failed/interrupted attempts; `save_audio=on` retains earlier successes too.
-`audio_budget_mb` defaults to 4000 decimal MB, pruning oldest inactive audio after work and while idle.
-Transcripts survive audio pruning. A recording larger than the budget can lose recovery audio immediately.
+is persisted before optional AI and final text before desktop delivery. Recordings are never retained
+as history: private runtime WAVs exist only while capture/transcription and optional processing run.
+They are deleted on success, failure, cancellation, and shutdown. Crash leftovers are removed on next
+daemon startup, along with recordings saved by older versions. Runtime storage falls back to the
+state directory if `$XDG_RUNTIME_DIR` is absent; a crash can leave temporary audio until next startup.
+There is no audio replay, export, or reprocessing; record again after recognition failure. Transcript
+copy/paste remains available after desktop delivery failure. Retired `save_audio`, `audio_budget_mb`,
+and `reprocess_shortcut_key` settings are ignored in old configurations and backups.
 
 `save_history=off` instead keeps the latest dictation only in memory and records in private runtime
 temporary files, removed on completion/cancel/shutdown and cleaned after a crash on next service start.
@@ -379,13 +381,12 @@ not an older stored transcript. Restart clears it. Explicit dictionary learning/
 separately configured persistent user data. Disabling history also suppresses automatic file-history
 saving. `save_file_history` and `file_history_limit` independently bound the file browser.
 
-Shutdown/SIGTERM stops capture without starting delivery and retains interrupted audio when history
-is enabled. Cancel discards the ongoing attempt and clears any already-saved raw cancelled text.
+Shutdown/SIGTERM stops capture without starting delivery and deletes interrupted audio. Cancel
+discards the ongoing attempt and clears any already-saved raw cancelled text.
 
 ```sh
 mouthkeys history --query phrase --limit 100 --offset 0
 mouthkeys copy --id ENTRY_UUID
-mouthkeys reprocess --id ENTRY_UUID
 mouthkeys clear-history --yes
 mouthkeys delete-audio --yes
 mouthkeys shutdown
@@ -614,10 +615,10 @@ Stats includes time windows, saved-time estimate against `typing_wpm`, totals, c
 weekend policy, daily charts, app/peak/record summaries, and milestones. It derives from local history;
 disabling history also removes those attempts from durable stats.
 
-Backup & Audio exports private settings/profiles/mode routes, dictionary/vocabulary/pronunciation
+Backup exports private settings/profiles/mode routes, dictionary/vocabulary/pronunciation
 features, dictation/file-history/assistant-session records (including saved command output receipts),
-and separate audio ZIPs. Restore validates before applying,
-merges history by UUID, and does not delete other recordings. Environment secrets are not exported.
+without recording audio. Restore validates before applying and merges history by UUID. Environment
+secrets are not exported.
 Learning-policy observation counts/dismissal cooldowns and in-memory pending suggestions are not the
 same as accepted dictionary data; backups preserve accepted data, not an active field observation.
 
@@ -625,7 +626,6 @@ same as accepted dictionary data; backups preserve accepted data, not an active 
 mouthkeys backup-export backup.json
 mouthkeys backup-preview backup.json
 mouthkeys backup-import backup.json --yes
-mouthkeys export-audio recordings.zip
 mouthkeys dictionary-export dictionary.json
 mouthkeys dictionary-import dictionary.json --yes
 ```
@@ -766,10 +766,10 @@ Headless tests cannot complete these checks. Record compositor/toolkit/backend/v
 configuration before marking a setup verified:
 
 - Cold microphone/Bluetooth start: speak when Listening appears; check first word, immediate meter,
-  silence readiness, stop/cancel/duration-limit microphone release, and interrupted-audio recovery.
+  silence readiness, stop/cancel/duration-limit microphone release, and interrupted-audio deletion.
   Fail a present preferred input and confirm bounded alternate retry/quarantine; cancel during startup.
   Switch active source from overlay/Settings/CLI; confirm temporary versus persistent selection,
-  ordered retained audio, reported restart gap, old-source failure recovery and no overlapping captures.
+  ordered temporary audio, reported restart gap, old-source failure recovery and no overlapping captures.
 - Editor and Ghostty/other terminal: Unicode/newlines, normal clipboard paste, direct nonterminal
   insertion, and no simulated character typing into terminals.
 - Focus safety: switch windows, fields, tabs, terminal panes, and virtual desktops while processing.

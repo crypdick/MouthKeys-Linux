@@ -459,16 +459,15 @@ def test_every_config_is_editable_in_settings_and_new_options_roundtrip(monkeypa
     window.timer.stop()
     assert set(window.fields) == set(asdict(Config()))
     assert window.findChild(QScrollArea) is not None
-    window.fields["audio_budget_mb"].setValue(250)
     window.fields["recording_panel"].setCurrentIndex(
         window.fields["recording_panel"].findData("off")
     )
     window.fields["max_seconds"].setValue(30)
     assert window.save()
     saved = Config.load()
-    assert (saved.audio_budget_mb, saved.recording_panel, saved.max_seconds) == (250, "off", 30)
-    assert window.fields["audio_budget_mb"].suffix() == " MB"
-    assert "failures" in window.fields["audio_budget_mb"].toolTip()
+    assert (saved.recording_panel, saved.max_seconds) == ("off", 30)
+    assert "save_audio" not in window.fields
+    assert "audio_budget_mb" not in window.fields
     assert not window.isVisible()
     window.close()
     app.processEvents()

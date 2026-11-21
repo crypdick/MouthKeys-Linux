@@ -29,7 +29,6 @@ class ShortcutCapture(QDialog):
             ("toggle_shortcut", "Primary dictation"),
             ("cancel_shortcut", "Cancel"),
             ("paste_shortcut_key", "Paste last"),
-            ("reprocess_shortcut_key", "Reprocess"),
             ("command_shortcut_key", "Command Mode"),
             ("edit_shortcut_key", "Edit Mode"),
         ):

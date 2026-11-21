@@ -38,12 +38,12 @@ public_modules = [
   "mouthkeys.engines", "mouthkeys.file_history", "mouthkeys.file_transcription", "mouthkeys.file_transcription_ui",
   "mouthkeys.forced_alignment", "mouthkeys.formatting", "mouthkeys.gui", "mouthkeys.help_ui", "mouthkeys.history_ui", "mouthkeys.hotkeys",
   "mouthkeys.lark", "mouthkeys.learning", "mouthkeys.local_api", "mouthkeys.microphone_ui",
-  "mouthkeys.model_progress", "mouthkeys.models_ui", "mouthkeys.native_asr", "mouthkeys.native_worker", "mouthkeys.onboarding",
+  "mouthkeys.model_progress", "mouthkeys.models_ui", "mouthkeys.native_asr", "mouthkeys.native_worker", "mouthkeys.nemo_asr", "mouthkeys.onboarding",
   "mouthkeys.operations", "mouthkeys.overlay", "mouthkeys.overlay_assistant", "mouthkeys.overlay_process", "mouthkeys.overlay_rendering",
   "mouthkeys.portal_shortcuts", "mouthkeys.postprocess", "mouthkeys.profiles",
   "mouthkeys.pronunciation", "mouthkeys.qt_control", "mouthkeys.provider_tools", "mouthkeys.regional", "mouthkeys.regional_ui", "mouthkeys.routing",
   "mouthkeys.service", "mouthkeys.setup_languages", "mouthkeys.shortcut_capture", "mouthkeys.stats_view", "mouthkeys.storage",
-  "mouthkeys.transcribe", "mouthkeys.tray", "mouthkeys.upstream_backup", "mouthkeys.vocabulary",
+  "mouthkeys.transcribe", "mouthkeys.transformers_asr", "mouthkeys.tray", "mouthkeys.upstream_backup", "mouthkeys.vocabulary",
 ]
 
 [[packages]]

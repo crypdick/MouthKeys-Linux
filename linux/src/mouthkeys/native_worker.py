@@ -185,9 +185,13 @@ def worker_main():
         isolate_network()
         request, _ = _read_message(source)
         config = Config.from_mapping(request["config"])
-        from .native_asr import NemoBackend, TransformersBackend
+        from . import nemo_asr, transformers_asr
 
-        backend = (NemoBackend if config.engine == "nemo" else TransformersBackend)(config)
+        backend = (
+            nemo_asr.NemoBackend
+            if config.engine == "nemo"
+            else transformers_asr.TransformersBackend
+        )(config)
         _write_message(
             output,
             {

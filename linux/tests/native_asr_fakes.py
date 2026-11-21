@@ -4,11 +4,11 @@ import json
 import sys
 from contextlib import nullcontext
 from dataclasses import replace
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
 
 import numpy as np
 
-from mouthkeys import native_asr
+from mouthkeys import native_asr, nemo_asr, transformers_asr
 from mouthkeys.config import Config
 
 
@@ -64,13 +64,15 @@ class Model:
 
 
 def torch_fake(cuda=False):
-    return SimpleNamespace(
+    torch = ModuleType("torch")
+    torch.__dict__.update(
         cuda=SimpleNamespace(is_available=lambda: cuda),
         float32="float32",
         float16="float16",
         bfloat16="bfloat16",
         inference_mode=nullcontext,
     )
+    return torch
 
 
 def backend_fixture(monkeypatch, tmp_path, family):
@@ -101,7 +103,7 @@ def backend_fixture(monkeypatch, tmp_path, family):
         ),
     )
     monkeypatch.setattr(native_asr, "speech_spans", lambda audio: [{"start": 0, "end": len(audio)}])
-    return native_asr.TransformersBackend(config), config, processor, model, calls
+    return transformers_asr.TransformersBackend(config), config, processor, model, calls
 
 
 class Features:
@@ -136,7 +138,7 @@ class StreamingBuffer:
 
 
 def streaming_backend(monkeypatch):
-    backend = native_asr.NemoBackend.__new__(native_asr.NemoBackend)
+    backend = nemo_asr.NemoBackend.__new__(nemo_asr.NemoBackend)
     backend._base_decoding = None
     backend._vocabulary_state = None
     calls = []

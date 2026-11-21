@@ -112,10 +112,7 @@
 1	src/mouthkeys/benchmark.py	no-untyped-call	Call to untyped function "_stop" in typed context
 1	src/mouthkeys/benchmark.py	no-untyped-call	Call to untyped function "_tree_rss" in typed context
 2	src/mouthkeys/benchmark.py	no-untyped-call	Call to untyped function "accuracy" in typed context
-2	src/mouthkeys/benchmark.py	no-untyped-call	Call to untyped function "effective_revision" in typed context
 1	src/mouthkeys/benchmark.py	no-untyped-call	Call to untyped function "isolate_network" in typed context
-1	src/mouthkeys/benchmark.py	no-untyped-call	Call to untyped function "local_artifact" in typed context
-1	src/mouthkeys/benchmark.py	no-untyped-call	Call to untyped function "managed_path" in typed context
 1	src/mouthkeys/benchmark.py	no-untyped-call	Call to untyped function "onnx_path" in typed context
 1	src/mouthkeys/benchmark.py	no-untyped-call	Call to untyped function "resolve_whisper" in typed context
 1	src/mouthkeys/benchmark.py	no-untyped-call	Call to untyped function "transcribe_file" in typed context
@@ -190,10 +187,7 @@
 8	src/mouthkeys/dictionary_transfer.py	no-untyped-def	Function is missing a type annotation
 1	src/mouthkeys/engines.py	no-untyped-call	Call to untyped function "_download_onnx_revision" in typed context
 1	src/mouthkeys/engines.py	no-untyped-call	Call to untyped function "_model_catalog" in typed context
-3	src/mouthkeys/engines.py	no-untyped-call	Call to untyped function "artifact_path" in typed context
-1	src/mouthkeys/engines.py	no-untyped-call	Call to untyped function "effective_revision" in typed context
 2	src/mouthkeys/engines.py	no-untyped-call	Call to untyped function "has_revision" in typed context
-4	src/mouthkeys/engines.py	no-untyped-call	Call to untyped function "managed_path" in typed context
 1	src/mouthkeys/engines.py	no-untyped-call	Call to untyped function "matching_measurement" in typed context
 1	src/mouthkeys/engines.py	no-untyped-call	Call to untyped function "measurements" in typed context
 2	src/mouthkeys/engines.py	no-untyped-call	Call to untyped function "onnx_module" in typed context
@@ -201,7 +195,7 @@
 2	src/mouthkeys/engines.py	no-untyped-call	Call to untyped function "onnx_quantization" in typed context
 2	src/mouthkeys/engines.py	no-untyped-call	Call to untyped function "usable_whisper_snapshot" in typed context
 1	src/mouthkeys/engines.py	no-untyped-def	Function is missing a return type annotation
-12	src/mouthkeys/engines.py	no-untyped-def	Function is missing a type annotation
+11	src/mouthkeys/engines.py	no-untyped-def	Function is missing a type annotation
 3	src/mouthkeys/file_history.py	arg-type	Argument 1 to "isfinite" has incompatible type "Any | None"; expected "SupportsFloat | SupportsIndex"
 1	src/mouthkeys/file_history.py	operator	Unsupported left operand type for <= ("None")
 1	src/mouthkeys/file_history.py	operator	Unsupported operand types for <= ("int" and "None")
@@ -443,44 +437,6 @@
 4	src/mouthkeys/models_ui.py	no-untyped-def	Function is missing a type annotation
 4	src/mouthkeys/models_ui.py	union-attr	Item "None" of "QTableWidgetItem | None" has no attribute "data"
 1	src/mouthkeys/models_ui.py	union-attr	Item "None" of "QTableWidgetItem | None" has no attribute "setText"
-2	src/mouthkeys/native_asr.py	arg-type	Argument 1 to "float" has incompatible type "Any | None"; expected "str | Buffer | SupportsFloat | SupportsIndex"
-2	src/mouthkeys/native_asr.py	arg-type	Argument 1 to "isfinite" has incompatible type "Any | None"; expected "SupportsFloat | SupportsIndex"
-1	src/mouthkeys/native_asr.py	arg-type	Argument 1 to "iter" has incompatible type "Any | None"; expected "SupportsIter[Any]"
-3	src/mouthkeys/native_asr.py	index	Value of type "Any | None" is not indexable
-1	src/mouthkeys/native_asr.py	list-item	List item 0 has incompatible type "object"; expected "str"
-2	src/mouthkeys/native_asr.py	no-untyped-call	Call to untyped function "_language" in typed context
-1	src/mouthkeys/native_asr.py	no-untyped-call	Call to untyped function "_native_token_words" in typed context
-1	src/mouthkeys/native_asr.py	no-untyped-call	Call to untyped function "_strip_decoder_prompt" in typed context
-4	src/mouthkeys/native_asr.py	no-untyped-call	Call to untyped function "_text" in typed context
-3	src/mouthkeys/native_asr.py	no-untyped-call	Call to untyped function "_transcript_text" in typed context
-2	src/mouthkeys/native_asr.py	no-untyped-call	Call to untyped function "_vocabulary" in typed context
-2	src/mouthkeys/native_asr.py	no-untyped-call	Call to untyped function "_word_times" in typed context
-2	src/mouthkeys/native_asr.py	no-untyped-call	Call to untyped function "artifact_path" in typed context
-3	src/mouthkeys/native_asr.py	no-untyped-call	Call to untyped function "check" in typed context
-2	src/mouthkeys/native_asr.py	no-untyped-call	Call to untyped function "effective_revision" in typed context
-2	src/mouthkeys/native_asr.py	no-untyped-call	Call to untyped function "local_artifact" in typed context
-1	src/mouthkeys/native_asr.py	no-untyped-call	Call to untyped function "managed_path" in typed context
-2	src/mouthkeys/native_asr.py	no-untyped-call	Call to untyped function "nemotron_language" in typed context
-3	src/mouthkeys/native_asr.py	no-untyped-call	Call to untyped function "reset_stream" in typed context
-2	src/mouthkeys/native_asr.py	no-untyped-call	Call to untyped function "speech_spans" in typed context
-1	src/mouthkeys/native_asr.py	no-untyped-call	Call to untyped function "supports_native_streaming" in typed context
-2	src/mouthkeys/native_asr.py	no-untyped-call	Call to untyped function "torch_runtime" in typed context
-1	src/mouthkeys/native_asr.py	no-untyped-call	Call to untyped function "uses_native_streaming" in typed context
-2	src/mouthkeys/native_asr.py	no-untyped-call	Call to untyped function "validate_artifacts" in typed context
-1	src/mouthkeys/native_asr.py	no-untyped-def	Function is missing a return type annotation
-23	src/mouthkeys/native_asr.py	no-untyped-def	Function is missing a type annotation
-1	src/mouthkeys/native_asr.py	operator	Unsupported left operand type for <= ("None")
-1	src/mouthkeys/native_asr.py	operator	Unsupported operand types for <= ("int" and "None")
-2	src/mouthkeys/native_asr.py	operator	Unsupported operand types for > ("float" and "None")
-4	src/mouthkeys/native_asr.py	union-attr	Item "None" of "Any | None" has no attribute "buffer"
-5	src/mouthkeys/native_asr.py	union-attr	Item "None" of "Any | None" has no attribute "buffer_idx"
-1	src/mouthkeys/native_asr.py	union-attr	Item "None" of "Any | None" has no attribute "preprocess_audio"
-1	src/mouthkeys/native_asr.py	union-attr	Item "None" of "Any | None" has no attribute "step"
-1	src/mouthkeys/native_asr.py	union-attr	Item "None" of "Any | None" has no attribute "streaming_cfg"
-2	src/mouthkeys/native_asr.py	union-attr	Item "None" of "Any | None" has no attribute "streams_length"
-1	src/mouthkeys/native_asr.py	union-attr	Item "None" of "IO[bytes] | None" has no attribute "__enter__"
-1	src/mouthkeys/native_asr.py	union-attr	Item "None" of "IO[bytes] | None" has no attribute "__exit__"
-1	src/mouthkeys/native_asr.py	var-annotated	Need type annotation for "words" (hint: "words: list[<type>] = ...")
 1	src/mouthkeys/native_worker.py	arg-type	Argument 1 to "append" of "list" has incompatible type "memoryview[int]"; expected "bytes"
 4	src/mouthkeys/native_worker.py	no-untyped-call	Call to untyped function "_call" in typed context
 3	src/mouthkeys/native_worker.py	no-untyped-call	Call to untyped function "_read_exact" in typed context
@@ -492,8 +448,6 @@
 3	src/mouthkeys/native_worker.py	no-untyped-call	Call to untyped function "asr_config" in typed context
 6	src/mouthkeys/native_worker.py	no-untyped-call	Call to untyped function "close" in typed context
 1	src/mouthkeys/native_worker.py	no-untyped-call	Call to untyped function "isolate_network" in typed context
-1	src/mouthkeys/native_worker.py	no-untyped-call	Call to untyped function "segments" in typed context
-1	src/mouthkeys/native_worker.py	no-untyped-call	Call to untyped function "speech_spans" in typed context
 1	src/mouthkeys/native_worker.py	no-untyped-call	Call to untyped function "worker_main" in typed context
 7	src/mouthkeys/native_worker.py	no-untyped-def	Function is missing a return type annotation
 11	src/mouthkeys/native_worker.py	no-untyped-def	Function is missing a type annotation
@@ -712,12 +666,9 @@
 4	src/mouthkeys/transcribe.py	no-untyped-call	Call to untyped function "_stream_key" of "Transcriber" in typed context
 2	src/mouthkeys/transcribe.py	no-untyped-call	Call to untyped function "_uses_native_streaming" in typed context
 4	src/mouthkeys/transcribe.py	no-untyped-call	Call to untyped function "_word_metadata" of "Transcriber" in typed context
-1	src/mouthkeys/transcribe.py	no-untyped-call	Call to untyped function "download_native" in typed context
 1	src/mouthkeys/transcribe.py	no-untyped-call	Call to untyped function "download_onnx" in typed context
-1	src/mouthkeys/transcribe.py	no-untyped-call	Call to untyped function "effective_revision" in typed context
 1	src/mouthkeys/transcribe.py	no-untyped-call	Call to untyped function "load_onnx" in typed context
 1	src/mouthkeys/transcribe.py	no-untyped-call	Call to untyped function "resolve_whisper" in typed context
-2	src/mouthkeys/transcribe.py	no-untyped-call	Call to untyped function "uses_native_streaming" in typed context
 7	src/mouthkeys/transcribe.py	no-untyped-def	Function is missing a return type annotation
 9	src/mouthkeys/transcribe.py	no-untyped-def	Function is missing a type annotation
 1	src/mouthkeys/transcribe.py	no-untyped-def	Function is missing a type annotation for one or more parameters

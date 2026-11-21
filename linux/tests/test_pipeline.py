@@ -1,3 +1,4 @@
+import shutil
 import threading
 import uuid
 
@@ -32,10 +33,10 @@ def test_dictation_persists_before_delivery_and_discards_audio(controller):
     [("wayland", "needs an X11 login session"), ("x11", "identify the focused field")],
 )
 def test_auto_paste_fallback_explains_why(controller, monkeypatch, desktop, expected):
-    from mouthkeys import delivery
+    from mouthkeys import desktop_input
 
-    monkeypatch.setattr(delivery, "session", lambda: desktop)
-    monkeypatch.setattr(delivery.shutil, "which", lambda name: f"/fake/{name}")
+    monkeypatch.setattr(desktop_input, "session", lambda: desktop)
+    monkeypatch.setattr(shutil, "which", lambda name: f"/fake/{name}")
     Config(delivery="x11", destination_guard="field").save()
     controller.command("start")
     controller.command("stop")

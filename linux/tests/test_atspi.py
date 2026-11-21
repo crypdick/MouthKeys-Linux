@@ -3,7 +3,7 @@ from copy import deepcopy
 
 import pytest
 
-from mouthkeys import accessibility, atspi_helper, delivery
+from mouthkeys import accessibility, atspi_helper, delivery, desktop_input
 from mouthkeys.config import Config
 
 REF = (":1.42", "/org/a11y/atspi/accessible/7")
@@ -90,7 +90,7 @@ def test_focused_password_blocks_window_fallback_without_reading_text(monkeypatc
     bus.call = password_tree
     monkeypatch.setattr(accessibility, "_request", lambda *args: atspi_helper.find_focused(bus))
     assert accessibility.read_snapshot() is None
-    monkeypatch.setattr(delivery, "session", lambda: "x11")
+    monkeypatch.setattr(desktop_input, "session", lambda: "x11")
     adapter = delivery.Delivery()
     monkeypatch.setattr(adapter, "focus", lambda: "42")
     copies = []
@@ -109,12 +109,12 @@ def test_local_focused_child_in_inactive_window_is_not_foreground_evidence(monke
     value = atspi_helper.snapshot(bus, REF)
     assert value["focused"] is True
     assert value["foreground"] is False
-    monkeypatch.setattr(delivery, "session", lambda: "wayland")
+    monkeypatch.setattr(desktop_input, "session", lambda: "wayland")
     monkeypatch.setattr(accessibility, "read_snapshot", lambda *args, **kwargs: value)
     adapter = delivery.Delivery()
     monkeypatch.setattr(adapter, "focus", lambda: None)
     monkeypatch.setattr(adapter, "copy", lambda _: None)
-    monkeypatch.setattr(delivery, "run", lambda args: pytest.fail("Keys to inactive field"))
+    monkeypatch.setattr(desktop_input, "run", lambda args: pytest.fail("Keys to inactive field"))
     target = {"window": None, "field": value}
     adapter.last_verified = value
     config = Config(delivery="wayland", paste_backend="wtype", spoken_send="on")
@@ -220,7 +220,7 @@ def field_target():
 
 
 def test_verified_paste_uses_same_field_and_exact_expected_text(monkeypatch):
-    monkeypatch.setattr(delivery, "session", lambda: "x11")
+    monkeypatch.setattr(desktop_input, "session", lambda: "x11")
     target = field_target()
     current = deepcopy(target["field"])
     monkeypatch.setattr(accessibility, "read_snapshot", lambda _: deepcopy(current))
@@ -239,7 +239,7 @@ def test_verified_paste_uses_same_field_and_exact_expected_text(monkeypatch):
 
 
 def test_changed_pane_even_in_same_window_never_receives_paste(monkeypatch):
-    monkeypatch.setattr(delivery, "session", lambda: "x11")
+    monkeypatch.setattr(desktop_input, "session", lambda: "x11")
     target = field_target()
     wrong = {**target["field"], "field_id": ":1.42|/org/a11y/atspi/accessible/other"}
     monkeypatch.setattr(accessibility, "read_snapshot", lambda _: wrong)
@@ -251,7 +251,7 @@ def test_changed_pane_even_in_same_window_never_receives_paste(monkeypatch):
 
 
 def test_wayland_verified_field_send_releases_modifiers_and_blocks_later_typing(monkeypatch):
-    monkeypatch.setattr(delivery, "session", lambda: "wayland")
+    monkeypatch.setattr(desktop_input, "session", lambda: "wayland")
     target = field_target()
     target["window"] = None
     current = deepcopy(target["field"])
@@ -260,7 +260,7 @@ def test_wayland_verified_field_send_releases_modifiers_and_blocks_later_typing(
     adapter.last_verified = deepcopy(current)
     monkeypatch.setattr(accessibility, "read_snapshot", lambda _: current)
     calls = []
-    monkeypatch.setattr(delivery, "run", lambda args: calls.append(args))
+    monkeypatch.setattr(desktop_input, "run", lambda args: calls.append(args))
     config = Config(
         delivery="wayland",
         paste_backend="wtype",
@@ -277,7 +277,7 @@ def test_wayland_verified_field_send_releases_modifiers_and_blocks_later_typing(
 
 @pytest.mark.parametrize("change", ["caret", "selection", "count"])
 def test_spoken_send_refuses_caret_or_selection_changes_without_text_change(monkeypatch, change):
-    monkeypatch.setattr(delivery, "session", lambda: "wayland")
+    monkeypatch.setattr(desktop_input, "session", lambda: "wayland")
     target = field_target()
     target["window"] = None
     verified = deepcopy(target["field"])
@@ -291,7 +291,7 @@ def test_spoken_send_refuses_caret_or_selection_changes_without_text_change(monk
     else:
         current["character_count"] += 1
     monkeypatch.setattr(accessibility, "read_snapshot", lambda _: current)
-    monkeypatch.setattr(delivery, "run", lambda args: pytest.fail("Stale Return sent"))
+    monkeypatch.setattr(desktop_input, "run", lambda args: pytest.fail("Stale Return sent"))
     adapter = delivery.Delivery()
     adapter.last_verified = verified
     config = Config(delivery="wayland", paste_backend="wtype", spoken_send="on")
@@ -301,7 +301,7 @@ def test_spoken_send_refuses_caret_or_selection_changes_without_text_change(monk
 def test_cancel_during_slow_field_probe_is_checked_at_actual_send_boundary(monkeypatch):
     import threading
 
-    monkeypatch.setattr(delivery, "session", lambda: "wayland")
+    monkeypatch.setattr(desktop_input, "session", lambda: "wayland")
     target = field_target()
     target["window"] = None
     verified = deepcopy(target["field"])
@@ -315,7 +315,7 @@ def test_cancel_during_slow_field_probe_is_checked_at_actual_send_boundary(monke
         return verified
 
     monkeypatch.setattr(accessibility, "read_snapshot", probe)
-    monkeypatch.setattr(delivery, "run", lambda args: pytest.fail("Return after cancel"))
+    monkeypatch.setattr(desktop_input, "run", lambda args: pytest.fail("Return after cancel"))
     adapter = delivery.Delivery()
     adapter.last_verified = verified
     config = Config(delivery="wayland", paste_backend="wtype", spoken_send="on")
@@ -335,7 +335,7 @@ def test_cancel_during_slow_field_probe_is_checked_at_actual_send_boundary(monke
 
 
 def test_terminal_application_identity_still_forces_clipboard_when_field_role_is_plain(monkeypatch):
-    monkeypatch.setattr(delivery, "session", lambda: "wayland")
+    monkeypatch.setattr(desktop_input, "session", lambda: "wayland")
     target = field_target()
     target["window"] = None
     target["field"]["app"] = "com.mitchellh.ghostty"
@@ -365,7 +365,7 @@ def test_terminal_detection_does_not_guess_football_is_foot_terminal():
 def test_explicit_send_only_uses_unchanged_captured_field_without_prior_insertion(
     monkeypatch, change
 ):
-    monkeypatch.setattr(delivery, "session", lambda: "wayland")
+    monkeypatch.setattr(desktop_input, "session", lambda: "wayland")
     target = field_target()
     target["window"] = None
     target["field"]["selection_start"] = target["field"]["selection_end"] = target["field"]["caret"]
@@ -382,7 +382,7 @@ def test_explicit_send_only_uses_unchanged_captured_field_without_prior_insertio
     monkeypatch.setattr(accessibility, "read_snapshot", lambda _: current)
     adapter = delivery.Delivery()
     calls = []
-    monkeypatch.setattr(delivery, "run", lambda args: calls.append(args))
+    monkeypatch.setattr(desktop_input, "run", lambda args: calls.append(args))
     config = Config(delivery="wayland", paste_backend="wtype", spoken_send="on")
     assert adapter.send_key(config, target, allow_without_insert=True) is (change is None)
     assert len(calls) == int(change is None)
@@ -416,13 +416,13 @@ def test_native_wayland_metadata_reads_actual_compositor_ids(monkeypatch):
     import json
     from types import SimpleNamespace
 
-    monkeypatch.setattr(delivery, "session", lambda: "wayland")
+    monkeypatch.setattr(desktop_input, "session", lambda: "wayland")
     tree = {
         "id": 1,
         "nodes": [{"id": 77, "app_id": "org.example.Editor", "name": "Actual window", "nodes": []}],
     }
     monkeypatch.setattr(
-        delivery, "run", lambda args: SimpleNamespace(stdout=json.dumps(tree).encode())
+        desktop_input, "run", lambda args: SimpleNamespace(stdout=json.dumps(tree).encode())
     )
     assert delivery.Delivery().target_metadata("sway:77") == {
         "app": "org.example.Editor",
@@ -431,13 +431,13 @@ def test_native_wayland_metadata_reads_actual_compositor_ids(monkeypatch):
 
 
 def test_wayland_container_spoken_send_rechecks_native_focus(monkeypatch):
-    monkeypatch.setattr(delivery, "session", lambda: "wayland")
+    monkeypatch.setattr(desktop_input, "session", lambda: "wayland")
     adapter = delivery.Delivery()
     monkeypatch.setattr(adapter, "terminal", lambda _: True)
     focus = iter(["sway:77", "sway:77"])
     monkeypatch.setattr(adapter, "focus", lambda: next(focus))
     calls = []
-    monkeypatch.setattr(delivery, "run", lambda args: calls.append(args))
+    monkeypatch.setattr(desktop_input, "run", lambda args: calls.append(args))
     config = Config(
         delivery="wayland",
         paste_backend="wtype",

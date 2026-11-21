@@ -3,31 +3,31 @@ from types import SimpleNamespace
 
 import pytest
 
-from mouthkeys import delivery
+from mouthkeys import delivery, desktop_input
 from mouthkeys.config import Config
 
 
 def test_x11_auto_paste_reports_missing_default_backend(monkeypatch):
-    monkeypatch.setattr(delivery, "session", lambda: "x11")
-    monkeypatch.setattr(delivery.shutil, "which", lambda _: None)
+    monkeypatch.setattr(desktop_input, "session", lambda: "x11")
+    monkeypatch.setattr(desktop_input.shutil, "which", lambda _: None)
     config = Config(delivery="x11")
-    assert "xdotool not found" in delivery.automatic_delivery_warning(config)
-    assert delivery.automatic_delivery_warning(Config()) is None
-    monkeypatch.setattr(delivery.shutil, "which", lambda name: f"/fake/{name}")
-    assert delivery.automatic_delivery_warning(config) is None
+    assert "xdotool not found" in desktop_input.automatic_delivery_warning(config)
+    assert desktop_input.automatic_delivery_warning(Config()) is None
+    monkeypatch.setattr(desktop_input.shutil, "which", lambda name: f"/fake/{name}")
+    assert desktop_input.automatic_delivery_warning(config) is None
 
 
 @pytest.mark.parametrize("desktop,target", [("x11", "10"), ("wayland", "sway:42")])
 def test_strict_field_guard_never_delivers_or_sends_to_window_only_identity(
     monkeypatch, desktop, target
 ):
-    monkeypatch.setattr(delivery, "session", lambda: desktop)
+    monkeypatch.setattr(desktop_input, "session", lambda: desktop)
     adapter = delivery.Delivery()
     calls = []
     monkeypatch.setattr(adapter, "copy", lambda text: calls.append(text))
     monkeypatch.setattr(adapter, "focus", lambda: target)
     monkeypatch.setattr(adapter, "paste_key", lambda cfg: pytest.fail("Window-only paste"))
-    monkeypatch.setattr(delivery, "run", lambda *a, **kw: pytest.fail("Window-only Send"))
+    monkeypatch.setattr(desktop_input, "run", lambda *a, **kw: pytest.fail("Window-only Send"))
     config = Config(delivery=desktop, destination_guard="field", spoken_send="on")
     assert adapter.deliver("retained", config, target) == "copied"
     assert not adapter.send_key(config, target, allow_without_insert=True)
@@ -36,7 +36,7 @@ def test_strict_field_guard_never_delivers_or_sends_to_window_only_identity(
 
 @pytest.mark.parametrize("desktop", ["x11", "wayland"])
 def test_copy_unicode_uses_stdin_not_shell(monkeypatch, desktop):
-    monkeypatch.setattr(delivery, "session", lambda: desktop)
+    monkeypatch.setattr(desktop_input, "session", lambda: desktop)
     calls = []
 
     def run(args, **kwargs):
@@ -64,7 +64,7 @@ def test_copy_unicode_uses_stdin_not_shell(monkeypatch, desktop):
     ],
 )
 def test_x11_focus_guard(monkeypatch, focuses, target, expected):
-    monkeypatch.setattr(delivery, "session", lambda: "x11")
+    monkeypatch.setattr(desktop_input, "session", lambda: "x11")
     monkeypatch.setattr(delivery.time, "sleep", lambda _: None)
     adapter = delivery.Delivery()
     calls = []
@@ -79,7 +79,7 @@ def test_x11_focus_guard(monkeypatch, focuses, target, expected):
 def test_wayland_never_auto_pastes_even_with_xwayland_display(monkeypatch):
     monkeypatch.setenv("DISPLAY", ":0")
     monkeypatch.setenv("WAYLAND_DISPLAY", "wayland-0")
-    assert delivery.session() == "wayland"
+    assert desktop_input.session() == "wayland"
     adapter = delivery.Delivery()
     calls = []
     monkeypatch.setattr(adapter, "copy", lambda _: calls.append("copy"))
@@ -100,9 +100,9 @@ def test_wayland_never_auto_pastes_even_with_xwayland_display(monkeypatch):
     ],
 )
 def test_terminal_paste_chords_release_modifiers(monkeypatch, backend, expected):
-    monkeypatch.setattr(delivery, "session", lambda: "x11")
+    monkeypatch.setattr(desktop_input, "session", lambda: "x11")
     calls = []
-    monkeypatch.setattr(delivery, "run", lambda args: calls.append(args))
+    monkeypatch.setattr(desktop_input, "run", lambda args: calls.append(args))
     delivery.Delivery().paste_key(
         replace(
             Config(
@@ -133,13 +133,13 @@ def test_headless_never_changes_clipboard():
     "focuses,expected", [(["10", "10"], True), (["10", "20"], False), (["20"], False)]
 )
 def test_spoken_send_rechecks_focus_and_never_activates_target(monkeypatch, focuses, expected):
-    monkeypatch.setattr(delivery, "session", lambda: "x11")
+    monkeypatch.setattr(desktop_input, "session", lambda: "x11")
     adapter = delivery.Delivery()
     focus = iter(focuses)
     monkeypatch.setattr(adapter, "focus", lambda: next(focus))
     monkeypatch.setattr(adapter, "terminal", lambda _: False)
     calls = []
-    monkeypatch.setattr(delivery, "run", lambda args: calls.append(args))
+    monkeypatch.setattr(desktop_input, "run", lambda args: calls.append(args))
     assert (
         adapter.send_key(
             Config(destination_guard="window", spoken_send="on", spoken_send_key="shift+return"),
@@ -151,12 +151,12 @@ def test_spoken_send_rechecks_focus_and_never_activates_target(monkeypatch, focu
 
 
 def test_spoken_send_terminal_uses_plain_return(monkeypatch):
-    monkeypatch.setattr(delivery, "session", lambda: "x11")
+    monkeypatch.setattr(desktop_input, "session", lambda: "x11")
     adapter = delivery.Delivery()
     monkeypatch.setattr(adapter, "focus", lambda: "10")
     monkeypatch.setattr(adapter, "terminal", lambda _: True)
     calls = []
-    monkeypatch.setattr(delivery, "run", lambda args: calls.append(args))
+    monkeypatch.setattr(desktop_input, "run", lambda args: calls.append(args))
     assert adapter.send_key(
         Config(destination_guard="window", spoken_send="on", spoken_send_key="ctrl+return"), "10"
     )
@@ -164,7 +164,7 @@ def test_spoken_send_terminal_uses_plain_return(monkeypatch):
 
 
 def test_wayland_auto_paste_requires_explicit_delivery_and_stop_target(monkeypatch):
-    monkeypatch.setattr(delivery, "session", lambda: "wayland")
+    monkeypatch.setattr(desktop_input, "session", lambda: "wayland")
     monkeypatch.setattr(delivery.time, "sleep", lambda _: None)
     adapter = delivery.Delivery()
     calls = []
@@ -185,14 +185,14 @@ def test_wayland_auto_paste_requires_explicit_delivery_and_stop_target(monkeypat
 
 
 def test_wayland_focus_uses_compositor_identity_or_fails_closed(monkeypatch):
-    monkeypatch.setattr(delivery, "session", lambda: "wayland")
+    monkeypatch.setattr(desktop_input, "session", lambda: "wayland")
     monkeypatch.delenv("SWAYSOCK", raising=False)
     monkeypatch.delenv("HYPRLAND_INSTANCE_SIGNATURE", raising=False)
     adapter = delivery.Delivery()
     assert adapter.focus() is None
     monkeypatch.setenv("SWAYSOCK", "/fake/sway.sock")
     monkeypatch.setattr(
-        delivery,
+        desktop_input,
         "run",
         lambda args: SimpleNamespace(stdout=b'{"nodes":[{"type":"con","id":42,"focused":true}]}'),
     )
@@ -200,7 +200,7 @@ def test_wayland_focus_uses_compositor_identity_or_fails_closed(monkeypatch):
     monkeypatch.delenv("SWAYSOCK")
     monkeypatch.setenv("HYPRLAND_INSTANCE_SIGNATURE", "fake")
     monkeypatch.setattr(
-        delivery, "run", lambda args: SimpleNamespace(stdout=b'{"address":"0xabcd"}')
+        desktop_input, "run", lambda args: SimpleNamespace(stdout=b'{"address":"0xabcd"}')
     )
     assert adapter.focus() == "hypr:0xabcd"
 
@@ -209,7 +209,7 @@ def test_wayland_focus_uses_compositor_identity_or_fails_closed(monkeypatch):
 def test_clipboard_restores_only_after_paste_request(monkeypatch, changed, restore):
     from mouthkeys import clipboard
 
-    monkeypatch.setattr(delivery, "session", lambda: "x11")
+    monkeypatch.setattr(desktop_input, "session", lambda: "x11")
     monkeypatch.setattr(delivery.time, "sleep", lambda _: None)
     adapter = delivery.Delivery()
     focuses = iter(["10", "10", "20" if changed else "10"])
@@ -244,19 +244,24 @@ def test_clipboard_restores_only_after_paste_request(monkeypatch, changed, resto
 
 
 def test_direct_insertion_uses_stdin_and_never_types_into_terminals(monkeypatch):
-    monkeypatch.setattr(delivery, "session", lambda: "x11")
+    monkeypatch.setattr(desktop_input, "session", lambda: "x11")
     monkeypatch.setattr(delivery.time, "sleep", lambda _: None)
     adapter = delivery.Delivery()
     monkeypatch.setattr(adapter, "focus", lambda: "10")
     monkeypatch.setattr(adapter, "terminal", lambda _: False)
     calls = []
-    monkeypatch.setattr(delivery, "run", lambda args, **kw: calls.append((args, kw)))
+    monkeypatch.setattr(desktop_input, "run", lambda args, **kw: calls.append((args, kw)))
     monkeypatch.setattr(adapter, "copy", lambda _: calls.append("copy"))
     config = Config(
         destination_guard="window", delivery="x11", insertion_mode="direct", copy_to_clipboard="off"
     )
     assert adapter.deliver("café $(never)", config, "10") == "insert_requested"
-    assert calls[0][1]["input"] == "café $(never)".encode()
+    assert calls[0][1]["stdin"] == "café $(never)".encode()
+    calls.clear()
+    config_with_copy = replace(config, copy_to_clipboard="on")
+    assert adapter.deliver("saved", config_with_copy, "10") == "insert_requested"
+    assert calls[0][1]["stdin"] == b"saved"
+    assert calls[1:] == ["copy"]
     calls.clear()
     monkeypatch.setattr(adapter, "terminal", lambda _: True)
     monkeypatch.setattr(adapter, "paste_key", lambda _: calls.append("paste"))
@@ -269,7 +274,7 @@ def test_direct_insertion_uses_stdin_and_never_types_into_terminals(monkeypatch)
 
 
 def test_destination_metadata_uses_real_x11_properties_and_not_guesswork(monkeypatch):
-    monkeypatch.setattr(delivery, "session", lambda: "x11")
+    monkeypatch.setattr(desktop_input, "session", lambda: "x11")
     calls = []
 
     def run(args):
@@ -282,13 +287,13 @@ def test_destination_metadata_uses_real_x11_properties_and_not_guesswork(monkeyp
             )
         )
 
-    monkeypatch.setattr(delivery, "run", run)
+    monkeypatch.setattr(desktop_input, "run", run)
     assert delivery.Delivery().target_metadata("42") == {
         "app": "Ghostty",
         "window": 'project "notes"',
     }
     assert calls[0][:3] == ["xprop", "-id", "42"]
-    monkeypatch.setattr(delivery, "session", lambda: "wayland")
+    monkeypatch.setattr(desktop_input, "session", lambda: "wayland")
     assert delivery.Delivery().target_metadata("42") == {}
     assert len(calls) == 1
 
@@ -296,7 +301,7 @@ def test_destination_metadata_uses_real_x11_properties_and_not_guesswork(monkeyp
 def test_wayland_container_restore_uses_actual_clipboard_owner_helper_when_supported(monkeypatch):
     from mouthkeys import clipboard
 
-    monkeypatch.setattr(delivery, "session", lambda: "wayland")
+    monkeypatch.setattr(desktop_input, "session", lambda: "wayland")
     monkeypatch.setattr(delivery.time, "sleep", lambda _: None)
     adapter = delivery.Delivery()
     monkeypatch.setattr(adapter, "focus", lambda: "sway:77")

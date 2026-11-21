@@ -33,10 +33,10 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from . import __version__
+from . import __version__, desktop_input
 from .config import CHOICES, RANGES, Config, config_path, state_dir
 from .control import ensure_daemon, ensure_overlay
-from .delivery import automatic_delivery_warning, session
+from .desktop_input import automatic_delivery_warning
 from .file_transcription_ui import FileTranscriptionPage
 from .processes import python_command
 from .qt_control import Request
@@ -103,9 +103,7 @@ def language_choices():
 def audio_sources():
     import subprocess
 
-    from .delivery import session
-
-    if session() == "headless":
+    if desktop_input.session() == "headless":
         return ["default"]
     try:
         result = subprocess.run(
@@ -1729,9 +1727,9 @@ class Window(QWidget):
         )
         if warning:
             message = f"{warning} Clipboard fallback stays available."
-            if config.insertion_mode == "direct" and config.delivery == session():
+            if config.insertion_mode == "direct" and config.delivery == desktop_input.session():
                 message += " Direct insertion may still work in supported fields."
-        self.delivery_hint.setText(f"Detected session: {session()}. {message}")
+        self.delivery_hint.setText(f"Detected session: {desktop_input.session()}. {message}")
 
     def save(self):
         try:

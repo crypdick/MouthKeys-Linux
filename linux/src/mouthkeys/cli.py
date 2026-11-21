@@ -83,7 +83,7 @@ def _configure(args: argparse.Namespace, parser: argparse.ArgumentParser) -> Non
         updated.save()
         config = asdict(updated)
         if args.key in ("delivery", "paste_backend", "insertion_mode"):
-            from .delivery import automatic_delivery_warning
+            from .desktop_input import automatic_delivery_warning
 
             if warning := automatic_delivery_warning(updated):
                 print(f"Warning: {warning}", file=sys.stderr)
@@ -255,7 +255,7 @@ def main(argv: list[str] | None = None) -> int | None:
                 Dictionary.export_file(args.path, format=args.format)
             print(str(args.path))
         elif args.command == "doctor":
-            from .delivery import doctor
+            from .desktop_input import doctor
 
             result = doctor(Config.load())
             print(json.dumps(result, indent=2))

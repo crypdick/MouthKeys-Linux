@@ -1,68 +1,85 @@
-import json
-import os
-import re
-import shutil
+"""Guard transcript insertion and Spoken Send with the captured destination."""
+
 import subprocess
 import time
+from collections.abc import Callable
+from contextlib import suppress
 from dataclasses import replace
+from threading import Event
+from typing import TypedDict
 
+from . import accessibility, atspi_helper, clipboard, desktop_input
 from .config import Config
 from .desktop import terminal_name
 
 
-def session():
-    if os.environ.get("WAYLAND_DISPLAY") or os.environ.get("XDG_SESSION_TYPE") == "wayland":
-        return "wayland"
-    return "x11" if os.environ.get("DISPLAY") else "headless"
+class CapturedField(TypedDict, total=False):
+    window: str | None
+    field: dict[str, object]
 
 
-def automatic_delivery_warning(config: Config):
-    """Check configuration and tools without probing focus or sending input."""
-    if config.delivery == "clipboard":
-        return None
-    desktop = session()
-    if config.delivery != desktop:
-        if config.delivery == "x11" and desktop == "wayland":
-            return (
-                "X11 auto-paste needs an X11 login session; this session is Wayland "
-                "(even if DISPLAY is set). Choose Wayland auto-paste or Clipboard only."
-            )
-        return (
-            f"Delivery is set to {config.delivery}, but the detected session is {desktop}. "
-            "Choose delivery for your desktop session or Clipboard only."
-        )
-    backend = config.paste_backend
-    if desktop == "x11" and backend == "auto":
-        backend = "xdotool"
-    if desktop == "wayland" and backend in ("auto", "xdotool"):
-        return "Wayland paste keys need a compatible wtype or configured ydotool backend."
-    if not shutil.which(backend):
-        return f"Paste backend {backend} not found. Install it or choose another backend."
-    if desktop == "x11" and backend != "xdotool" and not shutil.which("xdotool"):
-        return "Install xdotool for X11 window detection and focus checks."
+Target = str | CapturedField | None
+
+
+def _temporary_clipboard(text: str, config: Config) -> Callable[[bool], bool] | None:
+    """Set temporary text and return the callback to restore or retain it."""
+    # Snapshot failure falls back to ordinary, recoverable clipboard delivery.
+    with suppress(OSError, RuntimeError, subprocess.SubprocessError):
+        return clipboard.ClipboardPaste(
+            text,
+            delay_ms=config.clipboard_restore_delay_ms,
+            exclude_history=config.clipboard_exclude_history == "on",
+        ).finish
     return None
 
 
-def run(args, **kwargs):
-    try:
-        return subprocess.run(args, check=True, timeout=3, capture_output=True, **kwargs)  # noqa: S603
-    except FileNotFoundError as exc:
-        raise RuntimeError(f"Install {args[0]} (see linux/README.md)") from exc
-    except subprocess.CalledProcessError as exc:
-        detail = (
-            exc.stderr.decode(errors="replace") if isinstance(exc.stderr, bytes) else exc.stderr
-        )
-        raise RuntimeError(f"{args[0]} failed: {(detail or '').strip()}") from exc
+def _verify_field_paste(field: dict[str, object], text: str) -> dict[str, object] | None:
+    before = field.get("text")
+    field_id = field.get("field_id")
+    start, end = field.get("selection_start"), field.get("selection_end")
+    if not isinstance(before, str) or not isinstance(field_id, str):
+        return None
+    offset = field.get("text_start", 0)
+    count = field.get("character_count", len(before))
+    if (
+        type(start) is not int
+        or type(end) is not int
+        or type(count) is not int
+        or type(offset) is not int
+    ):
+        return None
+    # Use the existing AT-SPI replacement rules to compare against the same field region.
+    expected: str = atspi_helper.expected_text(field, text)
+    expected_count = count + len(text) - (end - start)
+    deadline = time.monotonic() + 0.8
+    for _ in range(3):
+        current = accessibility.read_snapshot(field)
+        if (
+            current
+            and current.get("field_id") == field_id
+            and current.get("focused")
+            and current.get("text") == expected
+            and current.get("text_start", 0) == offset
+            and current.get("character_count", len(expected)) == expected_count
+        ):
+            return current
+        if time.monotonic() >= deadline:
+            break
+        time.sleep(0.05)
+    return None
 
 
 class Delivery:
     send_key_guarded = True
+    last_verified: dict[str, object] | None = None
 
-    def capture_target(self, config=None):
-        from .accessibility import read_snapshot
-
+    def capture_target(self, _config: Config | None = None) -> Target:
         before = self.focus()
-        field = read_snapshot(include_protected=True) if session() != "headless" else None
+        field = (
+            accessibility.read_snapshot(include_protected=True)
+            if desktop_input.session() != "headless"
+            else None
+        )
         if field and field.get("protected"):
             return None
         if field and field.get("foreground") is not True:
@@ -72,12 +89,13 @@ class Delivery:
             return None
         return {"window": after, "field": field} if field else after
 
-    def _field_current(self, target, *, unchanged=False):
-        from .accessibility import read_snapshot
-        from .atspi_helper import unchanged as same_contents
-
+    def _field_current(
+        self, target: CapturedField, *, unchanged: bool = False
+    ) -> dict[str, object] | None:
         field = target.get("field")
-        current = read_snapshot(field) if field else None
+        if not field:
+            return None
+        current = accessibility.read_snapshot(field)
         if (
             not current
             or current.get("field_id") != field.get("field_id")
@@ -85,24 +103,11 @@ class Delivery:
             or current.get("foreground") is not True
         ):
             return None
-        if unchanged and not same_contents(field, current):
+        if unchanged and not atspi_helper.unchanged(field, current):
             return None
         return current
 
-    def _activate_window(self, window):
-        if not window:
-            return False
-        if session() == "x11" and re.fullmatch(r"(?:0x[\da-fA-F]+|\d+)", window):
-            run(["xdotool", "windowactivate", "--sync", window])
-        elif window.startswith("sway:") and re.fullmatch(r"\d+", window[5:]):
-            run(["swaymsg", f"[con_id={window[5:]}]", "focus"])
-        elif window.startswith("hypr:") and re.fullmatch(r"0x[\da-fA-F]+", window[5:]):
-            run(["hyprctl", "dispatch", "focuswindow", "address:" + window[5:]])
-        else:
-            return False
-        return self.focus() == window
-
-    def prepare_target(self, config, target):
+    def prepare_target(self, config: Config, target: Target) -> bool:
         if not isinstance(target, dict) or not target.get("field"):
             return False
         window = target.get("window")
@@ -112,20 +117,22 @@ class Delivery:
             return True
         if getattr(config, "return_to_start", "off") != "on":
             return False
-        from .accessibility import focus_target, read_snapshot
-
         field = target["field"]
-        current = read_snapshot(field)
+        current = accessibility.read_snapshot(field)
         if not current or current.get("text") != field.get("text"):
             return False
         try:
-            if window and not self._activate_window(window):
+            if window and (not desktop_input.activate_window(window) or self.focus() != window):
                 return False
-            return focus_target(field) and bool(self._field_current(target, unchanged=True))
+            return accessibility.focus_target(field) and bool(
+                self._field_current(target, unchanged=True)
+            )
         except (OSError, RuntimeError, subprocess.SubprocessError):
             return False
 
-    def replace_selection(self, text, config, target, *, cancel_event=None):
+    def replace_selection(
+        self, text: str, config: Config, target: Target, *, cancel_event: Event | None = None
+    ) -> str:
         """Explicit edit: replace only the unchanged selected range, preserving other rich text."""
         self.last_verified = None
         if cancel_event is not None and cancel_event.is_set():
@@ -142,17 +149,17 @@ class Delivery:
             return "copied"
         return self._deliver_field(
             text,
-            replace(config, delivery=session(), insertion_mode="direct"),
+            replace(config, delivery=desktop_input.session(), insertion_mode="direct"),
             target,
             cancel_event=cancel_event,
         )
 
-    def _native_insert(self, text, config, target, *, cancel_event=None):
-        from .accessibility import insert_text
-
+    def _native_insert(
+        self, text: str, config: Config, target: CapturedField, *, cancel_event: Event | None
+    ) -> str:
         if cancel_event is not None and cancel_event.is_set():
             return "cancelled"
-        current = insert_text(target["field"], text)
+        current = accessibility.insert_text(target["field"], text)
         if current:
             self.last_verified = current
             if getattr(config, "copy_to_clipboard", "on") == "on":
@@ -162,14 +169,13 @@ class Delivery:
         self.copy(text)
         return "insert_requested"
 
-    def _deliver_field(self, text, config, target, *, cancel_event=None):
-        from .accessibility import read_snapshot
-        from .atspi_helper import expected_text
-
+    def _deliver_field(
+        self, text: str, config: Config, target: CapturedField, *, cancel_event: Event | None = None
+    ) -> str:
         self.last_verified = None
         if cancel_event is not None and cancel_event.is_set():
             return "cancelled"
-        if config.delivery != session() or not self.prepare_target(config, target):
+        if config.delivery != desktop_input.session() or not self.prepare_target(config, target):
             if cancel_event is not None and cancel_event.is_set():
                 return "cancelled"
             self.copy(text)
@@ -183,225 +189,64 @@ class Delivery:
             and field["selection_start"] == field["selection_end"]
         ):
             return self._native_insert(text, config, target, cancel_event=cancel_event)
-        clipboard = None
-        if config.restore_clipboard == "on":
-            from .clipboard import ClipboardPaste
-
-            try:
-                clipboard = ClipboardPaste(
-                    text,
-                    delay_ms=config.clipboard_restore_delay_ms,
-                    exclude_history=getattr(config, "clipboard_exclude_history", "on") == "on",
-                )
-            except (OSError, RuntimeError, subprocess.SubprocessError):
-                pass
-        if clipboard is None:
+        finish_paste = (
+            _temporary_clipboard(text, config) if config.restore_clipboard == "on" else None
+        )
+        if finish_paste is None:
             if cancel_event is not None and cancel_event.is_set():
                 return "cancelled"
             self.copy(text)
-        if not self._field_current(target, unchanged=True):
-            if clipboard:
-                clipboard.finish(False)
-            return "copied"
-        if cancel_event is not None and cancel_event.is_set():
-            if clipboard:
-                clipboard.finish(False)
-            return "cancelled"
+        verified = None
         try:
+            if not self._field_current(target, unchanged=True):
+                return "copied"
+            if cancel_event is not None and cancel_event.is_set():
+                return "cancelled"
             self.paste_key(config)
-        except Exception:
-            if clipboard:
-                clipboard.finish(False)
-            raise
-        result = "paste_requested"
-        if getattr(config, "verify_paste", "on") == "on":
-            expected = expected_text(field, text)
-            deadline = time.monotonic() + 0.8
-            for _ in range(3):
-                current = read_snapshot(field)
-                current_text = current.get("text") if current else None
-                if (
-                    current
-                    and current.get("field_id") == field["field_id"]
-                    and current.get("focused")
-                    and isinstance(current_text, str)
-                    and current_text == expected
-                    and current.get("text_start", 0) == field.get("text_start", 0)
-                    and current.get("character_count", len(current_text))
-                    == (
-                        field.get("character_count", len(field["text"]))
-                        + len(text)
-                        - (field["selection_end"] - field["selection_start"])
-                    )
-                ):
-                    self.last_verified = current
-                    result = "pasted"
-                    break
-                if time.monotonic() >= deadline:
-                    break
-                time.sleep(0.05)
-        if clipboard:
-            clipboard.finish(result == "pasted")  # Never restore before text consumption is proven.
-        return result
+            if config.verify_paste == "on":
+                verified = _verify_field_paste(field, text)
+                self.last_verified = verified
+            return "pasted" if verified is not None else "paste_requested"
+        finally:
+            if finish_paste:
+                finish_paste(verified is not None)
 
-    def target_metadata(self, target):
+    def target_metadata(self, target: Target) -> dict[str, str]:
         if isinstance(target, dict):
-            metadata = self.target_metadata(target.get("window"))
-            if not metadata.get("app") and target.get("field", {}).get("app"):
-                metadata["app"] = target["field"]["app"]
+            metadata = desktop_input.window_metadata(target.get("window"))
+            field = target.get("field")
+            app = field.get("app") if field else None
+            if not metadata.get("app") and isinstance(app, str) and app:
+                metadata["app"] = app
             return metadata
-        if session() == "wayland" and isinstance(target, str):
-            try:
-                if target.startswith("sway:") and re.fullmatch(r"\d+", target[5:]):
-                    pending = [json.loads(run(["swaymsg", "-t", "get_tree", "-r"]).stdout)]
-                    while pending:
-                        node = pending.pop()
-                        if node.get("id") == int(target[5:]):
-                            return {
-                                "app": str(
-                                    node.get("app_id")
-                                    or node.get("window_properties", {}).get("class")
-                                    or ""
-                                )[:200],
-                                "window": str(node.get("name") or "")[:1000],
-                            }
-                        pending.extend(node.get("nodes", []) + node.get("floating_nodes", []))
-                elif target.startswith("hypr:") and re.fullmatch(r"0x[\da-fA-F]+", target[5:]):
-                    clients = json.loads(run(["hyprctl", "clients", "-j"]).stdout)
-                    node = next((node for node in clients if node.get("address") == target[5:]), {})
-                    return {
-                        "app": str(node.get("class") or "")[:200],
-                        "window": str(node.get("title") or "")[:1000],
-                    }
-            except (
-                OSError,
-                RuntimeError,
-                ValueError,
-                KeyError,
-                TypeError,
-                subprocess.SubprocessError,
-            ):
-                return {}
-        if session() != "x11" or not target or not re.fullmatch(r"(?:0x[\da-fA-F]+|\d+)", target):
-            return {}
-        try:
-            output = run(["xprop", "-id", target, "WM_CLASS", "_NET_WM_NAME", "WM_NAME"])
-        except (OSError, RuntimeError, subprocess.SubprocessError):
-            return {}
-        values = {}
-        for line in output.stdout.decode(errors="replace").splitlines():
-            key = line.split("(", 1)[0]
-            quoted = re.findall(r'"((?:\\.|[^"\\])*)"', line)
-            if quoted:
-                values[key] = quoted[-1].replace(r"\"", '"').replace(r"\\", "\\")
-        return {
-            "app": values.get("WM_CLASS", "")[:200],
-            "window": values.get("_NET_WM_NAME", values.get("WM_NAME", ""))[:1000],
-        }
+        return desktop_input.window_metadata(target)
 
-    def window_class(self, target):
-        if session() != "x11" or not target:
-            return None
-        try:
-            value = run(["xprop", "-id", str(target), "WM_CLASS"]).stdout.decode().lower()
-            return value if "=" in value else None
-        except (OSError, RuntimeError, subprocess.SubprocessError):
-            return None
-
-    def terminal(self, target):
+    def terminal(self, target: Target) -> bool | None:
         if isinstance(target, dict):
             field = target.get("field", {})
-            if field.get("terminal") or terminal_name(field.get("app", "")):
+            app = field.get("app")
+            if field.get("terminal") or (isinstance(app, str) and terminal_name(app)):
                 return True
             return self.terminal(target.get("window"))
         value = (
             self.target_metadata(target).get("app", "").lower()
-            if session() == "wayland"
-            else self.window_class(target)
+            if desktop_input.session() == "wayland"
+            else desktop_input.window_class(target)
         )
         if value is None:
             return None
         return terminal_name(value)
 
-    def focus(self):
-        if session() == "wayland":
-            try:
-                if os.environ.get("SWAYSOCK"):
-                    tree = json.loads(run(["swaymsg", "-t", "get_tree", "-r"]).stdout)
-                    pending = [tree]
-                    while pending:
-                        node = pending.pop()
-                        if node.get("focused") and node.get("type") == "con":
-                            return f"sway:{int(node['id'])}"
-                        pending.extend(node.get("nodes", []) + node.get("floating_nodes", []))
-                elif os.environ.get("HYPRLAND_INSTANCE_SIGNATURE"):
-                    window = json.loads(run(["hyprctl", "activewindow", "-j"]).stdout)
-                    address = window.get("address", "")
-                    if re.fullmatch(r"0x[0-9a-fA-F]+", address) and address != "0x0":
-                        return f"hypr:{address}"
-            except (
-                OSError,
-                RuntimeError,
-                ValueError,
-                KeyError,
-                TypeError,
-                subprocess.SubprocessError,
-            ):
-                pass
-            return None
-        if session() != "x11":
-            return None
-        try:
-            return run(["xdotool", "getwindowfocus"]).stdout.decode().strip() or None
-        except (RuntimeError, subprocess.TimeoutExpired):
-            return None
+    def focus(self) -> str | None:
+        return desktop_input.focus()
 
-    def copy(self, text: str):
-        desktop = session()
-        if desktop == "wayland":
-            # wl-copy forks to own the selection; never use --paste-once (XWayland reads twice).
-            args = ["wl-copy", "--type", "text/plain;charset=utf-8"]
-        elif desktop == "x11":
-            args = ["xclip", "-selection", "clipboard", "-in"]
-        else:
-            raise RuntimeError("No desktop session; transcript saved in history")
-        # The owner outlives the launcher. An inherited pipe can keep run() waiting for EOF.
-        try:
-            subprocess.run(  # noqa: S603
-                args,
-                input=text.encode(),
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                check=True,
-                timeout=3,
-            )
-        except FileNotFoundError as exc:
-            raise RuntimeError(f"Install {args[0]} (see linux/README.md)") from exc
+    def copy(self, text: str) -> None:
+        desktop_input.copy(text)
 
-    def paste_key(self, config: Config):
-        backend = config.paste_backend
-        if backend == "auto":
-            if session() != "x11":
-                raise ValueError("Wayland: use your normal paste key, or configure wtype/ydotool")
-            backend = "xdotool"
-        shifted = config.paste_shortcut == "ctrl+shift+v"
-        if backend == "xdotool":
-            if session() != "x11":
-                raise ValueError("xdotool cannot paste into native Wayland apps")
-            run(["xdotool", "key", "--clearmodifiers", config.paste_shortcut])
-        elif backend == "wtype":
-            args = ["wtype", "-M", "ctrl"]
-            if shifted:
-                args += ["-M", "shift"]
-            args += ["-k", "v"]
-            if shifted:
-                args += ["-m", "shift"]
-            run(args + ["-m", "ctrl"])
-        else:
-            keys = ["29:1"] + (["42:1"] if shifted else []) + ["47:1", "47:0"]
-            run(["ydotool", "key", *keys, *(["42:0"] if shifted else []), "29:0"])
+    def paste_key(self, config: Config) -> None:
+        desktop_input.paste_key(config)
 
-    def deliver(self, text: str, config: Config, target: str | dict | None):
+    def deliver(self, text: str, config: Config, target: Target) -> str:
         if isinstance(target, dict):
             return self._deliver_field(text, config, target)
         if config.destination_guard == "field":
@@ -413,217 +258,124 @@ class Delivery:
         if (
             direct
             and config.delivery == "x11"
-            and session() == "x11"
+            and desktop_input.session() == "x11"
             and target
             and all(char.isprintable() for char in text)
             and self.focus() == target
             and self.terminal(target) is False
         ) and self.focus() == target:
-            run(
-                ["xdotool", "type", "--clearmodifiers", "--delay", "0", "--file", "-"],
-                input=text.encode(),
-            )
+            desktop_input.type_x11(text)
             if getattr(config, "copy_to_clipboard", "on") == "on":
                 self.copy(text)
             return "insert_requested"
-        if (
-            config.delivery == "wayland"
-            and session() == "wayland"
-            and target
-            and target.startswith(("sway:", "hypr:"))
+        desktop = desktop_input.session()
+        if config.delivery == desktop and (
+            desktop == "x11"
+            or (desktop == "wayland" and target and target.startswith(("sway:", "hypr:")))
         ):
-            clipboard = None
-            if config.restore_clipboard == "on" and self.focus() == target:
-                from .clipboard import ClipboardPaste
+            return self._paste_window(text, config, target, desktop=desktop)
+        self.copy(text)
+        return "copied"
 
-                try:
-                    clipboard = ClipboardPaste(
-                        text,
-                        delay_ms=config.clipboard_restore_delay_ms,
-                        exclude_history=config.clipboard_exclude_history == "on",
-                    )
-                except (OSError, RuntimeError, subprocess.SubprocessError):
-                    pass
-            if clipboard is None:
-                self.copy(text)
-            if self.focus() != target:
-                if clipboard:
-                    clipboard.finish(False)
-                return "copied"
-            time.sleep(0.15)
-            if self.focus() != target:
-                if clipboard:
-                    clipboard.finish(False)
-                return "copied"
-            try:
-                self.paste_key(config)
-            except Exception:
-                if clipboard:
-                    clipboard.finish(False)
-                raise
-            if clipboard:
-                clipboard.finish(True)
-            return "paste_requested"
-        clipboard = None
+    def _paste_window(
+        self, text: str, config: Config, target: str | None, *, desktop: desktop_input.Session
+    ) -> str:
+        finish_paste = None
         if (
-            getattr(config, "restore_clipboard", "off") == "on"
-            and config.delivery == "x11"
-            and session() == "x11"
+            config.restore_clipboard == "on"
+            and desktop_input.session() == desktop
             and target
             and self.focus() == target
         ):
-            from .clipboard import ClipboardPaste
-
-            try:
-                clipboard = ClipboardPaste(
-                    text,
-                    delay_ms=getattr(config, "clipboard_restore_delay_ms", 500),
-                    exclude_history=getattr(config, "clipboard_exclude_history", "on") == "on",
-                )
-            except (OSError, RuntimeError, subprocess.SubprocessError):
-                pass  # Snapshot failure falls back to ordinary, recoverable clipboard delivery.
-        if clipboard is None:
+            finish_paste = _temporary_clipboard(text, config)
+        if finish_paste is None:
             self.copy(text)
-        if config.delivery != "x11":
-            return "copied"
-        if session() != "x11" or target is None or self.focus() != target:
-            if clipboard:
-                clipboard.finish(False)
-            return "copied"
-        # Let the selection owner become ready, then recheck without activating any window.
-        time.sleep(0.15)
-        if self.focus() != target:
-            if clipboard:
-                clipboard.finish(False)
-            return "copied"
+        requested = False
         try:
+            if desktop_input.session() != desktop or target is None or self.focus() != target:
+                return "copied"
+            # Let the selection owner become ready, then recheck without activating any window.
+            time.sleep(0.15)
+            if self.focus() != target:
+                return "copied"
             self.paste_key(config)
-        except Exception:
-            if clipboard:
-                clipboard.finish(False)
-            raise
-        if clipboard:
-            clipboard.finish(True)
-        return "paste_requested"  # Key injection cannot prove the destination consumed the text.
+            requested = True
+            # Key injection cannot prove the destination consumed the text.
+            return "paste_requested"
+        finally:
+            if finish_paste:
+                finish_paste(requested)
 
     def send_key(
         self,
         config: Config,
-        target: str | dict | None,
-        before_send=None,
-        allow_without_insert=False,
-    ):
+        target: Target,
+        before_send: Callable[[], bool] | None = None,
+        *,
+        allow_without_insert: bool = False,
+    ) -> bool:
         """Require captured field identity unless weaker window checks were explicitly chosen."""
         if config.spoken_send != "on":
             return False
         if isinstance(target, dict):
-            terminal = self.terminal(target)
-            if target.get("window") and self.focus() != target["window"]:
-                return False
-            # Field/caret probe must be last: metadata and compositor queries can stall.
-            current = self._field_current(target)
-            verified = (
-                target["field"] if allow_without_insert else getattr(self, "last_verified", None)
+            return self._send_with_field(
+                config, target, before_send, allow_without_insert=allow_without_insert
             )
-            if (
-                not current
-                or not verified
-                or current.get("protected") is not False
-                or verified.get("protected") is not False
-                or type(verified.get("caret")) is not int
-                or current["field_id"] != verified["field_id"]
-                or current["text"] != verified["text"]
-                or current.get("caret") != verified.get("caret")
-                or current.get("selection_start") != verified.get("caret")
-                or current.get("selection_end") != verified.get("caret")
-                or verified.get("selection_start") != verified.get("caret")
-                or verified.get("selection_end") != verified.get("caret")
-                or any(
-                    current.get(key) != verified.get(key)
-                    for key in ("text_start", "character_count", "complete")
-                )
-            ):
-                return False
-            if session() == "wayland":
-                return self._wayland_send(config, terminal=terminal, before_send=before_send)
-            if session() == "x11":
-                return self._x11_send(config, terminal=terminal, before_send=before_send)
-            return False
         if config.destination_guard == "field":
             return False
         if (
-            session() == "wayland"
+            desktop_input.session() == "wayland"
             and config.delivery == "wayland"
             and isinstance(target, str)
             and target.startswith(("sway:", "hypr:"))
             and self.focus() == target
         ):
             terminal = self.terminal(target)
-            if self.focus() != target:
-                return False
-            return self._wayland_send(config, terminal=terminal, before_send=before_send)
-        if session() != "x11" or not target or self.focus() != target:
+            return self.focus() == target and desktop_input.send_wayland(
+                config, terminal=terminal, before_send=before_send
+            )
+        if desktop_input.session() != "x11" or not target or self.focus() != target:
             return False
         terminal = self.terminal(target)
-        if self.focus() != target:
+        return self.focus() == target and desktop_input.send_x11(
+            config, terminal=terminal, before_send=before_send
+        )
+
+    def _send_with_field(
+        self,
+        config: Config,
+        target: CapturedField,
+        before_send: Callable[[], bool] | None,
+        *,
+        allow_without_insert: bool,
+    ) -> bool:
+        terminal = self.terminal(target)
+        if target.get("window") and self.focus() != target["window"]:
             return False
-        return self._x11_send(config, terminal=terminal, before_send=before_send)
-
-    def _x11_send(self, config, *, terminal=False, before_send=None):
-        key = "return" if terminal else config.spoken_send_key.lower()
-        keys = {"return": "Return", "shift+return": "shift+Return", "ctrl+return": "ctrl+Return"}
-        if key not in keys:
-            raise ValueError("Unsupported Spoken Send key")
-        if before_send is not None and not before_send():
+        # Field/caret probe must be last: metadata and compositor queries can stall.
+        current = self._field_current(target)
+        verified = target["field"] if allow_without_insert else self.last_verified
+        if (
+            not current
+            or not verified
+            or current.get("protected") is not False
+            or verified.get("protected") is not False
+            or type(verified.get("caret")) is not int
+            or current["field_id"] != verified["field_id"]
+            or current["text"] != verified["text"]
+            or current.get("caret") != verified.get("caret")
+            or current.get("selection_start") != verified.get("caret")
+            or current.get("selection_end") != verified.get("caret")
+            or verified.get("selection_start") != verified.get("caret")
+            or verified.get("selection_end") != verified.get("caret")
+            or any(
+                current.get(key) != verified.get(key)
+                for key in ("text_start", "character_count", "complete")
+            )
+        ):
             return False
-        run(["xdotool", "key", "--clearmodifiers", keys[key]])
-        return True
-
-    def _wayland_send(self, config, *, terminal=False, before_send=None):
-        key = "return" if terminal else config.spoken_send_key
-        modifier = {"return": None, "shift+return": "shift", "ctrl+return": "ctrl"}[key]
-        if config.paste_backend == "wtype":
-            args = ["wtype"] + (["-M", modifier] if modifier else []) + ["-k", "Return"]
-            if before_send is not None and not before_send():
-                return False
-            run(args + (["-m", modifier] if modifier else []))
-        elif config.paste_backend == "ydotool":
-            code = {"shift": "42", "ctrl": "29"}.get(modifier)
-            keys = ([code + ":1"] if code else []) + ["28:1", "28:0"]
-            if before_send is not None and not before_send():
-                return False
-            run(["ydotool", "key", *keys, *([code + ":0"] if code else [])])
-        else:
-            return False
-        return True
-
-
-def doctor(config: Config):
-    desktop = session()
-    required = ["ffmpeg"]
-    if desktop == "wayland":
-        required += ["wl-copy"]
-    elif desktop == "x11":
-        required += ["xclip"]
-        if config.delivery == "x11" or config.paste_backend in ("auto", "xdotool"):
-            required += ["xdotool"]
-    if config.paste_backend in ("wtype", "ydotool"):
-        required += [config.paste_backend]
-    if getattr(config, "insertion_mode", "clipboard") == "direct":
-        required += ["xprop"]
-    if getattr(config, "pause_media", "off") == "on":
-        required += ["playerctl"]
-    if (
-        getattr(config, "sound_file", "")
-        or getattr(config, "sound_stop_file", "")
-        or getattr(config, "sound_preset", "custom") == "mouthkeys"
-    ):
-        required += ["paplay"]
-    return {
-        "session": desktop,
-        "commands": {name: shutil.which(name) for name in required},
-        "audio_source": config.audio_source,
-        "model": config.model,
-        "delivery": config.delivery,
-        "delivery_warning": automatic_delivery_warning(config),
-    }
+        if desktop_input.session() == "wayland":
+            return desktop_input.send_wayland(config, terminal=terminal, before_send=before_send)
+        if desktop_input.session() == "x11":
+            return desktop_input.send_x11(config, terminal=terminal, before_send=before_send)
+        return False

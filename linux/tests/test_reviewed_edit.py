@@ -3,7 +3,7 @@ import time
 
 import pytest
 
-from mouthkeys import assistance, delivery
+from mouthkeys import assistance, delivery, desktop_input
 from mouthkeys.config import Config
 from mouthkeys.service import Controller
 from mouthkeys.storage import History
@@ -100,7 +100,7 @@ def test_edit_cancellation_at_desktop_boundaries_never_sends_key(monkeypatch, bo
     cancelled = threading.Event()
     target = {"field": {"selection_start": 0, "selection_end": 3}}
     calls = []
-    monkeypatch.setattr(delivery, "session", lambda: "x11")
+    monkeypatch.setattr(desktop_input, "session", lambda: "x11")
 
     def prepare(*_):
         if boundary == "prepare":

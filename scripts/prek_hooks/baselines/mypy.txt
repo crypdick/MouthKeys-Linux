@@ -26,17 +26,13 @@
 1	src/mouthkeys/assistance.py	no-untyped-def	Function is missing a return type annotation
 6	src/mouthkeys/assistance.py	no-untyped-def	Function is missing a type annotation
 1	src/mouthkeys/assistance.py	union-attr	Item "None" of "Any | IO[Any] | None" has no attribute "close"
-4	src/mouthkeys/assistant_history.py	no-untyped-call	Call to untyped function "_mode" of "AssistantHistory" in typed context
-5	src/mouthkeys/assistant_history.py	no-untyped-call	Call to untyped function "get" in typed context
-1	src/mouthkeys/assistant_history.py	no-untyped-call	Call to untyped function "new" in typed context
 1	src/mouthkeys/assistant_history.py	no-untyped-call	Call to untyped function "record_private_execution" in typed context
-1	src/mouthkeys/assistant_history.py	no-untyped-call	Call to untyped function "rows" in typed context
 1	src/mouthkeys/assistant_history.py	no-untyped-call	Call to untyped function "validate_entries" of "AssistantHistory" in typed context
 3	src/mouthkeys/assistant_history.py	no-untyped-call	Call to untyped function "validate_execution" in typed context
 5	src/mouthkeys/assistant_history.py	no-untyped-call	Call to untyped function "validate_executions" in typed context
 10	src/mouthkeys/assistant_history.py	no-untyped-call	Call to untyped function "validate_messages" in typed context
 3	src/mouthkeys/assistant_history.py	no-untyped-def	Function is missing a return type annotation
-19	src/mouthkeys/assistant_history.py	no-untyped-def	Function is missing a type annotation
+12	src/mouthkeys/assistant_history.py	no-untyped-def	Function is missing a type annotation
 1	src/mouthkeys/assistant_history.py	var-annotated	Need type annotation for "result" (hint: "result: list[<type>] = ...")
 1	src/mouthkeys/assistant_ui.py	arg-type	Argument 1 to "dict" has incompatible type "Any | None"; expected "SupportsKeysAndGetItem[Any, Any]"
 1	src/mouthkeys/assistant_ui.py	assignment	Incompatible types in assignment (expression has type "Event", target has type "str")
@@ -53,23 +49,17 @@
 2	src/mouthkeys/assistant_ui.py	no-untyped-call	Call to untyped function "context_messages" in typed context
 1	src/mouthkeys/assistant_ui.py	no-untyped-call	Call to untyped function "current" in typed context
 2	src/mouthkeys/assistant_ui.py	no-untyped-call	Call to untyped function "current_selection" in typed context
-1	src/mouthkeys/assistant_ui.py	no-untyped-call	Call to untyped function "delete" in typed context
 1	src/mouthkeys/assistant_ui.py	no-untyped-call	Call to untyped function "execute_command" in typed context
 1	src/mouthkeys/assistant_ui.py	no-untyped-call	Call to untyped function "generate" in typed context
-2	src/mouthkeys/assistant_ui.py	no-untyped-call	Call to untyped function "get" in typed context
-1	src/mouthkeys/assistant_ui.py	no-untyped-call	Call to untyped function "new" in typed context
 2	src/mouthkeys/assistant_ui.py	no-untyped-call	Call to untyped function "pending_executions" in typed context
 1	src/mouthkeys/assistant_ui.py	no-untyped-call	Call to untyped function "propose" in typed context
 1	src/mouthkeys/assistant_ui.py	no-untyped-call	Call to untyped function "record_execution" in typed context
 1	src/mouthkeys/assistant_ui.py	no-untyped-call	Call to untyped function "record_private_execution" in typed context
 8	src/mouthkeys/assistant_ui.py	no-untyped-call	Call to untyped function "reload_chat" in typed context
-1	src/mouthkeys/assistant_ui.py	no-untyped-call	Call to untyped function "rename" in typed context
 3	src/mouthkeys/assistant_ui.py	no-untyped-call	Call to untyped function "render_conversation" in typed context
 2	src/mouthkeys/assistant_ui.py	no-untyped-call	Call to untyped function "requires_confirmation" in typed context
 4	src/mouthkeys/assistant_ui.py	no-untyped-call	Call to untyped function "reset_proposal" in typed context
-1	src/mouthkeys/assistant_ui.py	no-untyped-call	Call to untyped function "rows" in typed context
 1	src/mouthkeys/assistant_ui.py	no-untyped-call	Call to untyped function "run_command" in typed context
-2	src/mouthkeys/assistant_ui.py	no-untyped-call	Call to untyped function "select" in typed context
 1	src/mouthkeys/assistant_ui.py	no-untyped-call	Call to untyped function "select_prompt" in typed context
 1	src/mouthkeys/assistant_ui.py	no-untyped-call	Call to untyped function "show_proposal" in typed context
 1	src/mouthkeys/assistant_ui.py	no-untyped-call	Call to untyped function "validate_messages" in typed context
@@ -122,22 +112,12 @@
 12	src/mouthkeys/benchmark.py	no-untyped-def	Function is missing a type annotation
 1	src/mouthkeys/benchmark.py	union-attr	Item "None" of "Any | None" has no attribute "close"
 1	src/mouthkeys/benchmark.py	var-annotated	Need type annotation for "seen" (hint: "seen: set[<type>] = ...")
-1	src/mouthkeys/cli.py	assignment	Incompatible types in assignment (expression has type "AssistantHistory", variable has type "FileHistory")
-2	src/mouthkeys/cli.py	attr-defined	"FileHistory" has no attribute "get"
-1	src/mouthkeys/cli.py	attr-defined	"FileHistory" has no attribute "new"
-1	src/mouthkeys/cli.py	attr-defined	"FileHistory" has no attribute "rename"
-1	src/mouthkeys/cli.py	attr-defined	"FileHistory" has no attribute "select"
 1	src/mouthkeys/cli.py	no-untyped-call	Call to untyped function "AssistantHistory" in typed context
-1	src/mouthkeys/cli.py	no-untyped-call	Call to untyped function "apply_startup" in typed context
 1	src/mouthkeys/cli.py	no-untyped-call	Call to untyped function "download_diarization" in typed context
-3	src/mouthkeys/cli.py	no-untyped-call	Call to untyped function "file_progress" in typed context
-2	src/mouthkeys/cli.py	no-untyped-call	Call to untyped function "install_desktop" in typed context
 1	src/mouthkeys/cli.py	no-untyped-call	Call to untyped function "model_catalog" in typed context
-2	src/mouthkeys/cli.py	no-untyped-call	Call to untyped function "read_app_map" in typed context
 1	src/mouthkeys/cli.py	no-untyped-call	Call to untyped function "resolve_profile" in typed context
 1	src/mouthkeys/cli.py	no-untyped-call	Call to untyped function "run_benchmark" in typed context
 1	src/mouthkeys/cli.py	no-untyped-call	Call to untyped function "transcribe_file" in typed context
-5	src/mouthkeys/cli.py	no-untyped-def	Function is missing a type annotation
 3	src/mouthkeys/clipboard.py	no-untyped-call	Call to untyped function "acknowledge" in typed context
 1	src/mouthkeys/clipboard.py	no-untyped-call	Call to untyped function "capture_formats" in typed context
 1	src/mouthkeys/clipboard.py	no-untyped-call	Call to untyped function "main" in typed context
@@ -222,7 +202,6 @@
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "RegionalFillerBanner" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "SetupPage" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "Window" in typed context
-1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "apply_startup" in typed context
 2	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "apply_theme" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "audio_sources" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "create_tray" in typed context
@@ -367,7 +346,6 @@
 2	src/mouthkeys/operations.py	no-untyped-call	Call to untyped function "AssistantHistory" in typed context
 2	src/mouthkeys/operations.py	no-untyped-call	Call to untyped function "_prepare_backup" in typed context
 2	src/mouthkeys/operations.py	no-untyped-call	Call to untyped function "_read_import" in typed context
-1	src/mouthkeys/operations.py	no-untyped-call	Call to untyped function "apply_startup" in typed context
 1	src/mouthkeys/operations.py	no-untyped-call	Call to untyped function "backup_export" in typed context
 1	src/mouthkeys/operations.py	no-untyped-call	Call to untyped function "backup_import" in typed context
 1	src/mouthkeys/operations.py	no-untyped-call	Call to untyped function "export" in typed context
@@ -459,7 +437,6 @@
 1	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "enroll" of "PronunciationStore" in typed context
 1	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "execute_command" in typed context
 1	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "format_text" in typed context
-3	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "get" in typed context
 1	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "handle_action" in typed context
 1	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "pending_executions" in typed context
 2	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "process" in typed context

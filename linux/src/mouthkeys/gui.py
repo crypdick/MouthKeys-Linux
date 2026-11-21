@@ -25,7 +25,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from . import __version__, desktop_input
+from . import __version__, desktop_entry, desktop_input
 from .backup_ui import BackupPage
 from .config import CHOICES, RANGES, Config, config_path, state_dir
 from .control import ensure_daemon, ensure_overlay
@@ -850,9 +850,7 @@ class Window(QWidget):
                 getattr(previous, key) != getattr(updated, key)
                 for key in ("launch_at_startup", "show_window_at_login", "tray")
             ):
-                from .cli import apply_startup
-
-                apply_startup(updated)
+                desktop_entry.apply_startup(updated)
             self.apply_theme()
             self.refresh_regional_offers()
             if previous.hide_from_taskbar != updated.hide_from_taskbar:

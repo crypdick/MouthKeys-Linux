@@ -10,6 +10,7 @@ from dataclasses import asdict
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
+from . import desktop_entry
 from .config import Config
 
 
@@ -319,9 +320,7 @@ def backup_import(history, path, *, app_map=None, expected_sha256=None):
     save_routes(prepared["routes"])
     config.save()
     if migration is None:
-        from .cli import apply_startup
-
-        apply_startup(config)
+        desktop_entry.apply_startup(config)
     if "file_history" in data:
         FileHistory().restore(prepared["file_rows"])
     if "assistant_history" in data:

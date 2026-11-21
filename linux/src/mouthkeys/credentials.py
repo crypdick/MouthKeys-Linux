@@ -8,9 +8,24 @@ https://gnome.pages.gitlab.gnome.org/libsecret/coverage/tool/secret-tool.c.gcov.
 
 import os
 import subprocess
+from typing import Literal, Protocol, runtime_checkable
+
+from .ai_providers import endpoint_url
 
 
-def validate_key(key):
+@runtime_checkable
+class CredentialSettings(Protocol):
+    @property
+    def ai_provider(self) -> str: ...
+
+    @property
+    def ai_endpoint(self) -> str: ...
+
+    @property
+    def ai_key_env(self) -> str: ...
+
+
+def validate_key(key: object) -> str:
     if (
         not isinstance(key, str)
         or len(key) > 4096
@@ -20,9 +35,7 @@ def validate_key(key):
     return key
 
 
-def _attributes(config):
-    from .ai_providers import endpoint_url
-
+def _attributes(config: CredentialSettings) -> list[str]:
     return [
         "application",
         "mouthkeys-linux",
@@ -33,7 +46,12 @@ def _attributes(config):
     ]
 
 
-def _run(config, action, *, secret=None):
+def _run(
+    config: CredentialSettings,
+    action: Literal["lookup", "store", "clear"],
+    *,
+    secret: str | None = None,
+) -> bytes:
     args = ["secret-tool", action]
     if action == "store":
         args += ["--label=MouthKeys AI API key"]
@@ -60,20 +78,21 @@ def _run(config, action, *, secret=None):
                 "No accessible API key for this endpoint; save or unlock it in Settings"
             )
         raise RuntimeError("Keyring operation failed; unlock your desktop keyring")
-    return result.stdout if action == "lookup" else None
+    return result.stdout if action == "lookup" else b""
 
 
-def store_key(config, key):
-    if not validate_key(key):
+def store_key(config: CredentialSettings, key: object) -> None:
+    key = validate_key(key)
+    if not key:
         raise ValueError("Provide a nonempty API key")
     _run(config, "store", secret=key)
 
 
-def delete_key(config):
+def delete_key(config: CredentialSettings) -> None:
     _run(config, "clear")
 
 
-def api_key(config):
+def api_key(config: CredentialSettings) -> str:
     if getattr(config, "ai_credential_source", "environment") == "secret-service":
         raw = _run(config, "lookup")
         try:

@@ -4,6 +4,16 @@ import locale
 import os
 import re
 from pathlib import Path
+from typing import TypedDict
+
+from .config import Config
+
+
+class RegionalOffer(TypedDict):
+    region: str
+    word: str
+    message: str
+
 
 UPSTREAM_FILLERS = "um,uh,er,ah,eh,umm,uhh,err,ahh,ehh,hmm,hm,mm,mmm,erm,urm,ugh"
 CANADIAN_ZONES = {
@@ -53,7 +63,7 @@ CENTRAL_ZONES = {
     "US/Central",
 }
 # First match wins, including when system region and time zone disagree.
-REGIONS = (
+REGIONS: tuple[tuple[str, str, set[str], set[str], str], ...] = (
     (
         "canada",
         "eh",
@@ -109,7 +119,13 @@ _MINNESOTAN = re.compile(
 )
 
 
-def region_offer(config, *, region=None, zone=None, dictation=None):
+def region_offer(
+    config: Config,
+    *,
+    region: str | None = None,
+    zone: str | None = None,
+    dictation: str | None = None,
+) -> RegionalOffer | None:
     if config.regional_filler_answered == "on" or config.remove_filler_words != "on":
         return None
     if region is None:
@@ -122,12 +138,15 @@ def region_offer(config, *, region=None, zone=None, dictation=None):
         if "/zoneinfo/" in zone:
             zone = zone.split("/zoneinfo/", 1)[-1]
     fillers = {part.strip().casefold() for part in config.filler_words.split(",")}
-    for name, word, region_codes, zones, message in REGIONS:
+    for name, word, region_codes, zones, default_message in REGIONS:
         if region in region_codes or zone in zones:
             # Match region first; do not fall through if its word is already kept.
             if word not in fillers:
                 return None
-            if name == "minnesota" and _MINNESOTAN.search(dictation or ""):
-                message = 'Ope, sounds like Minnesota. Keep "eh" in your transcripts?'
+            message = (
+                'Ope, sounds like Minnesota. Keep "eh" in your transcripts?'
+                if name == "minnesota" and _MINNESOTAN.search(dictation or "")
+                else default_message
+            )
             return {"region": name, "word": word, "message": message}
     return None

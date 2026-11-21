@@ -4,6 +4,7 @@ import fcntl
 import os
 import threading
 import time
+from collections.abc import Iterator
 from contextlib import contextmanager
 
 from .config import config_path, private_dir
@@ -14,7 +15,7 @@ LOCK_TIMEOUT = 3.0
 
 
 @contextmanager
-def dictionary_lock():
+def dictionary_lock() -> Iterator[None]:
     # Reentrant in one thread; acquiring another flock descriptor would deadlock.
     if not _LOCK.acquire(timeout=LOCK_TIMEOUT):
         raise TimeoutError("Dictionary is busy; retry after the current operation")

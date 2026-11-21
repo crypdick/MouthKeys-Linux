@@ -14,7 +14,7 @@ from mouthkeys.routing import save_routes, select_prompt
 from mouthkeys.service import Controller
 from mouthkeys.storage import History
 
-from .test_pipeline import FakeDelivery, FakeRecorder, FakeTranscriber, finish
+from .pipeline_support import FakeDelivery, FakeRecorder, FakeTranscriber, finish
 
 
 def profiles():

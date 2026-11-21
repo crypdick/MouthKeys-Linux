@@ -5,9 +5,9 @@ import pytest
 from mouthkeys.assistant_history import AssistantHistory, pending_executions
 from mouthkeys.config import Config, state_dir
 
+from .pipeline_support import finish
 from .test_assistant_history import receipt, turn
 from .test_assistant_sessions import controller, proposal
-from .test_pipeline import finish
 
 
 @pytest.mark.parametrize("fail", [False, True])

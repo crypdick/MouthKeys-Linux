@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 MODIFIERS = {"shift": 1, "ctrl": 4, "control": 4, "alt": 8, "super": 64, "meta": 64, "win": 64}
 
 
-def parse_chord(value):
+def parse_chord(value: str) -> tuple[int, str]:
     if value.endswith("++"):
         value = value[:-1] + "plus"
     parts = [part.strip().lower() for part in value.split("+")]

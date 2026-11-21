@@ -77,6 +77,12 @@ role = "desktop"
 public_modules = ["mouthkeys.desktop"]
 
 [[packages]]
+name = "x11_shortcuts"
+root = "mouthkeys.x11_shortcuts"
+role = "desktop"
+public_modules = ["mouthkeys.x11_shortcuts"]
+
+[[packages]]
 name = "accessibility"
 root = "mouthkeys.accessibility"
 role = "desktop"

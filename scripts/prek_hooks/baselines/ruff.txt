@@ -1300,38 +1300,8 @@
 1	src/mouthkeys/tray.py	ANN202	Missing return type annotation for private function `settled`
 1	src/mouthkeys/tray.py	ANN204	Missing return type annotation for special method `__init__`
 2	src/mouthkeys/tray.py	PLC0415	`import` should be at the top-level of a file
-4	src/mouthkeys/upstream_backup.py	ANN001	Missing type annotation for function argument `app_map`
-2	src/mouthkeys/upstream_backup.py	ANN001	Missing type annotation for function argument `base_config`
-2	src/mouthkeys/upstream_backup.py	ANN001	Missing type annotation for function argument `current_dictionary`
-2	src/mouthkeys/upstream_backup.py	ANN001	Missing type annotation for function argument `current_profiles`
-2	src/mouthkeys/upstream_backup.py	ANN001	Missing type annotation for function argument `current_routes`
-4	src/mouthkeys/upstream_backup.py	ANN001	Missing type annotation for function argument `document`
-1	src/mouthkeys/upstream_backup.py	ANN001	Missing type annotation for function argument `field`
-1	src/mouthkeys/upstream_backup.py	ANN001	Missing type annotation for function argument `limit`
-2	src/mouthkeys/upstream_backup.py	ANN001	Missing type annotation for function argument `name`
-3	src/mouthkeys/upstream_backup.py	ANN001	Missing type annotation for function argument `path`
-1	src/mouthkeys/upstream_backup.py	ANN001	Missing type annotation for function argument `reason`
-1	src/mouthkeys/upstream_backup.py	ANN001	Missing type annotation for function argument `settings`
-3	src/mouthkeys/upstream_backup.py	ANN001	Missing type annotation for function argument `value`
-1	src/mouthkeys/upstream_backup.py	ANN001	Missing type annotation for function argument `with_digest`
-1	src/mouthkeys/upstream_backup.py	ANN201	Missing return type annotation for public function `convert_upstream_backup`
-1	src/mouthkeys/upstream_backup.py	ANN201	Missing return type annotation for public function `load_upstream_backup`
-1	src/mouthkeys/upstream_backup.py	ANN201	Missing return type annotation for public function `preview_upstream_backup`
-1	src/mouthkeys/upstream_backup.py	ANN201	Missing return type annotation for public function `read_backup`
-1	src/mouthkeys/upstream_backup.py	ANN202	Missing return type annotation for private function `_aliases`
-1	src/mouthkeys/upstream_backup.py	ANN202	Missing return type annotation for private function `_convert_upstream_backup`
-1	src/mouthkeys/upstream_backup.py	ANN202	Missing return type annotation for private function `_date`
-1	src/mouthkeys/upstream_backup.py	ANN202	Missing return type annotation for private function `_list`
-1	src/mouthkeys/upstream_backup.py	ANN202	Missing return type annotation for private function `_provider`
-1	src/mouthkeys/upstream_backup.py	ANN202	Missing return type annotation for private function `_text`
-1	src/mouthkeys/upstream_backup.py	ANN202	Missing return type annotation for private function `skip`
-1	src/mouthkeys/upstream_backup.py	C901	`_convert_upstream_backup` is too complex (68 > 15)
-1	src/mouthkeys/upstream_backup.py	FURB162	Unnecessary timezone replacement with zero offset
-1	src/mouthkeys/upstream_backup.py	PLC0415	`import` should be at the top-level of a file
-1	src/mouthkeys/upstream_backup.py	PLR0912	Too many branches (66 > 12)
 2	src/mouthkeys/upstream_backup.py	PLR0913	Too many arguments in function definition (6 > 5)
-1	src/mouthkeys/upstream_backup.py	PLR0915	Too many statements (209 > 50)
-6	src/mouthkeys/upstream_backup.py	TRY004	Prefer `TypeError` exception for invalid type
+2	src/mouthkeys/upstream_backup.py	TRY004	Prefer `TypeError` exception for invalid type
 3	src/mouthkeys/vocabulary.py	ANN001	Missing type annotation for function argument `config`
 2	src/mouthkeys/vocabulary.py	ANN001	Missing type annotation for function argument `entries`
 1	src/mouthkeys/vocabulary.py	ANN001	Missing type annotation for function argument `text`

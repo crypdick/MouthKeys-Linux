@@ -4,5 +4,4 @@
 696	linux/src/mouthkeys/native_asr.py
 540	linux/src/mouthkeys/overlay.py
 1518	linux/src/mouthkeys/service.py
-544	linux/src/mouthkeys/upstream_backup.py
 488	linux/tests/smoke_native.py

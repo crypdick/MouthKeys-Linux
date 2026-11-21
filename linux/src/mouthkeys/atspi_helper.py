@@ -203,6 +203,10 @@ def find_focused(bus):
         try:
             role = bus.call(ref, ACCESSIBLE, "GetRole")[0]
             if role == bus.password_role:
+                states = bus.call(ref, ACCESSIBLE, "GetState")[0]
+                if has_state(states, bus.focused_state) and active_window(bus, ref) is True:
+                    # Report that fallback is unsafe without reading any password data.
+                    return {"protected": True}
                 continue
             value = snapshot(bus, ref)
             if value and value.get("foreground") is True:

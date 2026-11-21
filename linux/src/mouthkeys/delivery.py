@@ -89,7 +89,9 @@ class Delivery:
         from .accessibility import read_snapshot
 
         before = self.focus()
-        field = read_snapshot() if session() != "headless" else None
+        field = read_snapshot(include_protected=True) if session() != "headless" else None
+        if field and field.get("protected"):
+            return None
         if field and field.get("foreground") is not True:
             field = None
         after = self.focus()

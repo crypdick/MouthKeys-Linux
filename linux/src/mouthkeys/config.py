@@ -40,7 +40,7 @@ class Config:
     compute_type: str = "default"
     audio_source: str = "default"
     delivery: str = "clipboard"
-    destination_guard: str = "field"
+    destination_guard: str = "field_then_window"
     paste_backend: str = "auto"
     paste_shortcut: str = "ctrl+shift+v"
     max_seconds: int = 300
@@ -156,6 +156,11 @@ class Config:
     regional_filler_answered: str = "off"
     pronunciation_span_budget: int = 2000
 
+    def __post_init__(self):
+        if self.destination_guard == "window":
+            # Saved settings, backups, and CLI scripts may still use the old name.
+            object.__setattr__(self, "destination_guard", "field_then_window")
+
     def validate(self):
         for key, value in asdict(self).items():
             if key in RANGES:
@@ -248,7 +253,7 @@ OPTIONAL = {
     "filler_words",
 }
 CHOICES = {
-    "destination_guard": ["field", "window"],
+    "destination_guard": ["field_then_window", "field"],
     "ai_credential_source": ["environment", "secret-service"],
     "command_confirm": ["on", "destructive", "off"],
     "file_diarization_mode": ["turns", "overlap"],

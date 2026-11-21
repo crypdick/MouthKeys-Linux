@@ -339,7 +339,7 @@ class Overlay(QWidget):
             self.show()  # Never activate or raise the destination app.
         if not active and self.active:
             message = data.get("message", "")
-            success = message.startswith(("Copied —", "Paste requested —"))
+            success = message.startswith(("Copied —", "Paste requested —", "Insertion requested —"))
             self.dismiss_at = time.monotonic() + (0.6 if success else 10)
             if message == "Cancelled":
                 self.dismiss_at = 0

@@ -249,6 +249,7 @@ def main(argv=None):
                 config[args.key] = int(args.value) if args.key in RANGES else args.value
                 updated = Config(**config)
                 updated.save()
+                config = asdict(updated)
                 if args.key in ("delivery", "paste_backend", "insertion_mode"):
                     from .delivery import automatic_delivery_warning
 

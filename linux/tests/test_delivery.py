@@ -18,7 +18,7 @@ def test_x11_auto_paste_reports_missing_default_backend(monkeypatch):
 
 
 @pytest.mark.parametrize("desktop,target", [("x11", "10"), ("wayland", "sway:42")])
-def test_default_guard_never_delivers_or_sends_to_window_only_identity(
+def test_strict_field_guard_never_delivers_or_sends_to_window_only_identity(
     monkeypatch, desktop, target
 ):
     monkeypatch.setattr(delivery, "session", lambda: desktop)
@@ -28,7 +28,7 @@ def test_default_guard_never_delivers_or_sends_to_window_only_identity(
     monkeypatch.setattr(adapter, "focus", lambda: target)
     monkeypatch.setattr(adapter, "paste_key", lambda cfg: pytest.fail("Window-only paste"))
     monkeypatch.setattr(delivery, "run", lambda *a, **kw: pytest.fail("Window-only Send"))
-    config = Config(delivery=desktop, spoken_send="on")
+    config = Config(delivery=desktop, destination_guard="field", spoken_send="on")
     assert adapter.deliver("retained", config, target) == "copied"
     assert not adapter.send_key(config, target, allow_without_insert=True)
     assert calls == ["retained"]
@@ -72,10 +72,7 @@ def test_x11_focus_guard(monkeypatch, focuses, target, expected):
     monkeypatch.setattr(adapter, "focus", lambda: next(focus))
     monkeypatch.setattr(adapter, "copy", lambda text: calls.append("copy"))
     monkeypatch.setattr(adapter, "paste_key", lambda _: calls.append("paste"))
-    assert (
-        adapter.deliver("hello", Config(destination_guard="window", delivery="x11"), target)
-        == expected
-    )
+    assert adapter.deliver("hello", Config(delivery="x11"), target) == expected
     assert calls == (["copy", "paste"] if expected == "paste_requested" else ["copy"])
 
 

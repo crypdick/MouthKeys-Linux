@@ -4,22 +4,25 @@ X11 uses passive grabs, never polling every key. Portal uses system-managed
 GlobalShortcuts; running that backend explicitly may open its consent dialog.
 """
 
-import ctypes
-import ctypes.util
 import fcntl
 import logging
 import os
 import pathlib
 import queue
 import re
-import select
 import signal
 import subprocess
 import threading
 import time
+from collections.abc import Mapping
+from types import FrameType
+from typing import Protocol, cast, runtime_checkable
 
+from . import profiles
 from .config import Config, runtime_dir, state_dir
+from .control import ensure_daemon, request
 from .processes import python_command
+from .x11_shortcuts import ShortcutBinding, ShortcutEvent, X11Grabs
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +33,7 @@ def parse_chord(value: str) -> tuple[int, str]:
     if value.endswith("++"):
         value = value[:-1] + "plus"
     parts = [part.strip().lower() for part in value.split("+")]
-    if not parts or not parts[-1] or any(part not in MODIFIERS for part in parts[:-1]):
+    if not parts[-1] or any(part not in MODIFIERS for part in parts[:-1]):
         raise ValueError(f"Invalid shortcut: {value}")
     key = parts[-1]
     if not re.fullmatch(r"[a-z0-9_-]+", key):
@@ -66,272 +69,173 @@ def parse_chord(value: str) -> tuple[int, str]:
     }.get(key, key.upper() if re.fullmatch(r"f\d+", key) else key)
 
 
-def bindings(config):
-    result = []
-    for action, value in (
+def bindings(config: Config) -> list[ShortcutBinding]:
+    configured = [
         ("toggle", config.toggle_shortcut),
         ("cancel", config.cancel_shortcut),
         ("paste", config.paste_shortcut_key),
-        ("command", getattr(config, "command_shortcut_key", "")),
-        ("edit", getattr(config, "edit_shortcut_key", "")),
-    ):
-        for chord in value.split(","):
-            if chord.strip():
-                result.append((action, *parse_chord(chord)))
-    from .profiles import load_profiles
-
-    for profile in load_profiles():
-        for chord in profile.get("shortcut", "").split(","):
-            if chord.strip():
-                result.append(("profile:" + profile["id"], *parse_chord(chord)))
-    keys = [(mask, key) for _, mask, key in result]
-    if len(set(keys)) != len(keys):
+        ("command", config.command_shortcut_key),
+        ("edit", config.edit_shortcut_key),
+        *(
+            (f"profile:{profile['id']}", profile["shortcut"])
+            for profile in profiles.load_profiles()
+        ),
+    ]
+    result = [
+        (action, *parse_chord(chord))
+        for action, value in configured
+        for chord in value.split(",")
+        if chord.strip()
+    ]
+    keys = {(mask, key) for _, mask, key in result}
+    if len(keys) != len(result):
         raise ValueError("Two actions cannot share the same shortcut")
     return result
+
+
+@runtime_checkable
+class ShortcutSender(Protocol):
+    def __call__(self, action: str, **fields: object) -> object: ...
 
 
 class Activation:
     """Serial commands preserve start-before-stop even when microphone startup is slow."""
 
-    def __init__(self, mode, send):
+    def __init__(self, mode: str, send: ShortcutSender) -> None:
         self.mode, self.send = mode, send
-        self.pressed = {}
+        self.pressed: set[str] = set()
+        self.primary: set[str] = set()
+        self.primary_at = 0.0
         self.started = False
-        self.primary = set()
-        self.primary_at = 0
-        self.recording_id = None
+        self.recording_id: str | None = None
 
-    def event(self, action, down, when, token=None):
-        token = token or action
+    def event(self, action: str, down: bool, when: float, token: str | None = None) -> None:  # noqa: FBT001 - ordered shortcut event fields
+        key = token or action
         if down:
-            if token in self.pressed:
-                return
-            self.pressed[token] = when
-            recording = action in ("toggle", "command", "edit") or action.startswith("profile:")
-            if not recording:
-                self.send(action)
-            else:
-                self.primary.add(token)
-                if len(self.primary) > 1:
-                    return
-                self.primary_at = when
-                options = {}
-                if action.startswith("profile:"):
-                    options["profile"] = action.split(":", 1)[1]
-                elif action in ("command", "edit"):
-                    options["mode"] = action
-                if self.mode in ("hold", "automatic"):
-                    options["held"] = True
-                result = self.send("start" if self.mode == "hold" else "toggle", **options)
-                self.started = result.get("phase") == "recording"
-                self.recording_id = result.get("id")
-        elif token in self.pressed:
-            self.pressed.pop(token)
-            duration = when - self.primary_at
-            self.primary.discard(token)
-            recording = action in ("toggle", "command", "edit") or action.startswith("profile:")
-            if recording and self.primary:
-                return
-            if (
-                recording
-                and self.started
-                and (self.mode == "hold" or (self.mode == "automatic" and duration >= 0.25))
-            ):
-                self.send("stop", **({"id": self.recording_id} if self.recording_id else {}))
-                self.started = False
-            elif recording and self.started and self.mode == "automatic":
-                self.send(
-                    "release_hold", **({"id": self.recording_id} if self.recording_id else {})
-                )
+            self._press(action, when, key)
+        elif key in self.pressed:
+            self.pressed.remove(key)
+            if key in self.primary:
+                self.primary.remove(key)
+                if not self.primary:
+                    self._release(when)
 
-    def finish(self):
-        if self.started and self.primary:
-            self.send(
-                "stop", automatic=True, **({"id": self.recording_id} if self.recording_id else {})
-            )
-        self.primary.clear()
-        self.pressed.clear()
+    def _press(self, action: str, when: float, token: str) -> None:
+        if token in self.pressed:
+            return
+        self.pressed.add(token)
+        if action not in ("toggle", "command", "edit") and not action.startswith("profile:"):
+            self.send(action)
+            return
+        self.primary.add(token)
+        if len(self.primary) > 1:
+            return
+        self.primary_at = when
         self.started = False
+        self.recording_id = None
+        options: dict[str, object] = {}
+        if action.startswith("profile:"):
+            options["profile"] = action.split(":", 1)[1]
+        elif action in ("command", "edit"):
+            options["mode"] = action
+        if self.mode in ("hold", "automatic"):
+            options["held"] = True
+        result = self.send("start" if self.mode == "hold" else "toggle", **options)
+        if not isinstance(result, Mapping):
+            raise TypeError("Invalid recording response")
+        self.started = result.get("phase") == "recording"
+        identity = result.get("id")
+        self.recording_id = identity if isinstance(identity, str) else None
 
+    def _release(self, when: float) -> None:
+        if not self.started:
+            return
+        options = {"id": self.recording_id} if self.recording_id else {}
+        duration = when - self.primary_at
+        if self.mode == "hold" or (self.mode == "automatic" and duration >= 0.25):
+            self.send("stop", **options)
+            self.started = False
+        elif self.mode == "automatic":
+            self.send("release_hold", **options)
 
-class KeyEvent(ctypes.Structure):
-    _fields_ = [
-        ("type", ctypes.c_int),
-        ("serial", ctypes.c_ulong),
-        ("send_event", ctypes.c_int),
-        ("display", ctypes.c_void_p),
-        ("window", ctypes.c_ulong),
-        ("root", ctypes.c_ulong),
-        ("subwindow", ctypes.c_ulong),
-        ("time", ctypes.c_ulong),
-        ("x", ctypes.c_int),
-        ("y", ctypes.c_int),
-        ("x_root", ctypes.c_int),
-        ("y_root", ctypes.c_int),
-        ("state", ctypes.c_uint),
-        ("keycode", ctypes.c_uint),
-        ("same_screen", ctypes.c_int),
-    ]
-
-
-class ModifierMap(ctypes.Structure):
-    _fields_ = [("max_keypermod", ctypes.c_int), ("modifiermap", ctypes.POINTER(ctypes.c_ubyte))]
-
-
-class X11:
-    def __init__(self, config):
-        name = ctypes.util.find_library("X11")
-        if not name:
-            raise RuntimeError("libX11 unavailable")
-        self.lib = ctypes.CDLL(name)
-        for method, restype, args in (
-            ("XOpenDisplay", ctypes.c_void_p, [ctypes.c_char_p]),
-            ("XDefaultRootWindow", ctypes.c_ulong, [ctypes.c_void_p]),
-            ("XStringToKeysym", ctypes.c_ulong, [ctypes.c_char_p]),
-            ("XKeysymToKeycode", ctypes.c_ubyte, [ctypes.c_void_p, ctypes.c_ulong]),
-            ("XConnectionNumber", ctypes.c_int, [ctypes.c_void_p]),
-            ("XPending", ctypes.c_int, [ctypes.c_void_p]),
-            ("XNextEvent", ctypes.c_int, [ctypes.c_void_p, ctypes.c_void_p]),
-            ("XCloseDisplay", ctypes.c_int, [ctypes.c_void_p]),
-            ("XSync", ctypes.c_int, [ctypes.c_void_p, ctypes.c_int]),
-            ("XSelectInput", ctypes.c_int, [ctypes.c_void_p, ctypes.c_ulong, ctypes.c_long]),
-            (
-                "XGrabKey",
-                ctypes.c_int,
-                [
-                    ctypes.c_void_p,
-                    ctypes.c_int,
-                    ctypes.c_uint,
-                    ctypes.c_ulong,
-                    ctypes.c_int,
-                    ctypes.c_int,
-                    ctypes.c_int,
-                ],
-            ),
-            (
-                "XGrabButton",
-                ctypes.c_int,
-                [
-                    ctypes.c_void_p,
-                    ctypes.c_uint,
-                    ctypes.c_uint,
-                    ctypes.c_ulong,
-                    ctypes.c_int,
-                    ctypes.c_uint,
-                    ctypes.c_int,
-                    ctypes.c_int,
-                    ctypes.c_ulong,
-                    ctypes.c_ulong,
-                ],
-            ),
-            (
-                "XkbSetDetectableAutoRepeat",
-                ctypes.c_int,
-                [ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p],
-            ),
-        ):
-            function = getattr(self.lib, method)
-            function.restype, function.argtypes = restype, args
-        self.display = self.lib.XOpenDisplay(None)
-        if not self.display:
-            raise RuntimeError("Cannot open X11 display")
-        self.errors = []
-        callback_type = ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_void_p, ctypes.c_void_p)
-        self.error_handler = callback_type(lambda *_: self.errors.append(True) or 0)
-        self.lib.XSetErrorHandler.argtypes = [callback_type]
-        self.lib.XSetErrorHandler.restype = ctypes.c_void_p
-        self.lib.XSetErrorHandler(self.error_handler)
-        self.root = self.lib.XDefaultRootWindow(self.display)
-        self.actions = {}
-        self.down = {}
-        self.ignored = 2
+    def finish(self) -> None:
         try:
-            # Do not select ButtonPress on root: window managers can own that mask.
-            # Passive button grabs supply their own press/release event mask below.
-            self.lib.XSelectInput(self.display, self.root, 1 | 2)
-            supported = ctypes.c_int()
-            self.lib.XkbSetDetectableAutoRepeat(self.display, 1, ctypes.byref(supported))
-            if not supported.value:
-                raise RuntimeError("X11 server lacks detectable auto-repeat")
-            self.lib.XGetModifierMapping.argtypes = [ctypes.c_void_p]
-            self.lib.XGetModifierMapping.restype = ctypes.POINTER(ModifierMap)
-            self.lib.XFreeModifiermap.argtypes = [ctypes.POINTER(ModifierMap)]
-            mapping = self.lib.XGetModifierMapping(self.display)
-            try:
-                numlock = self.lib.XKeysymToKeycode(
-                    self.display, self.lib.XStringToKeysym(b"Num_Lock")
+            if self.started and self.primary:
+                self.send(
+                    "stop",
+                    automatic=True,
+                    **({"id": self.recording_id} if self.recording_id else {}),
                 )
-                for modifier in range(8):
-                    for index in range(mapping.contents.max_keypermod):
-                        if (
-                            numlock
-                            and mapping.contents.modifiermap[
-                                modifier * mapping.contents.max_keypermod + index
-                            ]
-                            == numlock
-                        ):
-                            self.ignored |= 1 << modifier
-            finally:
-                self.lib.XFreeModifiermap(mapping)
-            for action, mask, key in bindings(config):
-                mouse = re.fullmatch(r"button(\d+)", key)
-                code = (
-                    int(mouse[1])
-                    if mouse
-                    else self.lib.XKeysymToKeycode(
-                        self.display, self.lib.XStringToKeysym(key.encode())
-                    )
-                )
-                if not code or (mouse and not 1 <= code <= 32):
-                    raise ValueError(f"Unavailable shortcut key: {key}")
-                for locks in {0, 2, self.ignored & ~2, self.ignored}:
-                    if mouse:
-                        self.lib.XGrabButton(
-                            self.display, code, mask | locks, self.root, 0, 4 | 8, 1, 1, 0, 0
-                        )
-                    else:
-                        self.lib.XGrabKey(self.display, code, mask | locks, self.root, 0, 1, 1)
-                self.actions[(bool(mouse), code, mask)] = action
-            self.lib.XSync(self.display, 0)
-            if self.errors:
-                raise RuntimeError("Shortcut unavailable or already owned by desktop/i3")
-        except Exception:
-            self.close()
-            raise
+        finally:
+            self.primary.clear()
+            self.pressed.clear()
+            self.started = False
+            self.recording_id = None
 
-    def events(self):
-        fd = self.lib.XConnectionNumber(self.display)
-        while True:
-            if not self.lib.XPending(self.display):
-                if not select.select([fd], [], [], 0.25)[0]:
-                    yield None
+
+def _consume(events: queue.Queue[ShortcutEvent | str | None], activation: Activation) -> None:
+    while True:
+        value = events.get()
+        try:
+            if value is None:
+                activation.finish()
+            elif isinstance(value, str):
+                activation.mode = value
+            else:
+                activation.event(*value)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Shortcut action failed", extra={"error_type": type(exc).__name__})
+        if value is None:
+            return
+
+
+def _read_x11(config: Config, events: queue.Queue[ShortcutEvent | str | None]) -> None:
+    while config.shortcut_backend == "x11":
+        active_bindings = bindings(config)
+        backend = X11Grabs(active_bindings)
+        checked_at = 0.0
+        try:
+            for event in backend.events():
+                if event is not None:
+                    events.put(event, timeout=1)
+                now = time.monotonic()
+                if backend.down or now - checked_at < 1:
                     continue
-            raw = (ctypes.c_long * 24)()
-            self.lib.XNextEvent(self.display, ctypes.byref(raw))
-            event = ctypes.cast(raw, ctypes.POINTER(KeyEvent)).contents
-            if event.type in (2, 3, 4, 5):
-                token = (event.type in (4, 5), event.keycode)
-                down = event.type in (2, 4)
-                if down:
-                    if token in self.down:
-                        continue
-                    action = self.actions.get((*token, (event.state & 255) & ~self.ignored))
-                    if action:
-                        self.down[token] = action
-                else:
-                    action = self.down.pop(token, None)
-                if action:
-                    yield action, down, time.monotonic(), str(token)
-
-    def close(self):
-        if self.display:
-            self.lib.XCloseDisplay(self.display)
-            self.display = None
+                checked_at = now
+                refreshed = Config.load()
+                if (
+                    refreshed.shortcut_backend != config.shortcut_backend
+                    or refreshed.hotkey_mode != config.hotkey_mode
+                    or bindings(refreshed) != active_bindings
+                ):
+                    config = refreshed
+                    events.put(config.hotkey_mode, timeout=1)
+                    break
+        finally:
+            backend.close()
 
 
-def launch():
-    from .control import ensure_daemon, request
+def _run_x11(config: Config) -> int:
+    if not os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"):
+        raise ValueError("Native X11 shortcuts require an X11 session; use portal on Wayland")
+    events: queue.Queue[ShortcutEvent | str | None] = queue.Queue(maxsize=64)
+    worker = threading.Thread(
+        target=_consume, args=(events, Activation(config.hotkey_mode, request)), daemon=True
+    )
+    worker.start()
+    try:
+        _read_x11(config, events)
+    finally:
+        events.put(None, timeout=1)
+        worker.join(timeout=12)
+    return 0
 
+
+def _terminate(_signal: int, _frame: FrameType | None) -> None:
+    raise SystemExit(0)
+
+
+def launch() -> int:
     config = Config.load()
     if config.shortcut_backend == "desktop":
         raise ValueError("Desktop owns shortcuts; choose x11 or portal explicitly")
@@ -340,72 +244,22 @@ def launch():
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
             return 0
+        previous_handler = None
         if threading.current_thread() is threading.main_thread():
-
-            def terminate(*_):
-                raise SystemExit(0)
-
-            signal.signal(signal.SIGTERM, terminate)
-        ensure_daemon()
-        if config.shortcut_backend == "portal":
-            from .portal_shortcuts import launch as portal
-
-            return portal()
-        if not os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"):
-            raise ValueError("Native X11 shortcuts require an X11 session; use portal on Wayland")
-        events = queue.Queue(maxsize=64)
-        activation = Activation(config.hotkey_mode, request)
-
-        def consume():
-            while True:
-                value = events.get()
-                if value is None:
-                    return
-                try:
-                    if value[0] == "_mode":
-                        activation.mode = value[1]
-                    elif value[0] == "_finish":
-                        activation.finish()
-                    else:
-                        activation.event(*value)
-                except Exception as exc:  # noqa: BLE001
-                    logger.warning(
-                        "Shortcut action failed", extra={"error_type": type(exc).__name__}
-                    )
-
-        worker = threading.Thread(target=consume, daemon=True)
-        worker.start()
+            previous_handler = signal.signal(signal.SIGTERM, _terminate)
         try:
-            while True:
-                active_bindings = bindings(config)
-                backend = X11(config)
-                checked_at = 0
-                try:
-                    for event in backend.events():
-                        if event:
-                            events.put(event, timeout=1)
-                        if not backend.down and time.monotonic() - checked_at >= 1:
-                            checked_at = time.monotonic()
-                            refreshed = Config.load()
-                            if (
-                                bindings(refreshed),
-                                refreshed.hotkey_mode,
-                                refreshed.shortcut_backend,
-                            ) != (active_bindings, config.hotkey_mode, config.shortcut_backend):
-                                config = refreshed
-                                events.put(("_mode", config.hotkey_mode), timeout=1)
-                                break
-                finally:
-                    backend.close()
-                if config.shortcut_backend != "x11":
-                    return 0  # Switching to portal still requires an explicit setup request.
+            ensure_daemon()
+            if config.shortcut_backend == "portal":
+                from .portal_shortcuts import launch as portal
+
+                return cast("int", portal())
+            return _run_x11(config)
         finally:
-            events.put(("_finish",), timeout=1)
-            events.put(None, timeout=1)
-            worker.join(timeout=12)
+            if previous_handler is not None:
+                signal.signal(signal.SIGTERM, previous_handler)
 
 
-def ensure_hotkeys():
+def ensure_hotkeys() -> None:
     """Only explicit X11 configuration autostarts. Portal consent requires manual launch."""
     config = Config.load()
     if (

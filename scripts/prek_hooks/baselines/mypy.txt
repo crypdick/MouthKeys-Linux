@@ -226,7 +226,6 @@
 2	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "apply_theme" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "audio_sources" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "create_tray" in typed context
-1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "ensure_hotkeys" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "language_choices" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "list_models" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "model_catalog" in typed context
@@ -244,20 +243,7 @@
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "verify" in typed context
 14	src/mouthkeys/gui.py	no-untyped-def	Function is missing a return type annotation
 8	src/mouthkeys/gui.py	no-untyped-def	Function is missing a type annotation
-1	src/mouthkeys/hotkeys.py	assignment	Incompatible types in assignment (expression has type "float", variable has type "int")
-1	src/mouthkeys/hotkeys.py	func-returns-value	"append" of "list" does not return a value (it only ever returns None)
-1	src/mouthkeys/hotkeys.py	no-untyped-call	Call to untyped function "Activation" in typed context
-1	src/mouthkeys/hotkeys.py	no-untyped-call	Call to untyped function "X11" in typed context
-3	src/mouthkeys/hotkeys.py	no-untyped-call	Call to untyped function "bindings" in typed context
-2	src/mouthkeys/hotkeys.py	no-untyped-call	Call to untyped function "close" in typed context
-1	src/mouthkeys/hotkeys.py	no-untyped-call	Call to untyped function "event" in typed context
-1	src/mouthkeys/hotkeys.py	no-untyped-call	Call to untyped function "events" in typed context
-1	src/mouthkeys/hotkeys.py	no-untyped-call	Call to untyped function "finish" in typed context
 1	src/mouthkeys/hotkeys.py	no-untyped-call	Call to untyped function "launch" in typed context
-6	src/mouthkeys/hotkeys.py	no-untyped-def	Function is missing a return type annotation
-5	src/mouthkeys/hotkeys.py	no-untyped-def	Function is missing a type annotation
-1	src/mouthkeys/hotkeys.py	var-annotated	Need type annotation for "errors" (hint: "errors: list[<type>] = ...")
-1	src/mouthkeys/hotkeys.py	var-annotated	Need type annotation for "events"
 2	src/mouthkeys/lark.py	no-untyped-call	Call to untyped function "carries_status_page" in typed context
 1	src/mouthkeys/lark.py	no-untyped-call	Call to untyped function "find_receiver" in typed context
 1	src/mouthkeys/lark.py	no-untyped-call	Call to untyped function "heartbeat" in typed context
@@ -402,12 +388,8 @@
 3	src/mouthkeys/overlay.py	no-untyped-def	Function is missing a type annotation
 1	src/mouthkeys/overlay_assistant.py	no-untyped-call	Call to untyped function "AssistantPage" in typed context
 1	src/mouthkeys/portal_shortcuts.py	assignment	Incompatible types in assignment (expression has type "float", variable has type "int")
-1	src/mouthkeys/portal_shortcuts.py	no-untyped-call	Call to untyped function "Activation" in typed context
-1	src/mouthkeys/portal_shortcuts.py	no-untyped-call	Call to untyped function "bindings" in typed context
 2	src/mouthkeys/portal_shortcuts.py	no-untyped-call	Call to untyped function "configured_entries" in typed context
-1	src/mouthkeys/portal_shortcuts.py	no-untyped-call	Call to untyped function "event" in typed context
 3	src/mouthkeys/portal_shortcuts.py	no-untyped-call	Call to untyped function "fail" in typed context
-1	src/mouthkeys/portal_shortcuts.py	no-untyped-call	Call to untyped function "finish" in typed context
 1	src/mouthkeys/portal_shortcuts.py	no-untyped-call	Call to untyped function "helper" in typed context
 1	src/mouthkeys/portal_shortcuts.py	no-untyped-call	Call to untyped function "preferred_trigger" in typed context
 2	src/mouthkeys/portal_shortcuts.py	no-untyped-call	Call to untyped function "request" in typed context

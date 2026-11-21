@@ -20,6 +20,8 @@ then dispatches local work or uses `control` to contact the private Unix socket 
   `delivery` decides whether to use those commands and rechecks the destination before sending.
   Cancellation before delivery wins; unverified destination identity falls back to copy.
 - **UI and optional integrations:** `gui`, `overlay`, `tray`, and `hotkeys` call the service.
+  `x11_shortcuts` owns the native X11 connection and passive grabs. `hotkeys` serializes
+  their events and releases an owned held recording when the listener stops.
   `overlay_process` owns the passive panel's lifetime and wake socket; `overlay_rendering` draws
   its current frame without controlling focus, placement, or IPC. `qt_control` sends their
   control requests without importing Settings or blocking the Qt event loop.

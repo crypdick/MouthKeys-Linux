@@ -467,34 +467,7 @@
 1	src/mouthkeys/gui.py	PLR1714	Consider merging multiple comparisons: `category in ("All settings", group)`. Use a `set` if the elements are hashable.
 1	src/mouthkeys/gui.py	PLW2901	`for` loop variable `value` overwritten by assignment target
 1	src/mouthkeys/gui.py	TRY300	Consider moving this statement to an `else` block
-1	src/mouthkeys/hotkeys.py	ANN001	Missing type annotation for function argument `action`
-2	src/mouthkeys/hotkeys.py	ANN001	Missing type annotation for function argument `config`
-1	src/mouthkeys/hotkeys.py	ANN001	Missing type annotation for function argument `down`
-1	src/mouthkeys/hotkeys.py	ANN001	Missing type annotation for function argument `mode`
-1	src/mouthkeys/hotkeys.py	ANN001	Missing type annotation for function argument `send`
-1	src/mouthkeys/hotkeys.py	ANN001	Missing type annotation for function argument `token`
-1	src/mouthkeys/hotkeys.py	ANN001	Missing type annotation for function argument `when`
-1	src/mouthkeys/hotkeys.py	ANN002	Missing type annotation for `*_`
-1	src/mouthkeys/hotkeys.py	ANN201	Missing return type annotation for public function `bindings`
-1	src/mouthkeys/hotkeys.py	ANN201	Missing return type annotation for public function `close`
-1	src/mouthkeys/hotkeys.py	ANN201	Missing return type annotation for public function `ensure_hotkeys`
-1	src/mouthkeys/hotkeys.py	ANN201	Missing return type annotation for public function `event`
-1	src/mouthkeys/hotkeys.py	ANN201	Missing return type annotation for public function `events`
-1	src/mouthkeys/hotkeys.py	ANN201	Missing return type annotation for public function `finish`
-1	src/mouthkeys/hotkeys.py	ANN201	Missing return type annotation for public function `launch`
-1	src/mouthkeys/hotkeys.py	ANN202	Missing return type annotation for private function `consume`
-1	src/mouthkeys/hotkeys.py	ANN202	Missing return type annotation for private function `terminate`
-2	src/mouthkeys/hotkeys.py	ANN204	Missing return type annotation for special method `__init__`
-1	src/mouthkeys/hotkeys.py	C901	`launch` is too complex (19 > 15)
-2	src/mouthkeys/hotkeys.py	PERF401	Use `list.extend` to create a transformed list
-3	src/mouthkeys/hotkeys.py	PLC0415	`import` should be at the top-level of a file
-1	src/mouthkeys/hotkeys.py	PLR0912	Too many branches (13 > 12)
-1	src/mouthkeys/hotkeys.py	PLR0912	Too many branches (15 > 12)
-1	src/mouthkeys/hotkeys.py	PLR0915	Too many statements (51 > 50)
-1	src/mouthkeys/hotkeys.py	PLR0915	Too many statements (58 > 50)
-1	src/mouthkeys/hotkeys.py	PLR1702	Too many nested blocks (6 > 5)
-1	src/mouthkeys/hotkeys.py	PLR1702	Too many nested blocks (7 > 5)
-1	src/mouthkeys/hotkeys.py	SIM102	Use a single `if` statement instead of nested `if` statements
+1	src/mouthkeys/hotkeys.py	PLC0415	`import` should be at the top-level of a file
 1	src/mouthkeys/lark.py	ANN001	Missing type annotation for function argument `args`
 1	src/mouthkeys/lark.py	ANN001	Missing type annotation for function argument `config`
 1	src/mouthkeys/lark.py	ANN001	Missing type annotation for function argument `descriptor`

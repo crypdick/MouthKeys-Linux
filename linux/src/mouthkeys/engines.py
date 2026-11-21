@@ -17,7 +17,7 @@ ONNX_MODELS = {
 }
 
 
-def managed_path(model, engine="onnx"):
+def managed_path(model: str, engine: str = "onnx") -> Path:
     """Never interpret a model ID as a filesystem path when deleting cache data."""
     digest = hashlib.sha256(model.encode()).hexdigest()[:24]
     return cache_dir() / "models" / engine / digest

@@ -1,7 +1,7 @@
 """Machine-readable progress from the Hub's supported tqdm callback interface."""
 
 from collections.abc import Callable
-from typing import TYPE_CHECKING, TypedDict, cast
+from typing import TYPE_CHECKING, NotRequired, TypedDict, cast
 
 from tqdm.auto import tqdm
 
@@ -16,7 +16,7 @@ class DownloadProgress(TypedDict):
     completed: float
     total: float | None
     unit: str
-    description: str
+    description: NotRequired[str]
 
 
 def progress_tqdm(callback: Callable[[DownloadProgress], None]) -> type[_ProgressBar]:

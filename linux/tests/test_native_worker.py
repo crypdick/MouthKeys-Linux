@@ -193,3 +193,123 @@ def test_ready_handshake_reports_actual_native_streaming_capability(monkeypatch)
     backend.timeout = 1
     assert backend._response() == "ready"
     assert backend.native_streaming is False
+
+
+@pytest.mark.parametrize("engine", ["nemo", "transformers"])
+def test_worker_runs_real_framing_for_backend_selection_and_redacts_inference_errors(engine):
+    if not ctypes.util.find_library("seccomp"):
+        pytest.skip("Optional native worker requires libseccomp")
+    script = """
+from types import SimpleNamespace
+
+from mouthkeys import native_worker, nemo_asr, transformers_asr
+
+
+class Offline:
+    def __init__(self, config):
+        assert config.engine == "transformers"
+        self.words = []
+
+    def segments(self, samples, config, *, presegmented):
+        assert len(samples) == 2 and presegmented
+        return [SimpleNamespace(start=0.0, end=0.125, text="decoded file")]
+
+
+class Streaming:
+    supports_native_streaming = True
+
+    def __init__(self, config):
+        assert config.engine == "nemo"
+        self.words = []
+
+    def stream(self, samples, config, session_key, *, final):
+        if session_key == "invalid":
+            raise ValueError("private inference payload")
+        assert session_key == ["test", "take"] and final and len(samples) == 3
+        self.words = [{"word": "decoded", "start": 0, "end": 0.125}]
+        return "decoded"
+
+    def segments(self, samples, config, *, presegmented):
+        return Offline.segments(self, samples, config, presegmented=presegmented)
+
+    def reset_stream(self):
+        self.words = []
+
+
+nemo_asr.NemoBackend = Streaming
+transformers_asr.TransformersBackend = Offline
+native_worker.worker_main()
+"""
+    config = native_worker.asr_config(replace(Config(), engine=engine))
+    payload = io.BytesIO()
+    native_worker._write_message(payload, {"config": config})
+    if engine == "nemo":
+        native_worker._write_message(
+            payload,
+            {"method": "stream", "config": config, "session_key": ["test", "take"], "final": True},
+            [0, 1, 2],
+        )
+        native_worker._write_message(
+            payload, {"method": "stream", "config": config, "session_key": "invalid"}, [0]
+        )
+    else:
+        native_worker._write_message(payload, {"method": "unknown", "config": config})
+    native_worker._write_message(payload, {"method": "reset_stream"})
+    native_worker._write_message(
+        payload, {"method": "segments", "config": config, "presegmented": True}, [0, 1]
+    )
+
+    result = subprocess.run(  # noqa: S603 - local worker using fake models
+        [sys.executable, "-P", "-c", script],
+        input=payload.getvalue(),
+        capture_output=True,
+        timeout=10,
+        check=True,
+    )
+    assert b"private inference payload" not in result.stdout + result.stderr
+    output = io.BytesIO(result.stdout)
+    ready, _ = native_worker._read_message(output)
+    assert ready == {"result": "ready", "native_streaming": engine == "nemo"}
+    if engine == "nemo":
+        response, _ = native_worker._read_message(output)
+        assert response == {
+            "result": "decoded",
+            "words": [{"word": "decoded", "start": 0, "end": 0.125}],
+        }
+    failure, _ = native_worker._read_message(output)
+    assert "failed (ValueError)" in failure["error"]
+    reset, _ = native_worker._read_message(output)
+    assert reset == {"result": None, "words": []}
+    segments, _ = native_worker._read_message(output)
+    assert segments == {
+        "result": [{"start": 0, "end": 0.125, "text": "decoded file", "words": []}],
+        "words": [],
+    }
+    assert not output.read()
+
+
+def test_worker_loader_failure_is_returned_before_any_inference():
+    if not ctypes.util.find_library("seccomp"):
+        pytest.skip("Optional native worker requires libseccomp")
+    payload = io.BytesIO()
+    native_worker._write_message(
+        payload, {"config": native_worker.asr_config(Config(engine="nemo"))}
+    )
+    script = """
+from mouthkeys import native_worker, nemo_asr
+
+def missing(config):
+    raise RuntimeError("Requested local archive unavailable")
+
+nemo_asr.NemoBackend = missing
+native_worker.worker_main()
+"""
+    result = subprocess.run(  # noqa: S603 - local worker using fake models
+        [sys.executable, "-P", "-c", script],
+        input=payload.getvalue(),
+        capture_output=True,
+        timeout=10,
+        check=True,
+    )
+    response, _ = native_worker._read_message(io.BytesIO(result.stdout))
+    assert response == {"error": "Requested local archive unavailable"}

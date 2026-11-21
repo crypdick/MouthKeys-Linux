@@ -5,7 +5,7 @@ from types import ModuleType, SimpleNamespace
 import numpy as np
 import pytest
 
-from mouthkeys import native_asr
+from mouthkeys import native_asr, nemo_asr, transformers_asr
 from mouthkeys.config import Config
 from mouthkeys.transcribe import Transcriber, download
 
@@ -75,10 +75,12 @@ def test_download_explicit_revision_filters_out_remote_python(monkeypatch):
 def test_missing_model_never_imports_or_downloads_native_packages(monkeypatch):
     config = replace(Config(), engine="transformers", model="Qwen/Qwen3-ASR-0.6B-hf")
     monkeypatch.setattr(
-        native_asr.importlib, "import_module", lambda *a: pytest.fail("Native import attempted")
+        transformers_asr.importlib,
+        "import_module",
+        lambda *a: pytest.fail("Native import attempted"),
     )
     with pytest.raises(RuntimeError, match="explicitly download"):
-        native_asr.TransformersBackend(config)
+        transformers_asr.TransformersBackend(config)
 
 
 def test_native_precision_cuda_failures_are_actionable(monkeypatch):
@@ -193,7 +195,7 @@ def test_nemo_uses_real_weighted_graph_scores_and_restores_disabled_decoder(monk
             )
         ),
     )
-    backend = native_asr.NemoBackend.__new__(native_asr.NemoBackend)
+    backend = nemo_asr.NemoBackend.__new__(nemo_asr.NemoBackend)
     backend._base_decoding = None
     backend._vocabulary_state = None
     backend.model = SimpleNamespace(
@@ -219,6 +221,20 @@ def test_nemo_uses_real_weighted_graph_scores_and_restores_disabled_decoder(monk
     assert len(calls) == before
     backend._vocabulary(replace(config, vocabulary_boosting="off"))
     assert calls[-1][1] == {"strategy": "greedy_batch", "greedy": {"max_symbols": 10}}
+    previous = len(calls)
+    assert (tmp_path / "vocabulary.nemo").stat().st_mode & 0o777 == 0o600
+
+    monkeypatch.delenv("MOUTHKEYS_NATIVE_STATE")
+    with pytest.raises(RuntimeError, match="isolated model worker"):
+        backend._vocabulary(config)
+    monkeypatch.setenv("MOUTHKEYS_NATIVE_STATE", str(tmp_path))
+    monkeypatch.setattr(backend.model.tokenizer, "text_to_ids", lambda _: [])
+    with pytest.raises(ValueError, match="tokenizer cannot encode"):
+        backend._vocabulary(config)
+    backend._base_decoding = {"greedy": None}
+    with pytest.raises(ValueError, match="greedy decoding configuration"):
+        backend._vocabulary(config)
+    assert len(calls) == previous
 
 
 def test_download_artifact_validation_rejects_missing_companions_before_ready(tmp_path):
@@ -248,9 +264,11 @@ def test_machine_progress_reports_actual_file_counts():
 def test_cohere_conditioning_prompt_is_not_transcript(bos):
     prompt = np.array([[4, 5, 6]])
     generated = np.array([[*bos, 4, 5, 6, 10, 11]])
-    assert native_asr._strip_decoder_prompt(generated, prompt).tolist() == [[10, 11]]
+    assert transformers_asr.strip_decoder_prompt(generated, prompt).tolist() == [[10, 11]]
 
 
 def test_cohere_does_not_guess_unexpected_prompt_offset():
     with pytest.raises(ValueError, match="conditioning prefix"):
-        native_asr._strip_decoder_prompt(np.array([[8, 8, 4, 5, 6, 10]]), np.array([[4, 5, 6]]))
+        transformers_asr.strip_decoder_prompt(
+            np.array([[8, 8, 4, 5, 6, 10]]), np.array([[4, 5, 6]])
+        )

@@ -1,3 +1,4 @@
+import sys
 import wave
 from dataclasses import replace
 from types import SimpleNamespace
@@ -7,7 +8,8 @@ import pytest
 from mouthkeys.config import Config
 from mouthkeys.dictionary import Dictionary
 from mouthkeys.engines import model_catalog
-from mouthkeys.native_asr import NEMO_MODELS, NemoBackend, uses_native_streaming
+from mouthkeys.native_asr import NEMO_MODELS, uses_native_streaming
+from mouthkeys.nemo_asr import NemoBackend
 from mouthkeys.transcribe import Transcriber
 from mouthkeys.vocabulary import VocabularyStore, context_prompt
 
@@ -136,10 +138,10 @@ def test_native_tdt_loader_ignores_stream_only_precision_and_latency(monkeypatch
     monkeypatch.setattr(
         native_asr, "torch_runtime", lambda config: (SimpleNamespace(), "cpu", "float16")
     )
-    monkeypatch.setattr(
-        native_asr.importlib,
-        "import_module",
-        lambda name: SimpleNamespace(ASRModel=SimpleNamespace(restore_from=lambda *a, **kw: model)),
+    monkeypatch.setitem(
+        sys.modules,
+        "nemo.collections.asr.models",
+        SimpleNamespace(ASRModel=SimpleNamespace(restore_from=lambda *a, **kw: model)),
     )
     config = replace(
         Config(),

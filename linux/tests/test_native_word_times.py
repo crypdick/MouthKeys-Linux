@@ -4,14 +4,14 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from mouthkeys import native_asr
+from mouthkeys import native_asr, nemo_asr, transformers_asr
 from mouthkeys.config import Config
 
 from .native_asr_fakes import Tensor, backend_fixture, streaming_backend
 
 
 def test_native_word_frame_offsets_are_scaled_without_mutating_hypothesis():
-    backend = object.__new__(native_asr.NemoBackend)
+    backend = object.__new__(nemo_asr.NemoBackend)
     backend.model = SimpleNamespace(
         encoder=SimpleNamespace(subsampling_factor=8),
         cfg=SimpleNamespace(preprocessor=SimpleNamespace(window_stride=0.01)),
@@ -35,6 +35,7 @@ def test_cache_aware_word_rendering_restores_mergeable_timestep_list(monkeypatch
     backend.model.encoder.subsampling_factor = 8
     backend.model.cfg = SimpleNamespace(preprocessor=SimpleNamespace(window_stride=0.01))
     hypotheses = []
+    untouched = SimpleNamespace(timestamp=[7])
 
     def step(**kwargs):
         previous = kwargs["previous_hypotheses"]
@@ -48,7 +49,7 @@ def test_cache_aware_word_rendering_restores_mergeable_timestep_list(monkeypatch
             },
         )
         hypotheses.append(hypothesis)
-        return None, [hypothesis], "channel", "time", "length", [hypothesis]
+        return None, [hypothesis], "channel", "time", "length", [hypothesis, untouched]
 
     backend.model.conformer_stream_step = step
     config = replace(Config(), engine="nemo", pronunciation_matching="on")
@@ -56,6 +57,7 @@ def test_cache_aware_word_rendering_restores_mergeable_timestep_list(monkeypatch
     backend.stream(np.arange(18), config, "session", final=True)
     assert len(hypotheses) > 1
     assert all(hyp.timestamp == [0] for hyp in hypotheses)
+    assert untouched.timestamp == [7]
     assert backend.words[0]["word"] == "hello"
     assert backend.stream_key is None
 
@@ -143,11 +145,11 @@ def test_transformers_nemotron_preserves_native_durations_and_groups_word_interv
     ],
 )
 def test_native_token_timing_abstains_on_ambiguous_or_mismatched_metadata(text, tokens):
-    assert native_asr._native_token_words(text, tokens, duration=1) == []
+    assert transformers_asr.native_token_words(text, tokens, duration=1) == []
 
 
 def test_native_token_timing_preserves_unicode_punctuation_and_clips_only_waveform_edge():
-    words = native_asr._native_token_words(
+    words = transformers_asr.native_token_words(
         "Café! next",
         [
             {"token": "  Caf", "start": 0.1, "end": 0.2},

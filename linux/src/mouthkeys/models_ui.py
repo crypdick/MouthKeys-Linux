@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
 )
 
 from .qt_control import Task
+from .settings_fields import field_value
 
 
 class ModelBrowser(QDialog):
@@ -91,7 +92,6 @@ class ModelBrowser(QDialog):
     def refresh(self):
         from .config import Config
         from .engines import model_catalog
-        from .gui import field_value
 
         engine = self.window.fields["engine"].currentData()
         self.engine = engine
@@ -211,7 +211,6 @@ class ModelBrowser(QDialog):
     def benchmark(self):
         from .benchmark import run_benchmark
         from .config import Config
-        from .gui import field_value
 
         if self.benchmark_task is not None or self.table.currentRow() < 0:
             return

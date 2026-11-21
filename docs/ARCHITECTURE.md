@@ -26,7 +26,9 @@ then dispatches local work or uses `control` to contact the private Unix socket 
   Transcript history (`history_ui`), activity (`stats_view`), backup review (`backup_ui`), and
   diagnostics (`help_ui`) own their Settings pages. `dictionary_ui` owns editing and voice training
   drafts; saving compares the editor's snapshot under the same lock used to write the dictionary.
-  Settings waits for backup previews and reviews before closing.
+  Settings waits for backup previews and reviews before closing. `prompt_profiles_ui` owns the
+  profile editor, application overrides, and draft prompt tests. Recorded tests keep the draft
+  that was active when recording started and never enter the desktop delivery path.
   `file_transcription_ui` owns the file worker and its history; Settings and the tray check whether
   it is busy before closing.
   `local_api` is opt-in loopback access. `ai_providers` and `ai_stream` handle configured AI

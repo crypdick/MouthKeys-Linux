@@ -2,7 +2,7 @@
 
 import json
 import sys
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import asdict, replace
 from pathlib import Path
 from typing import cast
@@ -23,9 +23,6 @@ from PySide6.QtWidgets import (
     QScrollArea,
     QSpinBox,
     QStackedWidget,
-    QTableWidget,
-    QTableWidgetItem,
-    QTextEdit,
     QVBoxLayout,
     QWidget,
 )
@@ -40,7 +37,10 @@ from .file_transcription_ui import FileTranscriptionPage
 from .help_ui import HelpPage
 from .history_ui import HistoryPage
 from .processes import python_command
+from .profiles import PromptProfile, load_profiles
+from .prompt_profiles_ui import KeyringAction, PromptProfilesPage
 from .qt_control import Request, Response, ResponseHandler, Task
+from .settings_fields import field_value
 from .stats_view import StatsPage
 
 COMPUTE_TYPES = [
@@ -121,14 +121,6 @@ def audio_sources():
         ]
     except (OSError, subprocess.SubprocessError):
         return ["default"]
-
-
-def field_value(field):
-    if isinstance(field, QSpinBox):
-        return field.value()
-    if isinstance(field, QLineEdit):
-        return field.text()
-    return field.currentText() if field.isEditable() else field.currentData()
 
 
 def setting_group(key):
@@ -335,14 +327,13 @@ class Window(QWidget):
                 ("No individual confirmation", "off"),
             ],
         }
-        from .profiles import load_profiles
-
+        profiles = load_profiles()
         choices["ai_profile"] = [("Default settings", "")] + [
-            (profile["name"], profile["id"]) for profile in load_profiles()
+            (profile["name"], profile["id"]) for profile in profiles
         ]
         for key in ("edit_profile", "command_profile"):
             choices[key] = [("Sync to global provider", "default"), ("Off", "off")] + [
-                (profile["name"], profile["id"]) for profile in load_profiles()
+                (profile["name"], profile["id"]) for profile in profiles
             ]
         labels = {
             "max_seconds": "Maximum recording length",
@@ -575,7 +566,17 @@ class Window(QWidget):
         self.backup_page = BackupPage(self.send, self.status.setText, self.operation_result)
         tabs.addWidget(self.backup_page)
         tabs.addWidget(HelpPage())
-        tabs.addWidget(self.profiles_page())
+        self.prompt_profiles = PromptProfilesPage(
+            self.send,
+            self.run_task,
+            self.status.setText,
+            self.refresh_profile_choices,
+            lambda action: self.keyring_action(action, profile=True),
+        )
+        profiles_scroll = QScrollArea()
+        profiles_scroll.setWidgetResizable(True)
+        profiles_scroll.setWidget(self.prompt_profiles)
+        tabs.addWidget(profiles_scroll)
         from .assistant_ui import AssistantPage
 
         self.assistant_page = AssistantPage(self)
@@ -770,300 +771,27 @@ class Window(QWidget):
         self.download.errorOccurred.connect(self.download_error)
         self.download.start()
 
-    def profiles_page(self):
-        from .profiles import PROFILE_FIELDS
-
-        page = QWidget()
-        layout = QVBoxLayout(page)
-        note = QLabel(
-            "Save named cleanup prompts and provider settings. Choose active profile in "
-            "App Settings. Enable AI cleanup separately. Secrets stay in environment variables "
-            "or your desktop keyring, never profile files."
-        )
-        note.setWordWrap(True)
-        layout.addWidget(note)
-        self.profile_picker = QComboBox()
-        layout.addWidget(self.profile_picker)
-        form = QFormLayout()
-        self.profile_name = QLineEdit()
-        form.addRow("Name", self.profile_name)
-        self.profile_shortcut = QLineEdit()
-        self.profile_shortcut.setPlaceholderText("Optional chord, e.g. super+alt+1")
-        form.addRow("Shortcut", self.profile_shortcut)
-        self.profile_fields = {}
-        defaults = asdict(Config.load())
-        for name in PROFILE_FIELDS:
-            if name == "ai_prompt":
-                field = QTextEdit()
-                field.setPlainText(defaults[name])
-                field.setMinimumHeight(110)
-                field.setMaximumHeight(150)
-            elif name in RANGES:
-                field = QSpinBox()
-                field.setRange(*RANGES[name])
-                field.setValue(defaults[name])
-            elif name in CHOICES:
-                field = QComboBox()
-                for value in CHOICES[name]:
-                    field.addItem(value, value)
-                field.setCurrentIndex(field.findData(defaults[name]))
+    def refresh_profile_choices(self, profiles: list[PromptProfile]) -> None:
+        for key in ("ai_profile", "edit_profile", "command_profile"):
+            picker = cast("QComboBox", self.fields[key])
+            selected = picker.currentData()
+            picker.clear()
+            if key == "ai_profile":
+                picker.addItem("Default settings", "")
             else:
-                field = QLineEdit(defaults[name])
-            form.addRow(name.removeprefix("ai_").replace("_", " ").capitalize(), field)
-            self.profile_fields[name] = field
-        layout.addLayout(form)
-        buttons = QHBoxLayout()
-        for label, handler in (
-            ("Use provider endpoint", self.profile_endpoint),
-            ("Save profile", self.save_profile),
-            ("Delete profile", self.delete_profile),
-            ("Save keyring API key", lambda: self.keyring_action("store", profile=True)),
-            ("Delete keyring API key", lambda: self.keyring_action("delete", profile=True)),
-        ):
-            button = QPushButton(label)
-            button.clicked.connect(handler)
-            buttons.addWidget(button)
-        layout.addLayout(buttons)
-        self.profile_picker.currentIndexChanged.connect(self.select_profile)
-        self.refresh_profiles()
-        layout.addWidget(QLabel("Prompt test — no desktop insertion"))
-        self.prompt_test_raw = QTextEdit()
-        self.prompt_test_raw.setPlaceholderText("Type test text, or record a prompt tryout")
-        self.prompt_test_raw.setMinimumHeight(80)
-        self.prompt_test_raw.setMaximumHeight(120)
-        layout.addWidget(self.prompt_test_raw)
-        self.prompt_test_output = QTextEdit()
-        self.prompt_test_output.setReadOnly(True)
-        self.prompt_test_output.setMinimumHeight(80)
-        self.prompt_test_output.setMaximumHeight(120)
-        layout.addWidget(self.prompt_test_output)
-        self.prompt_test_id = None
-        self.prompt_test_config = None
-        test_actions = QHBoxLayout()
-        for title, handler in (
-            ("Test draft prompt", self.run_prompt_test),
-            ("Record test text", self.record_prompt_test),
-            ("Stop test recording", lambda: self.send("stop")),
-        ):
-            button = QPushButton(title)
-            button.clicked.connect(handler)
-            test_actions.addWidget(button)
-        layout.addLayout(test_actions)
-        layout.addWidget(QLabel("Application prompt overrides (exact application identity)"))
-        self.routing_table = QTableWidget(0, 3)
-        self.routing_table.setHorizontalHeaderLabels(["Application", "Prompt", "Mode"])
-        self.routing_table.horizontalHeader().setStretchLastSection(True)
-        self.routing_table.setMinimumHeight(160)
-        layout.addWidget(self.routing_table)
-        route_buttons = QHBoxLayout()
-        for text, handler in (
-            ("Add application", self.add_prompt_route),
-            ("Remove application", self.remove_prompt_route),
-            ("Save app overrides", self.save_prompt_routes),
-        ):
-            button = QPushButton(text)
-            button.clicked.connect(handler)
-            route_buttons.addWidget(button)
-        layout.addLayout(route_buttons)
-        from .routing import load_routes
+                picker.addItem("Sync to global provider", "default")
+                picker.addItem("Off", "off")
+            for profile in profiles:
+                picker.addItem(profile["name"], profile["id"])
+            picker.setCurrentIndex(max(0, picker.findData(selected)))
 
-        for rule in load_routes():
-            self.add_prompt_route(rule=rule)
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setWidget(page)
-        return scroll
-
-    def draft_prompt_config(self):
-        values = {
-            name: field.toPlainText() if isinstance(field, QTextEdit) else field_value(field)
-            for name, field in self.profile_fields.items()
-        }
-        return replace(Config.load(), ai_profile="", ai_enabled="on", **values).validate()
-
-    def record_prompt_test(self):
-        try:
-            self.prompt_test_config = self.draft_prompt_config()
-        # Report to the Settings UI without duplicating private data in logs.
-        except Exception as exc:  # allow: exception-handling  # noqa: BLE001
-            self.status.setText(str(exc))
-            return
-
-        def started(response):
-            if "result" in response:
-                self.prompt_test_id = response["result"]["id"]
-                self.prompt_test_output.setPlainText("Recording test; Stop when finished")
-
-        self.send("start", {"mode": "training"}, callback=started)
-
-    def update_prompt_test(self, result):
-        if self.prompt_test_id and result.get("id") == self.prompt_test_id:
-            proposal = result.get("assistant_proposal")
-            if proposal and proposal.get("mode") == "training":
-                self.prompt_test_id = None
-                self.prompt_test_raw.setPlainText(proposal["text"])
-                self.run_prompt_test(config=self.prompt_test_config)
-            elif result.get("phase") == "idle":
-                self.prompt_test_id = None
-
-    def run_prompt_test(self, _checked=False, config=None):
-        from .postprocess import process
-
-        try:
-            config = config or self.draft_prompt_config()
-            text = self.prompt_test_raw.toPlainText()
-            if not text.strip():
-                raise ValueError("Provide test text first")
-        # Report to the Settings UI without duplicating private data in logs.
-        except Exception as exc:  # allow: exception-handling  # noqa: BLE001
-            self.prompt_test_output.setPlainText(str(exc))
-            return
-        task = Task(lambda: process(text, config), self)
+    def run_task(self, function: Callable[[], object], callback: ResponseHandler) -> None:
+        task = Task(function, self)
         self.jobs.add(task)
-        task.done.connect(
-            lambda response: self.prompt_test_output.setPlainText(
-                response.get("error", response.get("result", ""))
-            )
-        )
+        task.done.connect(callback)
         task.finished.connect(lambda: self.jobs.discard(task))
         task.finished.connect(task.deleteLater)
         task.start()
-        self.prompt_test_output.setPlainText("Testing draft prompt…")
-
-    def add_prompt_route(self, _checked=False, rule=None):
-        from .profiles import load_profiles
-
-        rule = rule or {"app": "", "profile": "default"}
-        row = self.routing_table.rowCount()
-        self.routing_table.insertRow(row)
-        self.routing_table.setItem(row, 0, QTableWidgetItem(rule["app"]))
-        field = QComboBox()
-        field.addItem("Default prompt", "default")
-        field.addItem("Off — no AI cleanup", "off")
-        for profile in load_profiles():
-            field.addItem(profile["name"], profile["id"])
-        field.setCurrentIndex(field.findData(rule["profile"]))
-        self.routing_table.setCellWidget(row, 1, field)
-        mode = QComboBox()
-        for name in ("dictation", "edit", "command"):
-            mode.addItem(name, name)
-        mode.setCurrentIndex(mode.findData(rule.get("mode", "dictation")))
-        self.routing_table.setCellWidget(row, 2, mode)
-
-    def remove_prompt_route(self):
-        row = self.routing_table.currentRow()
-        if row >= 0:
-            self.routing_table.removeRow(row)
-
-    def save_prompt_routes(self):
-        from .routing import save_routes
-
-        try:
-            routes = [
-                {
-                    "app": self.routing_table.item(row, 0).text(),
-                    "profile": self.routing_table.cellWidget(row, 1).currentData(),
-                    "mode": self.routing_table.cellWidget(row, 2).currentData(),
-                }
-                for row in range(self.routing_table.rowCount())
-            ]
-            save_routes(routes)
-            self.status.setText("Application prompt overrides saved")
-        # Report to the Settings UI without duplicating private data in logs.
-        except Exception as exc:  # allow: exception-handling  # noqa: BLE001
-            self.status.setText(str(exc))
-
-    def refresh_profiles(self, selected=None):
-        from .profiles import load_profiles
-
-        self.profile_picker.blockSignals(True)
-        self.profile_picker.clear()
-        self.profile_picker.addItem("New profile", "")
-        profiles = load_profiles()
-        for profile in profiles:
-            self.profile_picker.addItem(profile["name"], profile["id"])
-        self.profile_picker.setCurrentIndex(max(0, self.profile_picker.findData(selected or "")))
-        self.profile_picker.blockSignals(False)
-        active = self.fields["ai_profile"].currentData()
-        self.fields["ai_profile"].clear()
-        self.fields["ai_profile"].addItem("Default settings", "")
-        for profile in profiles:
-            self.fields["ai_profile"].addItem(profile["name"], profile["id"])
-        self.fields["ai_profile"].setCurrentIndex(
-            max(0, self.fields["ai_profile"].findData(active))
-        )
-        self.select_profile()
-
-    def select_profile(self, *_):
-        from .profiles import load_profiles
-
-        selected = self.profile_picker.currentData()
-        profile = next((p for p in load_profiles() if p["id"] == selected), None)
-        self.profile_name.setText(profile["name"] if profile else "")
-        self.profile_shortcut.setText(profile.get("shortcut", "") if profile else "")
-        values = profile or asdict(Config.load())
-        for name, field in self.profile_fields.items():
-            value = values[name]
-            if isinstance(field, QTextEdit):
-                field.setPlainText(value)
-            elif isinstance(field, QLineEdit):
-                field.setText(value)
-            elif isinstance(field, QSpinBox):
-                field.setValue(value)
-            else:
-                field.setCurrentIndex(field.findData(value))
-
-    def profile_endpoint(self):
-        from .ai_providers import PROVIDER_ENDPOINTS
-
-        provider = field_value(self.profile_fields["ai_provider"])
-        self.profile_fields["ai_endpoint"].setText(PROVIDER_ENDPOINTS[provider])
-
-    def save_profile(self):
-        import uuid
-
-        from .profiles import load_profiles, save_profiles
-
-        try:
-            item_id = self.profile_picker.currentData() or str(uuid.uuid4())
-            values = {
-                name: field.toPlainText() if isinstance(field, QTextEdit) else field_value(field)
-                for name, field in self.profile_fields.items()
-            }
-            profile = {
-                "id": item_id,
-                "name": self.profile_name.text(),
-                "shortcut": self.profile_shortcut.text(),
-                **values,
-            }
-            profiles = [p for p in load_profiles() if p["id"] != item_id]
-            save_profiles([*profiles, profile])
-            self.refresh_profiles(item_id)
-            self.status.setText("Profile saved; select it in App Settings to activate")
-        # Report to the Settings UI without duplicating private data in logs.
-        except Exception as exc:  # allow: exception-handling  # noqa: BLE001
-            self.status.setText(str(exc))
-
-    def delete_profile(self):
-        from .profiles import load_profiles, save_profiles
-        from .routing import load_routes
-
-        selected = self.profile_picker.currentData()
-        if selected and any(rule["profile"] == selected for rule in load_routes()):
-            self.status.setText(
-                "Remove application overrides using this profile before deleting it"
-            )
-            return
-        if selected and selected == Config.load().ai_profile:
-            self.status.setText("Choose and save another active profile before deleting this one")
-            return
-        if (
-            selected
-            and QMessageBox.question(self, "Delete prompt", "Delete selected prompt profile?")
-            == QMessageBox.StandardButton.Yes
-        ):
-            save_profiles([p for p in load_profiles() if p["id"] != selected])
-            self.refresh_profiles()
 
     def apply_theme(self, *_):
         preference = Config.load().theme
@@ -1141,7 +869,7 @@ class Window(QWidget):
                 self.setup_page.update_status(result)
                 self.learning_page.update_status(result)
                 self.microphone_page.update_status(result)
-                self.update_prompt_test(result)
+                self.prompt_profiles.update_status(result)
                 self.dictionary_page.update_training(result)
                 self.history_page.refresh_history()
             else:
@@ -1200,17 +928,17 @@ class Window(QWidget):
             self.status.setText(str(exc))
             return False
 
-    def keyring_action(self, action, *, profile=False):
+    def keyring_action(self, action: KeyringAction, *, profile: bool = False) -> None:
         from PySide6.QtWidgets import QInputDialog
 
         from .credentials import delete_key, store_key
 
-        fields = self.profile_fields if profile else self.fields
-        selection = self.profile_picker.currentData() if profile else None
+        fields = self.prompt_profiles.fields if profile else self.fields
+        selection = self.prompt_profiles.selection if profile else None
         try:
             values = {key: field_value(field) for key, field in fields.items()}
-            config = replace(Config.load(), **values).validate()
-        except (TypeError, ValueError) as exc:
+            config = Config.from_mapping({**asdict(Config.load()), **values})
+        except (OSError, TypeError, ValueError) as exc:
             self.status.setText(str(exc))
             return
         if action == "store":
@@ -1223,8 +951,8 @@ class Window(QWidget):
             if not accepted:
                 return
 
-            def function():
-                return store_key(config, key)
+            def function() -> None:
+                store_key(config, key)
         else:
             if (
                 QMessageBox.question(
@@ -1234,27 +962,24 @@ class Window(QWidget):
             ):
                 return
 
-            def function():
-                return delete_key(config)
+            def function() -> None:
+                delete_key(config)
 
-        task = Task(function, self)
-        self.jobs.add(task)
-
-        def received(response):
+        def received(response: Response) -> None:
             if "error" in response:
-                self.status.setText(response["error"])
+                self.status.setText(str(response["error"]))
                 return
             if action == "store":
                 if (
                     field_value(fields["ai_endpoint"]) != config.ai_endpoint
                     or field_value(fields["ai_provider"]) != config.ai_provider
-                    or (profile and self.profile_picker.currentData() != selection)
+                    or (profile and self.prompt_profiles.selection != selection)
                 ):
                     self.status.setText(
                         "API key saved for earlier endpoint; current editor unchanged"
                     )
                     return
-                source = fields["ai_credential_source"]
+                source = cast("QComboBox", fields["ai_credential_source"])
                 source.setCurrentIndex(source.findData("secret-service"))
                 self.status.setText(
                     "API key saved in desktop keyring. Save profile to use it."
@@ -1264,10 +989,7 @@ class Window(QWidget):
             else:
                 self.status.setText("API key deleted from desktop keyring")
 
-        task.done.connect(received)
-        task.finished.connect(lambda: self.jobs.discard(task))
-        task.finished.connect(task.deleteLater)
-        task.start()
+        self.run_task(function, received)
 
     def provider_action(self, action):
         if not self.save():
@@ -1276,8 +998,6 @@ class Window(QWidget):
 
         config = Config.load()
         function = (lambda: verify(config)) if action == "verify" else (lambda: list_models(config))
-        task = Task(function, self)
-        self.jobs.add(task)
 
         def received(response):
             if "error" in response:
@@ -1298,10 +1018,7 @@ class Window(QWidget):
                     self.fields["ai_model"].setText(model)
                     self.status.setText("Model selected; Save settings to apply")
 
-        task.done.connect(received)
-        task.finished.connect(lambda: self.jobs.discard(task))
-        task.finished.connect(task.deleteLater)
-        task.start()
+        self.run_task(function, received)
         self.status.setText("Checking provider…")
 
     def preview_sound(self, stop):

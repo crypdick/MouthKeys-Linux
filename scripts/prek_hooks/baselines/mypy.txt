@@ -206,27 +206,16 @@
 10	src/mouthkeys/formatting.py	no-untyped-call	Call to untyped function "enabled" in typed context
 1	src/mouthkeys/formatting.py	no-untyped-call	Call to untyped function "neighbor" in typed context
 8	src/mouthkeys/formatting.py	no-untyped-def	Function is missing a type annotation
-1	src/mouthkeys/gui.py	arg-type	Argument 4 to "replace" of "Config" has incompatible type "**dict[str, str]"; expected "int"
 1	src/mouthkeys/gui.py	assignment	Incompatible types in assignment (expression has type "QComboBox", variable has type "QSpinBox")
-1	src/mouthkeys/gui.py	assignment	Incompatible types in assignment (expression has type "QComboBox", variable has type "QTextEdit")
 1	src/mouthkeys/gui.py	assignment	Incompatible types in assignment (expression has type "QLineEdit", variable has type "QSpinBox")
-1	src/mouthkeys/gui.py	assignment	Incompatible types in assignment (expression has type "QLineEdit", variable has type "QTextEdit")
-1	src/mouthkeys/gui.py	assignment	Incompatible types in assignment (expression has type "QSpinBox", variable has type "QTextEdit")
-6	src/mouthkeys/gui.py	attr-defined	"QSpinBox" has no attribute "addItem"
-1	src/mouthkeys/gui.py	attr-defined	"QSpinBox" has no attribute "currentData"
+4	src/mouthkeys/gui.py	attr-defined	"QSpinBox" has no attribute "addItem"
 1	src/mouthkeys/gui.py	attr-defined	"QSpinBox" has no attribute "currentIndexChanged"
 1	src/mouthkeys/gui.py	attr-defined	"QSpinBox" has no attribute "currentTextChanged"; maybe "textChanged"?
-5	src/mouthkeys/gui.py	attr-defined	"QSpinBox" has no attribute "findData"
-4	src/mouthkeys/gui.py	attr-defined	"QSpinBox" has no attribute "setCurrentIndex"
+4	src/mouthkeys/gui.py	attr-defined	"QSpinBox" has no attribute "findData"
+3	src/mouthkeys/gui.py	attr-defined	"QSpinBox" has no attribute "setCurrentIndex"
 1	src/mouthkeys/gui.py	attr-defined	"QSpinBox" has no attribute "setEditable"
 1	src/mouthkeys/gui.py	attr-defined	"QSpinBox" has no attribute "setInsertPolicy"
 3	src/mouthkeys/gui.py	attr-defined	"QSpinBox" has no attribute "setText"
-1	src/mouthkeys/gui.py	attr-defined	"QTextEdit" has no attribute "addItem"
-1	src/mouthkeys/gui.py	attr-defined	"QTextEdit" has no attribute "findData"
-1	src/mouthkeys/gui.py	attr-defined	"QTextEdit" has no attribute "setCurrentIndex"; maybe "setCurrentFont"?
-1	src/mouthkeys/gui.py	attr-defined	"QTextEdit" has no attribute "setRange"
-1	src/mouthkeys/gui.py	attr-defined	"QTextEdit" has no attribute "setValue"
-2	src/mouthkeys/gui.py	attr-defined	"QWidget" has no attribute "currentData"
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "AssistantPage" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "LearningPage" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "MicrophonePage" in typed context
@@ -234,51 +223,32 @@
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "RegionalFillerBanner" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "SetupPage" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "Window" in typed context
-1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "add_prompt_route" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "apply_startup" in typed context
 2	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "apply_theme" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "audio_sources" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "create_tray" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "delete_model" in typed context
-2	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "draft_prompt_config" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "ensure_hotkeys" in typed context
-10	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "field_value" in typed context
-4	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "keyring_action" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "language_choices" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "list_models" in typed context
-7	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "load_profiles" in typed context
-2	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "load_routes" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "model_catalog" in typed context
 2	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "model_choices" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "poll" in typed context
 2	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "preview_sound" in typed context
-1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "process" in typed context
-1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "profiles_page" in typed context
 2	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "provider_action" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "read_download_progress" in typed context
 2	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "refresh" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "refresh_delivery_hint" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "refresh_model_choices" in typed context
-3	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "refresh_profiles" in typed context
 2	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "refresh_regional_offers" in typed context
-1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "run_prompt_test" in typed context
 4	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "save" in typed context
-2	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "save_profiles" in typed context
-1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "save_routes" in typed context
-1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "select_profile" in typed context
 3	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "setting_group" in typed context
-1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "update_prompt_test" in typed context
 3	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "update_status" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "verify" in typed context
-29	src/mouthkeys/gui.py	no-untyped-def	Function is missing a return type annotation
-20	src/mouthkeys/gui.py	no-untyped-def	Function is missing a type annotation
+19	src/mouthkeys/gui.py	no-untyped-def	Function is missing a return type annotation
+11	src/mouthkeys/gui.py	no-untyped-def	Function is missing a type annotation
 2	src/mouthkeys/gui.py	union-attr	Item "None" of "Any | None" has no attribute "deleteLater"
 1	src/mouthkeys/gui.py	union-attr	Item "None" of "Any | None" has no attribute "readAllStandardError"
-1	src/mouthkeys/gui.py	union-attr	Item "None" of "QTableWidgetItem | None" has no attribute "text"
-1	src/mouthkeys/gui.py	union-attr	Item "QSpinBox" of "QTextEdit | QSpinBox" has no attribute "findData"
-1	src/mouthkeys/gui.py	union-attr	Item "QSpinBox" of "QTextEdit | QSpinBox" has no attribute "setCurrentIndex"
-1	src/mouthkeys/gui.py	union-attr	Item "QTextEdit" of "QTextEdit | QSpinBox" has no attribute "findData"
-1	src/mouthkeys/gui.py	union-attr	Item "QTextEdit" of "QTextEdit | QSpinBox" has no attribute "setCurrentIndex"
 1	src/mouthkeys/hotkeys.py	assignment	Incompatible types in assignment (expression has type "float", variable has type "int")
 1	src/mouthkeys/hotkeys.py	func-returns-value	"append" of "list" does not return a value (it only ever returns None)
 1	src/mouthkeys/hotkeys.py	no-untyped-call	Call to untyped function "Activation" in typed context
@@ -289,7 +259,6 @@
 1	src/mouthkeys/hotkeys.py	no-untyped-call	Call to untyped function "events" in typed context
 1	src/mouthkeys/hotkeys.py	no-untyped-call	Call to untyped function "finish" in typed context
 1	src/mouthkeys/hotkeys.py	no-untyped-call	Call to untyped function "launch" in typed context
-1	src/mouthkeys/hotkeys.py	no-untyped-call	Call to untyped function "load_profiles" in typed context
 6	src/mouthkeys/hotkeys.py	no-untyped-def	Function is missing a return type annotation
 5	src/mouthkeys/hotkeys.py	no-untyped-def	Function is missing a type annotation
 1	src/mouthkeys/hotkeys.py	var-annotated	Need type annotation for "errors" (hint: "errors: list[<type>] = ...")
@@ -375,7 +344,6 @@
 1	src/mouthkeys/models_ui.py	attr-defined	"Callable[[], QWidget]" has no attribute "send"
 1	src/mouthkeys/models_ui.py	method-assign	Cannot assign to a method
 3	src/mouthkeys/models_ui.py	no-untyped-call	Call to untyped function "choose" in typed context
-2	src/mouthkeys/models_ui.py	no-untyped-call	Call to untyped function "field_value" in typed context
 1	src/mouthkeys/models_ui.py	no-untyped-call	Call to untyped function "filter_rows" in typed context
 1	src/mouthkeys/models_ui.py	no-untyped-call	Call to untyped function "model_catalog" in typed context
 3	src/mouthkeys/models_ui.py	no-untyped-call	Call to untyped function "refresh" in typed context
@@ -424,17 +392,11 @@
 1	src/mouthkeys/operations.py	no-untyped-call	Call to untyped function "backup_import" in typed context
 1	src/mouthkeys/operations.py	no-untyped-call	Call to untyped function "export" in typed context
 1	src/mouthkeys/operations.py	no-untyped-call	Call to untyped function "load" of "PronunciationStore" in typed context
-2	src/mouthkeys/operations.py	no-untyped-call	Call to untyped function "load_profiles" in typed context
-2	src/mouthkeys/operations.py	no-untyped-call	Call to untyped function "load_routes" in typed context
 1	src/mouthkeys/operations.py	no-untyped-call	Call to untyped function "restore" in typed context
 1	src/mouthkeys/operations.py	no-untyped-call	Call to untyped function "save" of "PronunciationStore" in typed context
-1	src/mouthkeys/operations.py	no-untyped-call	Call to untyped function "save_profiles" in typed context
-1	src/mouthkeys/operations.py	no-untyped-call	Call to untyped function "save_routes" in typed context
 1	src/mouthkeys/operations.py	no-untyped-call	Call to untyped function "statistics" in typed context
 1	src/mouthkeys/operations.py	no-untyped-call	Call to untyped function "validate" of "PronunciationStore" in typed context
 1	src/mouthkeys/operations.py	no-untyped-call	Call to untyped function "validate_entries" of "AssistantHistory" in typed context
-2	src/mouthkeys/operations.py	no-untyped-call	Call to untyped function "validate_profiles" in typed context
-1	src/mouthkeys/operations.py	no-untyped-call	Call to untyped function "validate_routes" in typed context
 6	src/mouthkeys/operations.py	no-untyped-def	Function is missing a type annotation
 1	src/mouthkeys/operations.py	var-annotated	Need type annotation for "apps"
 1	src/mouthkeys/operations.py	var-annotated	Need type annotation for "days"
@@ -465,13 +427,9 @@
 1	src/mouthkeys/postprocess.py	no-untyped-call	Call to untyped function "request_completion" in typed context
 1	src/mouthkeys/postprocess.py	no-untyped-call	Call to untyped function "resolve_profile" in typed context
 3	src/mouthkeys/postprocess.py	no-untyped-def	Function is missing a type annotation
-1	src/mouthkeys/profiles.py	no-untyped-call	Call to untyped function "load_profiles" in typed context
 1	src/mouthkeys/profiles.py	no-untyped-call	Call to untyped function "models_endpoint" in typed context
-2	src/mouthkeys/profiles.py	no-untyped-call	Call to untyped function "profiles_path" in typed context
-2	src/mouthkeys/profiles.py	no-untyped-call	Call to untyped function "validate_profiles" in typed context
 1	src/mouthkeys/profiles.py	no-untyped-call	Call to untyped function "validate_reasoning" in typed context
-2	src/mouthkeys/profiles.py	no-untyped-def	Function is missing a return type annotation
-3	src/mouthkeys/profiles.py	no-untyped-def	Function is missing a type annotation
+1	src/mouthkeys/profiles.py	no-untyped-def	Function is missing a type annotation
 1	src/mouthkeys/pronunciation.py	assignment	Incompatible types in assignment (expression has type "dict[str, Any] | None", variable has type "dict[str, Any]")
 1	src/mouthkeys/pronunciation.py	index	Value of type "ndarray[Any, Any] | None" is not indexable
 1	src/mouthkeys/pronunciation.py	no-untyped-call	Call to untyped function "_AudioWindow" in typed context
@@ -499,11 +457,8 @@
 1	src/mouthkeys/regional_ui.py	no-untyped-call	Call to untyped function "answer" in typed context
 3	src/mouthkeys/regional_ui.py	no-untyped-call	Call to untyped function "refresh" in typed context
 3	src/mouthkeys/regional_ui.py	no-untyped-def	Function is missing a type annotation
-1	src/mouthkeys/routing.py	no-untyped-call	Call to untyped function "load_profiles" in typed context
-1	src/mouthkeys/routing.py	no-untyped-call	Call to untyped function "load_routes" in typed context
 1	src/mouthkeys/routing.py	no-untyped-call	Call to untyped function "resolve_profile" in typed context
-2	src/mouthkeys/routing.py	no-untyped-call	Call to untyped function "validate_routes" in typed context
-4	src/mouthkeys/routing.py	no-untyped-def	Function is missing a type annotation
+1	src/mouthkeys/routing.py	no-untyped-def	Function is missing a type annotation
 1	src/mouthkeys/service.py	arg-type	Argument 1 to "DictationJob" has incompatible type "Any | None"; expected "str"
 1	src/mouthkeys/service.py	assignment	Incompatible types in assignment (expression has type "bool", target has type "str")
 5	src/mouthkeys/service.py	assignment	Incompatible types in assignment (expression has type "float", variable has type "int")
@@ -542,8 +497,6 @@
 1	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "format_text" in typed context
 3	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "get" in typed context
 1	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "handle_action" in typed context
-2	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "load_profiles" in typed context
-2	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "load_routes" in typed context
 1	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "pending_executions" in typed context
 2	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "process" in typed context
 3	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "proposal_size" in typed context
@@ -613,9 +566,5 @@
 7	src/mouthkeys/tray.py	no-untyped-def	Function is missing a type annotation
 2	src/mouthkeys/tray.py	union-attr	Item "None" of "QCoreApplication | None" has no attribute "quit"
 2	src/mouthkeys/upstream_backup.py	no-untyped-call	Call to untyped function "_merge_rules" in typed context
-1	src/mouthkeys/upstream_backup.py	no-untyped-call	Call to untyped function "load_profiles" in typed context
-1	src/mouthkeys/upstream_backup.py	no-untyped-call	Call to untyped function "load_routes" in typed context
 1	src/mouthkeys/upstream_backup.py	no-untyped-call	Call to untyped function "merge_replacements" in typed context
 1	src/mouthkeys/upstream_backup.py	no-untyped-call	Call to untyped function "replacement_entries" in typed context
-2	src/mouthkeys/upstream_backup.py	no-untyped-call	Call to untyped function "validate_profiles" in typed context
-1	src/mouthkeys/upstream_backup.py	no-untyped-call	Call to untyped function "validate_routes" in typed context

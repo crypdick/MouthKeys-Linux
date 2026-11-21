@@ -6,9 +6,29 @@ import tempfile
 import uuid
 from dataclasses import replace
 from pathlib import Path
+from typing import TypedDict, cast
 
 from .ai_providers import PROVIDER_ENDPOINTS, endpoint_url
 from .config import config_path, private_dir
+
+
+class PromptProfile(TypedDict):
+    id: str
+    name: str
+    shortcut: str
+    ai_provider: str
+    ai_endpoint: str
+    ai_model: str
+    ai_key_env: str
+    ai_credential_source: str
+    ai_prompt: str
+    ai_max_tokens: int
+    ai_timeout: int
+    ai_models_endpoint: str
+    ai_reasoning_parameter: str
+    ai_reasoning_value: str
+    ai_streaming: str
+
 
 PROFILE_FIELDS = (
     "ai_provider",
@@ -34,11 +54,11 @@ PROFILE_DEFAULTS = {
 }
 
 
-def profiles_path():
+def profiles_path() -> Path:
     return config_path().parent / "profiles.json"
 
 
-def validate_profiles(profiles):
+def validate_profiles(profiles: object) -> list[PromptProfile]:
     if not isinstance(profiles, list) or len(profiles) > 100:
         raise ValueError("AI profiles must be a list with at most 100 entries")
     profiles = [
@@ -117,10 +137,10 @@ def validate_profiles(profiles):
                 raise ValueError(f"AI profile {key} must be between 1 and {high}")
     if len(json.dumps(profiles).encode()) > 1024 * 1024:
         raise ValueError("AI profiles exceed 1 MB")
-    return profiles
+    return cast("list[PromptProfile]", profiles)
 
 
-def load_profiles():
+def load_profiles() -> list[PromptProfile]:
     path = profiles_path()
     if not path.exists():
         return []
@@ -129,15 +149,15 @@ def load_profiles():
     return validate_profiles(json.loads(path.read_text()))
 
 
-def save_profiles(profiles):
-    profiles = validate_profiles(profiles)
+def save_profiles(profiles: object) -> None:
+    validated = validate_profiles(profiles)
     path = profiles_path()
     private_dir(path.parent)
     temporary = None
     try:
         with tempfile.NamedTemporaryFile(mode="w", dir=path.parent, delete=False) as stream:
             temporary = Path(stream.name)
-            json.dump(profiles, stream, indent=2, ensure_ascii=False)
+            json.dump(validated, stream, indent=2, ensure_ascii=False)
         temporary.replace(path)
     finally:
         if temporary:
@@ -151,4 +171,5 @@ def resolve_profile(config, profiles=None):
     profile = next((p for p in available if p["id"] == config.ai_profile), None)
     if profile is None:
         raise ValueError("Selected AI cleanup profile no longer exists")
-    return replace(config, **{field: profile[field] for field in PROFILE_FIELDS}).validate()
+    values = dict(profile)
+    return replace(config, **{field: values[field] for field in PROFILE_FIELDS}).validate()

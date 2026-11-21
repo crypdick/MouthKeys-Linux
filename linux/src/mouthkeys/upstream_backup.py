@@ -15,7 +15,7 @@ from typing import Literal, overload
 from urllib.parse import urlsplit
 
 from .config import Config
-from .dictionary import Dictionary
+from .dictionary import Dictionary, DictionaryData
 from .dictionary_transfer import _merge_rules, merge_replacements, replacement_entries
 from .profiles import PROFILE_FIELDS, load_profiles, validate_profiles
 from .routing import load_routes, validate_routes
@@ -106,7 +106,7 @@ def _provider(settings: dict[str, object]) -> Config | None:
 
 def _convert_dictionary(
     settings: dict[str, object], current_dictionary: object, notes: MigrationNotes
-) -> tuple[dict[str, object], int]:
+) -> tuple[DictionaryData, int]:
     dictionary = copy.deepcopy(Dictionary.validate(current_dictionary))
     replacements = replacement_entries(read_list(settings, "customDictionaryEntries", 10000))
     dictionary["replacements"] = merge_replacements(dictionary["replacements"], replacements)

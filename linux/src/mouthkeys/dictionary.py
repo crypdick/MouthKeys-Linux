@@ -4,13 +4,35 @@ import copy
 import json
 import re
 import uuid
+from pathlib import Path
+from typing import NotRequired, TypedDict, cast
 
 from .config import config_path, private_dir
 from .data_lock import dictionary_lock
 from .operations import write_private
 
+
+class Replacement(TypedDict):
+    triggers: list[str]
+    replacement: str
+    enabled: NotRequired[bool]
+    id: NotRequired[str]
+
+
+class FormattingRule(TypedDict):
+    aliases: list[str]
+    symbol: str
+    enabled: NotRequired[bool]
+
+
+class DictionaryData(TypedDict):
+    replacements: list[Replacement]
+    punctuation: list[FormattingRule]
+    actions: list[FormattingRule]
+
+
 # Keep aliases grouped: dot/period, hyphen/dash, and quote variants have different spacing.
-DEFAULT_PUNCTUATION_RULES = [
+DEFAULT_PUNCTUATION_RULES: list[FormattingRule] = [
     {"aliases": ["comma"], "symbol": ","},
     {"aliases": ["period", "full stop"], "symbol": "."},
     {"aliases": ["dot"], "symbol": "."},
@@ -117,11 +139,11 @@ def phrase_pattern(phrase: str) -> str:
 
 class Dictionary:
     @staticmethod
-    def path():
+    def path() -> Path:
         return config_path().with_name("dictionary.json")
 
     @staticmethod
-    def defaults():
+    def defaults() -> DictionaryData:
         return {
             "replacements": [],
             "punctuation": copy.deepcopy(DEFAULT_PUNCTUATION_RULES),
@@ -134,7 +156,7 @@ class Dictionary:
         }
 
     @staticmethod
-    def validate(data):
+    def validate(data: object) -> DictionaryData:
         if not isinstance(data, dict) or set(data) != {"replacements", "punctuation", "actions"}:
             raise ValueError("Dictionary requires replacements, punctuation, and actions lists")
         for section, key, value_key in (
@@ -175,10 +197,10 @@ class Dictionary:
                     if normalized in seen:
                         raise ValueError(f"Duplicate {section} phrase: {alias}")
                     seen.add(normalized)
-        return data
+        return cast("DictionaryData", data)  # Each section and its entries were checked above.
 
     @classmethod
-    def load(cls):
+    def load(cls) -> DictionaryData:
         with dictionary_lock():
             path = cls.path()
             if not path.exists():
@@ -186,27 +208,31 @@ class Dictionary:
             return cls.validate(json.loads(path.read_text()))
 
     @classmethod
-    def save(cls, data):
+    def save(cls, data: object, *, expected: DictionaryData | None = None) -> None:
         cls.validate(data)
         with dictionary_lock():
+            if expected is not None and cls.load() != expected:
+                raise ValueError(
+                    "Dictionary changed (possibly a learned correction). Reload before saving."
+                )
             path = cls.path()
             private_dir(path.parent)
             write_private(path, json.dumps(data, ensure_ascii=False, indent=2).encode())
 
     @classmethod
-    def import_file(cls, path, mode="replace"):
+    def import_file(cls, path: str | Path, mode: str = "replace") -> DictionaryData:
         from .dictionary_transfer import import_file
 
         return import_file(path, mode)
 
     @classmethod
-    def export_file(cls, path, format="native"):
+    def export_file(cls, path: str | Path, format: str = "native") -> None:  # noqa: A002 - transfer keyword
         from .dictionary_transfer import export_file
 
-        return export_file(path, format)
+        export_file(path, format)
 
     @classmethod
-    def apply(cls, text, data=None):
+    def apply(cls, text: str, data: object = None) -> str:
         data = cls.load() if data is None else cls.validate(data)
         # One pass: replacement text never becomes another trigger in this dictation.
         replacements = {

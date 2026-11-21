@@ -24,8 +24,9 @@ then dispatches local work or uses `control` to contact the private Unix socket 
   its current frame without controlling focus, placement, or IPC. `qt_control` sends their
   control requests without importing Settings or blocking the Qt event loop.
   Transcript history (`history_ui`), activity (`stats_view`), backup review (`backup_ui`), and
-  diagnostics (`help_ui`) own their Settings pages. Settings waits for backup previews and
-  reviews before closing.
+  diagnostics (`help_ui`) own their Settings pages. `dictionary_ui` owns editing and voice training
+  drafts; saving compares the editor's snapshot under the same lock used to write the dictionary.
+  Settings waits for backup previews and reviews before closing.
   `file_transcription_ui` owns the file worker and its history; Settings and the tray check whether
   it is busy before closing.
   `local_api` is opt-in loopback access. `ai_providers` and `ai_stream` handle configured AI

@@ -131,9 +131,7 @@
 1	src/mouthkeys/cli.py	no-untyped-call	Call to untyped function "apply_startup" in typed context
 1	src/mouthkeys/cli.py	no-untyped-call	Call to untyped function "delete_model" in typed context
 1	src/mouthkeys/cli.py	no-untyped-call	Call to untyped function "download_diarization" in typed context
-1	src/mouthkeys/cli.py	no-untyped-call	Call to untyped function "export_file" of "Dictionary" in typed context
 3	src/mouthkeys/cli.py	no-untyped-call	Call to untyped function "file_progress" in typed context
-1	src/mouthkeys/cli.py	no-untyped-call	Call to untyped function "import_file" of "Dictionary" in typed context
 2	src/mouthkeys/cli.py	no-untyped-call	Call to untyped function "install_desktop" in typed context
 1	src/mouthkeys/cli.py	no-untyped-call	Call to untyped function "model_catalog" in typed context
 2	src/mouthkeys/cli.py	no-untyped-call	Call to untyped function "read_app_map" in typed context
@@ -158,25 +156,13 @@
 1	src/mouthkeys/delivery.py	no-untyped-call	Call to untyped function "ClipboardPaste" in typed context
 1	src/mouthkeys/delivery.py	no-untyped-call	Call to untyped function "expected_text" in typed context
 1	src/mouthkeys/delivery.py	no-untyped-call	Call to untyped function "unchanged" in typed context
-1	src/mouthkeys/dictionary.py	no-untyped-call	Call to untyped function "defaults" of "Dictionary" in typed context
-1	src/mouthkeys/dictionary.py	no-untyped-call	Call to untyped function "export_file" in typed context
-1	src/mouthkeys/dictionary.py	no-untyped-call	Call to untyped function "import_file" in typed context
-1	src/mouthkeys/dictionary.py	no-untyped-call	Call to untyped function "load" of "Dictionary" in typed context
-2	src/mouthkeys/dictionary.py	no-untyped-call	Call to untyped function "path" of "Dictionary" in typed context
-3	src/mouthkeys/dictionary.py	no-untyped-call	Call to untyped function "validate" of "Dictionary" in typed context
-3	src/mouthkeys/dictionary.py	no-untyped-def	Function is missing a return type annotation
-5	src/mouthkeys/dictionary.py	no-untyped-def	Function is missing a type annotation
 1	src/mouthkeys/dictionary_transfer.py	no-untyped-call	Call to untyped function "_merge_rules" in typed context
 2	src/mouthkeys/dictionary_transfer.py	no-untyped-call	Call to untyped function "custom_word_entries" in typed context
 1	src/mouthkeys/dictionary_transfer.py	no-untyped-call	Call to untyped function "decode_document" in typed context
-1	src/mouthkeys/dictionary_transfer.py	no-untyped-call	Call to untyped function "defaults" of "Dictionary" in typed context
-2	src/mouthkeys/dictionary_transfer.py	no-untyped-call	Call to untyped function "load" of "Dictionary" in typed context
 2	src/mouthkeys/dictionary_transfer.py	no-untyped-call	Call to untyped function "merge_replacements" in typed context
 5	src/mouthkeys/dictionary_transfer.py	no-untyped-call	Call to untyped function "phrase_key" in typed context
 2	src/mouthkeys/dictionary_transfer.py	no-untyped-call	Call to untyped function "replacement_entries" in typed context
-1	src/mouthkeys/dictionary_transfer.py	no-untyped-call	Call to untyped function "save" of "Dictionary" in typed context
-3	src/mouthkeys/dictionary_transfer.py	no-untyped-call	Call to untyped function "validate" of "Dictionary" in typed context
-8	src/mouthkeys/dictionary_transfer.py	no-untyped-def	Function is missing a type annotation
+6	src/mouthkeys/dictionary_transfer.py	no-untyped-def	Function is missing a type annotation
 1	src/mouthkeys/engines.py	no-untyped-call	Call to untyped function "_download_onnx_revision" in typed context
 1	src/mouthkeys/engines.py	no-untyped-call	Call to untyped function "_model_catalog" in typed context
 2	src/mouthkeys/engines.py	no-untyped-call	Call to untyped function "has_revision" in typed context
@@ -215,13 +201,10 @@
 2	src/mouthkeys/formatting.py	no-untyped-call	Call to untyped function "_ending_question" in typed context
 1	src/mouthkeys/formatting.py	no-untyped-call	Call to untyped function "_first_letter_case" in typed context
 1	src/mouthkeys/formatting.py	no-untyped-call	Call to untyped function "_punctuation_spacing" in typed context
-1	src/mouthkeys/formatting.py	no-untyped-call	Call to untyped function "apply" of "Dictionary" in typed context
 1	src/mouthkeys/formatting.py	no-untyped-call	Call to untyped function "apply_question_mark_shortcut" in typed context
 1	src/mouthkeys/formatting.py	no-untyped-call	Call to untyped function "apply_spoken_punctuation" in typed context
 10	src/mouthkeys/formatting.py	no-untyped-call	Call to untyped function "enabled" in typed context
-1	src/mouthkeys/formatting.py	no-untyped-call	Call to untyped function "load" of "Dictionary" in typed context
 1	src/mouthkeys/formatting.py	no-untyped-call	Call to untyped function "neighbor" in typed context
-1	src/mouthkeys/formatting.py	no-untyped-call	Call to untyped function "validate" of "Dictionary" in typed context
 8	src/mouthkeys/formatting.py	no-untyped-def	Function is missing a type annotation
 1	src/mouthkeys/gui.py	arg-type	Argument 4 to "replace" of "Config" has incompatible type "**dict[str, str]"; expected "int"
 1	src/mouthkeys/gui.py	assignment	Incompatible types in assignment (expression has type "QComboBox", variable has type "QSpinBox")
@@ -244,14 +227,6 @@
 1	src/mouthkeys/gui.py	attr-defined	"QTextEdit" has no attribute "setRange"
 1	src/mouthkeys/gui.py	attr-defined	"QTextEdit" has no attribute "setValue"
 2	src/mouthkeys/gui.py	attr-defined	"QWidget" has no attribute "currentData"
-2	src/mouthkeys/gui.py	attr-defined	"QWidget" has no attribute "currentRow"
-1	src/mouthkeys/gui.py	attr-defined	"QWidget" has no attribute "editItem"
-1	src/mouthkeys/gui.py	attr-defined	"QWidget" has no attribute "insertRow"
-1	src/mouthkeys/gui.py	attr-defined	"QWidget" has no attribute "item"
-1	src/mouthkeys/gui.py	attr-defined	"QWidget" has no attribute "removeRow"
-1	src/mouthkeys/gui.py	attr-defined	"QWidget" has no attribute "rowCount"
-1	src/mouthkeys/gui.py	attr-defined	"QWidget" has no attribute "setCurrentCell"
-1	src/mouthkeys/gui.py	attr-defined	"QWidget" has no attribute "setItem"
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "AssistantPage" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "LearningPage" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "MicrophonePage" in typed context
@@ -264,19 +239,13 @@
 2	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "apply_theme" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "audio_sources" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "create_tray" in typed context
-1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "defaults" of "Dictionary" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "delete_model" in typed context
-1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "dictionary_page" in typed context
 2	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "draft_prompt_config" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "ensure_hotkeys" in typed context
-1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "export_file" of "Dictionary" in typed context
 10	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "field_value" in typed context
-4	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "fill_dictionary" in typed context
-1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "import_file" of "Dictionary" in typed context
 4	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "keyring_action" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "language_choices" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "list_models" in typed context
-4	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "load" of "Dictionary" in typed context
 7	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "load_profiles" in typed context
 2	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "load_routes" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "model_catalog" in typed context
@@ -292,26 +261,20 @@
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "refresh_model_choices" in typed context
 3	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "refresh_profiles" in typed context
 2	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "refresh_regional_offers" in typed context
-1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "refresh_words" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "run_prompt_test" in typed context
 4	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "save" in typed context
-2	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "save" of "Dictionary" in typed context
-1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "save_dictionary" in typed context
 2	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "save_profiles" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "save_routes" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "select_profile" in typed context
 3	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "setting_group" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "update_prompt_test" in typed context
 3	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "update_status" in typed context
-1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "update_training" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "verify" in typed context
-38	src/mouthkeys/gui.py	no-untyped-def	Function is missing a return type annotation
-23	src/mouthkeys/gui.py	no-untyped-def	Function is missing a type annotation
+29	src/mouthkeys/gui.py	no-untyped-def	Function is missing a return type annotation
+20	src/mouthkeys/gui.py	no-untyped-def	Function is missing a type annotation
 2	src/mouthkeys/gui.py	union-attr	Item "None" of "Any | None" has no attribute "deleteLater"
 1	src/mouthkeys/gui.py	union-attr	Item "None" of "Any | None" has no attribute "readAllStandardError"
-1	src/mouthkeys/gui.py	union-attr	Item "None" of "QTableWidgetItem | None" has no attribute "data"
-1	src/mouthkeys/gui.py	union-attr	Item "None" of "QTableWidgetItem | None" has no attribute "setData"
-2	src/mouthkeys/gui.py	union-attr	Item "None" of "QTableWidgetItem | None" has no attribute "text"
+1	src/mouthkeys/gui.py	union-attr	Item "None" of "QTableWidgetItem | None" has no attribute "text"
 1	src/mouthkeys/gui.py	union-attr	Item "QSpinBox" of "QTextEdit | QSpinBox" has no attribute "findData"
 1	src/mouthkeys/gui.py	union-attr	Item "QSpinBox" of "QTextEdit | QSpinBox" has no attribute "setCurrentIndex"
 1	src/mouthkeys/gui.py	union-attr	Item "QTextEdit" of "QTextEdit | QSpinBox" has no attribute "findData"
@@ -351,10 +314,7 @@
 4	src/mouthkeys/learning.py	no-untyped-call	Call to untyped function "cancel" in typed context
 2	src/mouthkeys/learning.py	no-untyped-call	Call to untyped function "changed_range" in typed context
 1	src/mouthkeys/learning.py	no-untyped-call	Call to untyped function "correction_candidate" in typed context
-2	src/mouthkeys/learning.py	no-untyped-call	Call to untyped function "load" of "Dictionary" in typed context
 2	src/mouthkeys/learning.py	no-untyped-call	Call to untyped function "path" of "CorrectionLearner" in typed context
-1	src/mouthkeys/learning.py	no-untyped-call	Call to untyped function "save" of "Dictionary" in typed context
-1	src/mouthkeys/learning.py	no-untyped-call	Call to untyped function "validate" of "Dictionary" in typed context
 4	src/mouthkeys/learning.py	no-untyped-def	Function is missing a return type annotation
 11	src/mouthkeys/learning.py	no-untyped-def	Function is missing a type annotation
 2	src/mouthkeys/learning_ui.py	attr-defined	"Callable[[], QWidget]" has no attribute "send"
@@ -381,14 +341,12 @@
 1	src/mouthkeys/local_api.py	no-untyped-call	Call to untyped function "dictionary" in typed context
 2	src/mouthkeys/local_api.py	no-untyped-call	Call to untyped function "dispatch" in typed context
 1	src/mouthkeys/local_api.py	no-untyped-call	Call to untyped function "history_item" in typed context
-1	src/mouthkeys/local_api.py	no-untyped-call	Call to untyped function "load" of "Dictionary" in typed context
 1	src/mouthkeys/local_api.py	no-untyped-call	Call to untyped function "merge_replacements" in typed context
 2	src/mouthkeys/local_api.py	no-untyped-call	Call to untyped function "phrase_key" in typed context
 1	src/mouthkeys/local_api.py	no-untyped-call	Call to untyped function "process" in typed context
 2	src/mouthkeys/local_api.py	no-untyped-call	Call to untyped function "replacement_entries" in typed context
 2	src/mouthkeys/local_api.py	no-untyped-call	Call to untyped function "replacement_id" in typed context
 1	src/mouthkeys/local_api.py	no-untyped-call	Call to untyped function "resolve_profile" in typed context
-1	src/mouthkeys/local_api.py	no-untyped-call	Call to untyped function "save" of "Dictionary" in typed context
 1	src/mouthkeys/local_api.py	no-untyped-call	Call to untyped function "statistics" in typed context
 1	src/mouthkeys/local_api.py	no-untyped-call	Call to untyped function "transcribe" in typed context
 1	src/mouthkeys/local_api.py	no-untyped-call	Call to untyped function "transcribe_file" in typed context
@@ -465,17 +423,14 @@
 1	src/mouthkeys/operations.py	no-untyped-call	Call to untyped function "backup_export" in typed context
 1	src/mouthkeys/operations.py	no-untyped-call	Call to untyped function "backup_import" in typed context
 1	src/mouthkeys/operations.py	no-untyped-call	Call to untyped function "export" in typed context
-1	src/mouthkeys/operations.py	no-untyped-call	Call to untyped function "load" of "Dictionary" in typed context
 1	src/mouthkeys/operations.py	no-untyped-call	Call to untyped function "load" of "PronunciationStore" in typed context
 2	src/mouthkeys/operations.py	no-untyped-call	Call to untyped function "load_profiles" in typed context
 2	src/mouthkeys/operations.py	no-untyped-call	Call to untyped function "load_routes" in typed context
 1	src/mouthkeys/operations.py	no-untyped-call	Call to untyped function "restore" in typed context
-1	src/mouthkeys/operations.py	no-untyped-call	Call to untyped function "save" of "Dictionary" in typed context
 1	src/mouthkeys/operations.py	no-untyped-call	Call to untyped function "save" of "PronunciationStore" in typed context
 1	src/mouthkeys/operations.py	no-untyped-call	Call to untyped function "save_profiles" in typed context
 1	src/mouthkeys/operations.py	no-untyped-call	Call to untyped function "save_routes" in typed context
 1	src/mouthkeys/operations.py	no-untyped-call	Call to untyped function "statistics" in typed context
-1	src/mouthkeys/operations.py	no-untyped-call	Call to untyped function "validate" of "Dictionary" in typed context
 1	src/mouthkeys/operations.py	no-untyped-call	Call to untyped function "validate" of "PronunciationStore" in typed context
 1	src/mouthkeys/operations.py	no-untyped-call	Call to untyped function "validate_entries" of "AssistantHistory" in typed context
 2	src/mouthkeys/operations.py	no-untyped-call	Call to untyped function "validate_profiles" in typed context
@@ -658,13 +613,9 @@
 7	src/mouthkeys/tray.py	no-untyped-def	Function is missing a type annotation
 2	src/mouthkeys/tray.py	union-attr	Item "None" of "QCoreApplication | None" has no attribute "quit"
 2	src/mouthkeys/upstream_backup.py	no-untyped-call	Call to untyped function "_merge_rules" in typed context
-1	src/mouthkeys/upstream_backup.py	no-untyped-call	Call to untyped function "defaults" of "Dictionary" in typed context
 1	src/mouthkeys/upstream_backup.py	no-untyped-call	Call to untyped function "load_profiles" in typed context
 1	src/mouthkeys/upstream_backup.py	no-untyped-call	Call to untyped function "load_routes" in typed context
 1	src/mouthkeys/upstream_backup.py	no-untyped-call	Call to untyped function "merge_replacements" in typed context
-1	src/mouthkeys/upstream_backup.py	no-untyped-call	Call to untyped function "path" of "Dictionary" in typed context
 1	src/mouthkeys/upstream_backup.py	no-untyped-call	Call to untyped function "replacement_entries" in typed context
-2	src/mouthkeys/upstream_backup.py	no-untyped-call	Call to untyped function "validate" of "Dictionary" in typed context
 2	src/mouthkeys/upstream_backup.py	no-untyped-call	Call to untyped function "validate_profiles" in typed context
 1	src/mouthkeys/upstream_backup.py	no-untyped-call	Call to untyped function "validate_routes" in typed context
-1	src/mouthkeys/vocabulary.py	no-untyped-call	Call to untyped function "load" of "Dictionary" in typed context

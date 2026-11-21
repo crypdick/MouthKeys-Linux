@@ -1,7 +1,9 @@
+from concurrent.futures import ThreadPoolExecutor
 from types import SimpleNamespace
 
 import pytest
 
+from mouthkeys import data_lock
 from mouthkeys.dictionary import Dictionary
 from mouthkeys.learning import CorrectionLearner, correction_candidate
 from mouthkeys.vocabulary import VocabularyStore, context_prompt, whisper_options
@@ -73,6 +75,35 @@ def test_learning_is_anchored_debounced_and_requires_confirmation():
     assert learner.pending() == []
     assert learner.path().stat().st_mode & 0o777 == 0o600
     assert "Prefix" not in learner.path().read_text()
+
+
+def test_accept_serializes_with_editor_saves(monkeypatch):
+    learner = CorrectionLearner(config(), clock=lambda: 0, wall_clock=lambda: 10000)
+    assert learner.begin("wurld", snapshot("wurld"))
+    learner.observe(snapshot("world"), now=1)
+    proposal = learner.observe(snapshot("world"), now=4)
+    old_dictionary = Dictionary.load()
+    edit = Dictionary.defaults()
+    edit["actions"] = []
+    original_load = Dictionary.load
+    monkeypatch.setattr(data_lock, "LOCK_TIMEOUT", 0.02)
+
+    with ThreadPoolExecutor(max_workers=1) as pool, monkeypatch.context() as patch:
+
+        def concurrent_save():
+            patch.setattr(Dictionary, "load", original_load)
+            data = original_load()
+            save = pool.submit(Dictionary.save, edit, expected=old_dictionary)
+            with pytest.raises(TimeoutError, match="retry after the current operation"):
+                save.result(timeout=2)
+            return data
+
+        patch.setattr(Dictionary, "load", concurrent_save)
+        learner.accept(proposal["id"])
+
+    assert Dictionary.apply("wurld") == "world"
+    with pytest.raises(ValueError, match="Reload before saving"):
+        Dictionary.save(edit, expected=old_dictionary)
 
 
 @pytest.mark.parametrize(

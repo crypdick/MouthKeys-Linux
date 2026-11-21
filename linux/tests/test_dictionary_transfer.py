@@ -1,13 +1,12 @@
 import fcntl
 import json
-import os
 import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
-from mouthkeys import data_lock
+from mouthkeys import data_lock, dictionary_transfer
 from mouthkeys.config import config_path, private_dir
 from mouthkeys.data_lock import dictionary_lock
 from mouthkeys.dictionary import Dictionary
@@ -78,7 +77,7 @@ def test_native_roundtrip_preserves_disabled_rules_formatting_and_vocabulary(tmp
     VocabularyStore.save_entries(words)
     path = tmp_path / "export.json"
     Dictionary.export_file(path)
-    assert os.stat(path).st_mode & 0o777 == 0o600
+    assert path.stat().st_mode & 0o777 == 0o600
     assert json.loads(path.read_text())["customWords"] == words
     Dictionary.save(Dictionary.defaults())
     VocabularyStore.save_entries([])
@@ -144,7 +143,9 @@ def test_invalid_import_changes_neither_store(tmp_path, data):
     VocabularyStore.save_entries([{"text": "Existing"}])
     old_dictionary = Dictionary.path().read_bytes()
     old_words = VocabularyStore.path().read_bytes()
-    with pytest.raises(ValueError):
+    with pytest.raises(
+        ValueError, match=r"Invalid replacements|weight|Duplicate|Dictionary requires"
+    ):
         Dictionary.import_file(document(tmp_path, data))
     assert Dictionary.path().read_bytes() == old_dictionary
     assert VocabularyStore.path().read_bytes() == old_words
@@ -168,7 +169,7 @@ def test_second_store_write_failure_rolls_back_vocabulary(tmp_path, monkeypatch)
 
 
 @pytest.mark.parametrize(
-    "payload,expected",
+    ("payload", "expected"),
     [
         ({"terms": ["Linux"]}, "words"),
         ({"items": [{"triggers": ["from"], "replacement": "to"}]}, "replacements"),
@@ -258,3 +259,80 @@ def test_dictionary_lock_times_out_when_another_thread_holds_it(monkeypatch):
             release.set()
         worker.result(timeout=2)
     Dictionary.save(Dictionary.defaults())
+
+
+def test_merge_removes_old_rules_with_no_remaining_triggers(tmp_path):
+    current = Dictionary.defaults()
+    current["replacements"] = [{"triggers": ["shared"], "replacement": "Old"}]
+    Dictionary.save(current)
+    path = document(tmp_path, {"replacements": [{"from": "shared", "to": "New", "enabled": False}]})
+    result = Dictionary.import_file(path, "merge")
+    assert result["replacements"] == [
+        {"triggers": ["shared"], "replacement": "New", "enabled": False}
+    ]
+    assert Dictionary.apply("shared") == "shared"
+
+
+@pytest.mark.parametrize(
+    ("payload", "message"),
+    [
+        ([], "must be a JSON object"),
+        ({"actions": [], "typo": []}, "Unknown native dictionary transfer fields"),
+        ({"replacements": "invalid"}, "must contain at most 10000 entries"),
+        ({"replacements": [42]}, "Invalid replacement entry"),
+        (
+            {"replacements": [{"from": "one", "to": "two", "id": "invalid"}]},
+            "Invalid replacement ID",
+        ),
+        ({"customWords": "invalid"}, "Custom words must be a list"),
+        ({"customWords": [{"text": "one", "typo": []}]}, "Invalid custom word entry"),
+    ],
+)
+def test_transfer_document_shape_at_import_boundary(tmp_path, payload, message):
+    path = document(tmp_path, payload)
+    with pytest.raises(ValueError, match=message):
+        Dictionary.import_file(path)
+    assert not Dictionary.path().exists()
+    assert not VocabularyStore.path().exists()
+
+
+def test_empty_items_clears_vocabulary_without_falling_back_to_entries(tmp_path):
+    VocabularyStore.save(["Existing"])
+    path = document(tmp_path, {"items": [], "entries": [{"text": "ignored"}]})
+    Dictionary.import_file(path)
+    assert VocabularyStore.load() == []
+
+
+def test_transfer_rejects_invalid_modes_and_oversize_payloads(tmp_path, monkeypatch):
+    source = document(tmp_path, {"customWords": ["Example"]})
+    target = tmp_path / "export.json"
+    with pytest.raises(ValueError, match="mode must be merge or replace"):
+        Dictionary.import_file(source, "invalid")
+    with pytest.raises(ValueError, match="format must be native or upstream"):
+        Dictionary.export_file(target, "invalid")
+
+    monkeypatch.setattr(dictionary_transfer, "MAX_TRANSFER_BYTES", 1)
+    with pytest.raises(ValueError, match="Dictionary transfer exceeds"):
+        Dictionary.import_file(source)
+    with pytest.raises(ValueError, match="Dictionary transfer exceeds"):
+        Dictionary.export_file(target)
+    assert not Dictionary.path().exists()
+    assert not VocabularyStore.path().exists()
+    assert not target.exists()
+
+
+@pytest.mark.parametrize("words", [None, ["New"]])
+def test_dictionary_write_failure_does_not_leave_new_vocabulary(tmp_path, monkeypatch, words):
+    payload = {"replacements": []}
+    if words is not None:
+        payload["customWords"] = words
+    path = document(tmp_path, payload)
+
+    def fail(data):
+        raise OSError("test disk failure")
+
+    monkeypatch.setattr(Dictionary, "save", fail)
+    with pytest.raises(OSError, match="test disk failure"):
+        Dictionary.import_file(path)
+    assert not Dictionary.path().exists()
+    assert not VocabularyStore.path().exists()

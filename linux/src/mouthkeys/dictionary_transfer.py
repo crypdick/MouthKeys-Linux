@@ -6,7 +6,7 @@ import uuid
 from pathlib import Path
 
 from .data_lock import dictionary_lock
-from .dictionary import Dictionary
+from .dictionary import Dictionary, DictionaryData
 from .operations import write_private
 from .vocabulary import VocabularyStore
 
@@ -146,7 +146,7 @@ def _merge_rules(existing, incoming):
     return result
 
 
-def import_file(path, mode="replace"):
+def import_file(path: str | Path, mode: str = "replace") -> DictionaryData:
     if mode not in ("merge", "replace"):
         raise ValueError("Dictionary import mode must be merge or replace")
     path = Path(path)
@@ -157,19 +157,18 @@ def import_file(path, mode="replace"):
         raise ValueError("Dictionary transfer exceeds 16 MiB")
     sections, words = decode_document(json.loads(raw))
     with dictionary_lock():
-        current = Dictionary.load()
-        updated = copy.deepcopy(current)
+        updated = dict(Dictionary.load())
         for section, entries in sections.items():
             updated[section] = (
                 entries
                 if mode == "replace"
                 else (
-                    merge_replacements(current[section], entries)
+                    merge_replacements(updated[section], entries)
                     if section == "replacements"
-                    else _merge_rules(current[section], entries)
+                    else _merge_rules(updated[section], entries)
                 )
             )
-        Dictionary.validate(updated)
+        dictionary = Dictionary.validate(updated)
         if words is not None:
             old_words = VocabularyStore.entries()
             if mode == "merge":
@@ -186,7 +185,7 @@ def import_file(path, mode="replace"):
             )
             VocabularyStore.save_entries(words)
         try:
-            Dictionary.save(updated)
+            Dictionary.save(dictionary)
         except Exception:
             if words is not None:
                 if previous is None:
@@ -194,23 +193,26 @@ def import_file(path, mode="replace"):
                 else:
                     write_private(VocabularyStore.path(), previous)
             raise
-        return updated
+        return dictionary
 
 
-def export_file(path, format="native"):
-    if format not in ("native", "upstream"):
+def export_file(path: str | Path, output_format: str = "native") -> None:
+    if output_format not in ("native", "upstream"):
         raise ValueError("Dictionary export format must be native or upstream")
     with dictionary_lock():
-        data = Dictionary.load()
+        dictionary = Dictionary.load()
         words = VocabularyStore.entries()
-        if format == "upstream":
+        data: dict[str, object]
+        if output_format == "upstream":
             data = {
                 "replacements": [
                     {"from": entry["triggers"], "to": entry["replacement"]}
-                    for entry in data["replacements"]
+                    for entry in dictionary["replacements"]
                     if entry.get("enabled", True)
                 ]
             }
+        else:
+            data = dict(dictionary)
         data["customWords"] = words
         encoded = json.dumps(data, ensure_ascii=False, indent=2).encode()
         if len(encoded) > MAX_TRANSFER_BYTES:

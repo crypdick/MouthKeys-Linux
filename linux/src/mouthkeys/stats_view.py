@@ -1,28 +1,30 @@
 """Local activity chart with accessible values; no Qt Charts dependency."""
 
-from datetime import date, timedelta
+from collections.abc import Mapping
+from datetime import datetime, timedelta
+from math import floor
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor, QPainter
+from PySide6.QtGui import QColor, QMouseEvent, QPainter, QPaintEvent
 from PySide6.QtWidgets import QWidget
 
 
 class ActivityChart(QWidget):
-    def __init__(self, parent=None):
+    def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setMinimumHeight(150)
         self.setMouseTracking(True)
         self.setAccessibleName("Daily dictated words")
-        self.values = {}
+        self.values: Mapping[str, int] = {}
         self.days = 7
-        self.series = []
+        self.series: list[tuple[str, int]] = []
         self.set_values({})
 
-    def set_values(self, values, days=None):
+    def set_values(self, values: Mapping[str, int], days: int | None = None) -> None:
         self.values = values
         if days is not None:
             self.days = days
-        today = date.today()
+        today = datetime.now().astimezone().date()
         dates = [today - timedelta(days=self.days - 1 - index) for index in range(self.days)]
         self.series = [(str(day), values.get(str(day), 0)) for day in dates]
         self.setAccessibleDescription(
@@ -30,13 +32,14 @@ class ActivityChart(QWidget):
         )
         self.update()
 
-    def paintEvent(self, _event):
+    def paintEvent(self, _event: QPaintEvent) -> None:  # noqa: N802 - Qt override
         painter = QPainter(self)
         ink = self.palette().windowText().color()
         painter.setPen(ink)
         left, right, top, bottom = 40, self.width() - 10, 22, self.height() - 28
         painter.drawLine(left, bottom, right, bottom)
-        peak = max(1, max(count for _, count in self.series))
+        peak = max(count for _, count in self.series)
+        peak = max(1, peak)
         painter.drawText(0, top + 4, str(peak))
         width = max(1, (right - left) / self.days)
         for index, (_, count) in enumerate(self.series):
@@ -55,9 +58,11 @@ class ActivityChart(QWidget):
             painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, "No activity yet")
         painter.end()
 
-    def mouseMoveEvent(self, event):
+    def mouseMoveEvent(self, event: QMouseEvent) -> None:  # noqa: N802 - Qt override
         width = max(1, (self.width() - 50) / self.days)
-        index = int((event.position().x() - 40) / width)
+        index = floor((event.position().x() - 40) / width)
         if 0 <= index < len(self.series):
             day, count = self.series[index]
             self.setToolTip(f"{day}: {count:,} words")
+        else:
+            self.setToolTip("")

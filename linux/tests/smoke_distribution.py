@@ -47,6 +47,8 @@ for key in (
 ):
     os.environ.pop(key, None)
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
+# The host GTK theme can still try to open a display with Qt offscreen.
+os.environ["QT_QPA_PLATFORMTHEME"] = ""
 os.environ["HF_HUB_OFFLINE"] = "1"
 os.environ["TRANSFORMERS_OFFLINE"] = "1"
 isolate_network()

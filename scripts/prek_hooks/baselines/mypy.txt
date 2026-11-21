@@ -129,7 +129,6 @@
 1	src/mouthkeys/cli.py	attr-defined	"FileHistory" has no attribute "select"
 1	src/mouthkeys/cli.py	no-untyped-call	Call to untyped function "AssistantHistory" in typed context
 1	src/mouthkeys/cli.py	no-untyped-call	Call to untyped function "apply_startup" in typed context
-1	src/mouthkeys/cli.py	no-untyped-call	Call to untyped function "delete_model" in typed context
 1	src/mouthkeys/cli.py	no-untyped-call	Call to untyped function "download_diarization" in typed context
 3	src/mouthkeys/cli.py	no-untyped-call	Call to untyped function "file_progress" in typed context
 2	src/mouthkeys/cli.py	no-untyped-call	Call to untyped function "install_desktop" in typed context
@@ -173,7 +172,7 @@
 2	src/mouthkeys/engines.py	no-untyped-call	Call to untyped function "onnx_quantization" in typed context
 2	src/mouthkeys/engines.py	no-untyped-call	Call to untyped function "usable_whisper_snapshot" in typed context
 1	src/mouthkeys/engines.py	no-untyped-def	Function is missing a return type annotation
-11	src/mouthkeys/engines.py	no-untyped-def	Function is missing a type annotation
+10	src/mouthkeys/engines.py	no-untyped-def	Function is missing a type annotation
 3	src/mouthkeys/file_history.py	arg-type	Argument 1 to "isfinite" has incompatible type "Any | None"; expected "SupportsFloat | SupportsIndex"
 1	src/mouthkeys/file_history.py	operator	Unsupported left operand type for <= ("None")
 1	src/mouthkeys/file_history.py	operator	Unsupported operand types for <= ("int" and "None")
@@ -227,7 +226,6 @@
 2	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "apply_theme" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "audio_sources" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "create_tray" in typed context
-1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "delete_model" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "ensure_hotkeys" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "language_choices" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "list_models" in typed context
@@ -236,19 +234,16 @@
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "poll" in typed context
 2	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "preview_sound" in typed context
 2	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "provider_action" in typed context
-1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "read_download_progress" in typed context
 2	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "refresh" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "refresh_delivery_hint" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "refresh_model_choices" in typed context
 2	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "refresh_regional_offers" in typed context
-4	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "save" in typed context
+3	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "save" in typed context
 3	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "setting_group" in typed context
 3	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "update_status" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "verify" in typed context
-19	src/mouthkeys/gui.py	no-untyped-def	Function is missing a return type annotation
-11	src/mouthkeys/gui.py	no-untyped-def	Function is missing a type annotation
-2	src/mouthkeys/gui.py	union-attr	Item "None" of "Any | None" has no attribute "deleteLater"
-1	src/mouthkeys/gui.py	union-attr	Item "None" of "Any | None" has no attribute "readAllStandardError"
+14	src/mouthkeys/gui.py	no-untyped-def	Function is missing a return type annotation
+8	src/mouthkeys/gui.py	no-untyped-def	Function is missing a type annotation
 1	src/mouthkeys/hotkeys.py	assignment	Incompatible types in assignment (expression has type "float", variable has type "int")
 1	src/mouthkeys/hotkeys.py	func-returns-value	"append" of "list" does not return a value (it only ever returns None)
 1	src/mouthkeys/hotkeys.py	no-untyped-call	Call to untyped function "Activation" in typed context

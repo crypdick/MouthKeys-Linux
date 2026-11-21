@@ -331,16 +331,15 @@
 3	src/mouthkeys/dictionary_transfer.py	TRY004	Prefer `TypeError` exception for invalid type
 2	src/mouthkeys/engines.py	ANN001	Missing type annotation for function argument `compute_type`
 2	src/mouthkeys/engines.py	ANN001	Missing type annotation for function argument `config`
-3	src/mouthkeys/engines.py	ANN001	Missing type annotation for function argument `engine`
+2	src/mouthkeys/engines.py	ANN001	Missing type annotation for function argument `engine`
 1	src/mouthkeys/engines.py	ANN001	Missing type annotation for function argument `measurement_config`
 1	src/mouthkeys/engines.py	ANN001	Missing type annotation for function argument `measurement_context`
-4	src/mouthkeys/engines.py	ANN001	Missing type annotation for function argument `model`
+3	src/mouthkeys/engines.py	ANN001	Missing type annotation for function argument `model`
 2	src/mouthkeys/engines.py	ANN001	Missing type annotation for function argument `path`
 2	src/mouthkeys/engines.py	ANN001	Missing type annotation for function argument `progress`
 1	src/mouthkeys/engines.py	ANN001	Missing type annotation for function argument `quantization`
 1	src/mouthkeys/engines.py	ANN001	Missing type annotation for function argument `repository`
-6	src/mouthkeys/engines.py	ANN001	Missing type annotation for function argument `revision`
-1	src/mouthkeys/engines.py	ANN201	Missing return type annotation for public function `delete_model`
+5	src/mouthkeys/engines.py	ANN001	Missing type annotation for function argument `revision`
 1	src/mouthkeys/engines.py	ANN201	Missing return type annotation for public function `download_onnx`
 1	src/mouthkeys/engines.py	ANN201	Missing return type annotation for public function `load_onnx`
 1	src/mouthkeys/engines.py	ANN201	Missing return type annotation for public function `model_catalog`
@@ -430,24 +429,16 @@
 1	src/mouthkeys/formatting.py	PLR0912	Too many branches (33 > 12)
 1	src/mouthkeys/formatting.py	PLR0913	Too many arguments in function definition (7 > 5)
 1	src/mouthkeys/formatting.py	PLR0915	Too many statements (90 > 50)
-2	src/mouthkeys/gui.py	ANN001	Missing type annotation for function argument `_`
 1	src/mouthkeys/gui.py	ANN001	Missing type annotation for function argument `action`
 1	src/mouthkeys/gui.py	ANN001	Missing type annotation for function argument `category`
-2	src/mouthkeys/gui.py	ANN001	Missing type annotation for function argument `code`
 1	src/mouthkeys/gui.py	ANN001	Missing type annotation for function argument `engine`
-1	src/mouthkeys/gui.py	ANN001	Missing type annotation for function argument `error`
 1	src/mouthkeys/gui.py	ANN001	Missing type annotation for function argument `key`
 2	src/mouthkeys/gui.py	ANN001	Missing type annotation for function argument `response`
 1	src/mouthkeys/gui.py	ANN001	Missing type annotation for function argument `stop`
 1	src/mouthkeys/gui.py	ANN002	Missing type annotation for `*_`
 1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `apply_theme`
 1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `audio_sources`
-1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `cancel_download`
 1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `capture_shortcut`
-1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `delete_model`
-1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `download_error`
-1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `download_model`
-1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `download_speakers`
 1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `filter_settings`
 1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `inspect_models`
 1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `language_choices`
@@ -457,7 +448,6 @@
 1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `poll`
 1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `preview_sound`
 1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `provider_action`
-1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `read_download_progress`
 1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `refresh_delivery_hint`
 1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `refresh_model_choices`
 1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `refresh_regional_offers`
@@ -465,18 +455,15 @@
 1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `save`
 1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `setting_group`
 1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `start_hotkeys`
-2	src/mouthkeys/gui.py	ANN202	Missing return type annotation for private function `finished`
 1	src/mouthkeys/gui.py	ANN202	Missing return type annotation for private function `received`
 1	src/mouthkeys/gui.py	ANN202	Missing return type annotation for private function `update`
 1	src/mouthkeys/gui.py	ANN204	Missing return type annotation for special method `__init__`
-1	src/mouthkeys/gui.py	C901	`__init__` is too complex (16 > 15)
 1	src/mouthkeys/gui.py	C901	`setting_group` is too complex (16 > 15)
 2	src/mouthkeys/gui.py	FBT003	Boolean positional value in function call
-23	src/mouthkeys/gui.py	PLC0415	`import` should be at the top-level of a file
+22	src/mouthkeys/gui.py	PLC0415	`import` should be at the top-level of a file
 1	src/mouthkeys/gui.py	PLR0911	Too many return statements (16 > 6)
-1	src/mouthkeys/gui.py	PLR0912	Too many branches (15 > 12)
-1	src/mouthkeys/gui.py	PLR0912	Too many branches (16 > 12)
-1	src/mouthkeys/gui.py	PLR0915	Too many statements (159 > 50)
+2	src/mouthkeys/gui.py	PLR0912	Too many branches (15 > 12)
+1	src/mouthkeys/gui.py	PLR0915	Too many statements (142 > 50)
 1	src/mouthkeys/gui.py	PLR1714	Consider merging multiple comparisons: `category in ("All settings", group)`. Use a `set` if the elements are hashable.
 1	src/mouthkeys/gui.py	PLW2901	`for` loop variable `value` overwritten by assignment target
 1	src/mouthkeys/gui.py	TRY300	Consider moving this statement to an `else` block

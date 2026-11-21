@@ -1,13 +1,12 @@
 "Optional Qt desktop controller. The daemon owns audio and never opens windows."
 
-import json
 import sys
 from collections.abc import Callable, Mapping
 from dataclasses import asdict, replace
 from pathlib import Path
 from typing import cast
 
-from PySide6.QtCore import QLocale, QProcess, Qt, QThread, QTimer
+from PySide6.QtCore import QLocale, Qt, QThread, QTimer
 from PySide6.QtGui import QCloseEvent, QDragEnterEvent, QDropEvent, QIcon, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
@@ -18,7 +17,6 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QListWidget,
     QMessageBox,
-    QProgressBar,
     QPushButton,
     QScrollArea,
     QSpinBox,
@@ -36,6 +34,7 @@ from .dictionary_ui import DictionaryPage
 from .file_transcription_ui import FileTranscriptionPage
 from .help_ui import HelpPage
 from .history_ui import HistoryPage
+from .model_downloads_ui import ModelDownloads
 from .processes import python_command
 from .profiles import PromptProfile, load_profiles
 from .prompt_profiles_ui import KeyringAction, PromptProfilesPage
@@ -224,7 +223,6 @@ class Window(QWidget):
         self.setMinimumSize(820, 560)
         self.jobs: set[QThread] = set()
         self.polling = False
-        self.download = None
         root = QHBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
@@ -517,30 +515,11 @@ class Window(QWidget):
             button.clicked.connect(action)
             self.settings_rows.append((form.rowCount(), category))
             form.addRow(button)
-        self.download_button = QPushButton("Download selected model")
-        self.download_button.clicked.connect(self.download_model)
+        self.model_downloads = ModelDownloads(
+            self.save, self.selected_model, self.status.setText, lambda: self.send("warmup")
+        )
         self.settings_rows.append((form.rowCount(), "Speech"))
-        form.addRow(self.download_button)
-        self.download_progress = QProgressBar()
-        self.download_progress.setRange(0, 100)
-        self.download_progress.setValue(0)
-        self.settings_rows.append((form.rowCount(), "Speech"))
-        form.addRow(self.download_progress)
-        self.download_output = ""
-        self.download_partial = ""
-        for label, handler in (
-            ("Cancel model download", self.cancel_download),
-            ("Delete selected cached model", self.delete_model),
-            ("Download speaker models", self.download_speakers),
-        ):
-            button = QPushButton(label)
-            button.clicked.connect(handler)
-            self.settings_rows.append((form.rowCount(), "Speech"))
-            form.addRow(button)
-        warm = QPushButton("Load model into memory")
-        warm.clicked.connect(lambda: self.send("warmup"))
-        self.settings_rows.append((form.rowCount(), "Speech"))
-        form.addRow(warm)
+        form.addRow(self.model_downloads)
         self.settings_category.currentTextChanged.connect(self.filter_settings)
         self.settings_category.setCurrentText("Speech")
         settings_scroll = QScrollArea()
@@ -725,51 +704,15 @@ class Window(QWidget):
             self.nav.setCurrentRow(3)
             event.acceptProposedAction()
 
-    def cancel_download(self):
-        if self.download is not None:
-            self.download.kill()
+    def selected_model(self) -> tuple[str, str, str]:
+        return (
+            field_value(self.fields["model"]),
+            field_value(self.fields["engine"]),
+            field_value(self.fields["model_revision"]),
+        )
 
-    def delete_model(self):
-        from .engines import delete_model
-
-        model = field_value(self.fields["model"])
-        if (
-            QMessageBox.question(
-                self,
-                "Delete model",
-                f"Delete cached model {model}? Active model memory is released on service restart.",
-            )
-            == QMessageBox.StandardButton.Yes
-        ):
-            try:
-                delete_model(
-                    model,
-                    field_value(self.fields["engine"]),
-                    revision=field_value(self.fields["model_revision"]),
-                )
-                self.status.setText("Cached model deleted")
-            # Report to the Settings UI without duplicating private data in logs.
-            except Exception as exc:  # allow: exception-handling  # noqa: BLE001
-                self.status.setText(str(exc))
-
-    def download_speakers(self):
-        if self.download is not None:
-            return
-        self.download = QProcess(self)
-        self.download.setProgram(sys.executable)
-        self.download.setArguments(python_command("mouthkeys", "download-speakers")[1:])
-
-        def finished(code, _):
-            error = bytes(self.download.readAllStandardError()).decode(errors="replace")
-            self.download.deleteLater()
-            self.download = None
-            self.status.setText(
-                "Speaker models downloaded" if code == 0 else error or "Download cancelled"
-            )
-
-        self.download.finished.connect(finished)
-        self.download.errorOccurred.connect(self.download_error)
-        self.download.start()
+    def delete_model(self) -> None:
+        self.model_downloads.delete_model()
 
     def refresh_profile_choices(self, profiles: list[PromptProfile]) -> None:
         for key in ("ai_profile", "edit_profile", "command_profile"):
@@ -1050,79 +993,14 @@ class Window(QWidget):
             self, lambda key, chord: cast("QLineEdit", self.fields[key]).setText(chord)
         ).exec()
 
-    def download_model(self):
-        if not self.save() or self.download is not None:
-            return
-        self.download = QProcess(self)
-        self.download.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
-        self.download.setProgram(sys.executable)
-        self.download.setArguments(python_command("mouthkeys", "download")[1:])
-        self.download_button.setEnabled(False)
-        self.download_button.setText("Downloading…")
-        self.download_progress.setRange(0, 0)
-        self.download_output = ""
-        self.download_partial = ""
-        self.download.readyReadStandardOutput.connect(self.read_download_progress)
-
-        def finished(code, _):
-            self.read_download_progress()
-            output = self.download_output
-            self.download.deleteLater()
-            self.download = None
-            self.download_button.setEnabled(True)
-            self.download_button.setText("Download selected model")
-            self.download_progress.setRange(0, 100)
-            self.download_progress.setValue(100 if code == 0 else 0)
-            if code == 0:
-                self.send("warmup")
-            QMessageBox.information(
-                self, "Model download", "Model downloaded" if code == 0 else output
-            )
-
-        self.download.finished.connect(finished)
-        self.download.errorOccurred.connect(self.download_error)
-        self.download.start()
-
-    def read_download_progress(self):
-        if self.download is None:
-            return
-        chunk = bytes(self.download.readAllStandardOutput()).decode(errors="replace")
-        self.download_output = (self.download_output + chunk)[-100000:]
-        self.download_partial += chunk
-        lines = self.download_partial.split("\n")
-        self.download_partial = lines.pop()
-        for line in lines:
-            try:
-                event = json.loads(line)["download_progress"]
-                total, completed = event.get("total"), event.get("completed", 0)
-                if total:
-                    self.download_progress.setRange(0, 1000)
-                    self.download_progress.setValue(min(1000, round(completed * 1000 / total)))
-                else:
-                    self.download_progress.setRange(0, 0)
-                self.download_progress.setFormat(
-                    f"{event.get('phase', 'Downloading')} · {completed}/{total or '?'} "
-                    f"{event.get('unit', '')}"
-                )
-            except (ValueError, TypeError, KeyError):
-                continue
-
-    def download_error(self, error):
-        if error == QProcess.ProcessError.FailedToStart and self.download is not None:
-            message = self.download.errorString()
-            self.download.deleteLater()
-            self.download = None
-            self.download_button.setEnabled(True)
-            self.download_button.setText("Download selected model")
-            self.status.setText(message)
-            self.download_progress.setRange(0, 100)
-            self.download_progress.setValue(0)
+    def download_model(self) -> None:
+        self.model_downloads.download_model()
 
     @property
     def busy(self) -> bool:
         return (
             bool(self.jobs)
-            or self.download is not None
+            or self.model_downloads.running
             or self.file_page.running
             or self.backup_page.running
         )

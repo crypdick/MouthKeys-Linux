@@ -163,6 +163,33 @@ def test_snapshot_rejects_user_gesture_during_multi_call_read(change):
     assert atspi_helper.snapshot(bus, REF) is None
 
 
+@pytest.mark.parametrize("fault", ["caret", "selection", "duplicate selection", "short text"])
+def test_snapshot_refuses_inconsistent_toolkit_payloads(fault):
+    bus = FakeBus()
+    if fault == "caret":
+        bus.caret = len(bus.text) + 1
+    elif fault == "selection":
+        bus.selection = (-1, 3)
+    original = bus.call
+
+    def call(ref, interface, method, signature=None, args=()):
+        if fault == "duplicate selection" and method == "GetNSelections":
+            return (2,)
+        if fault == "short text" and method == "GetText":
+            return ("",)
+        return original(ref, interface, method, signature, args)
+
+    bus.call = call
+    assert atspi_helper.snapshot(bus, REF) is None
+    assert not bus.writes
+
+
+def test_snapshot_requires_unique_object_identity():
+    bus = FakeBus()
+    assert atspi_helper.snapshot(bus, ("org.example", REF[1])) is None
+    assert atspi_helper.snapshot(bus, (REF[0], "/not/an/accessible/object")) is None
+
+
 @pytest.mark.parametrize("change", ["text", "selection", "focus"])
 def test_direct_edit_refuses_changed_content_selection_or_focus(change):
     bus = FakeBus()

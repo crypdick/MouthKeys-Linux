@@ -1,17 +1,68 @@
+import io
 import os
 import pathlib
 import shutil
+import signal
 import subprocess
 import sys
 import time
 import wave
+from types import SimpleNamespace
 
 import pytest
+
+from mouthkeys import capture
 
 
 @pytest.fixture(autouse=True)
 def fake_bluetooth_readiness(monkeypatch):
     monkeypatch.setattr("mouthkeys.audio.bluetooth_capture_ready", lambda _: True)
+
+
+def test_supervisor_passes_through_completed_child_status_without_signalling(monkeypatch):
+    def wait(*, timeout):
+        assert timeout == 2
+        return 7
+
+    process = SimpleNamespace(poll=lambda: 7, wait=wait)
+    monkeypatch.setattr(subprocess, "Popen", lambda *a, **kw: process)
+    assert capture.supervise(["fake-capture"]) == 7
+
+
+def test_supervisor_waits_for_eof_then_escalates_unresponsive_child(monkeypatch):
+    pipe = io.BytesIO(b"!")
+    monkeypatch.setattr(sys, "stdin", SimpleNamespace(buffer=pipe))
+    invocations = []
+
+    def select(readers, _writers, _errors, timeout):
+        assert readers == [pipe]
+        assert timeout == 0.1
+        invocations.append("select")
+        return readers, [], []
+
+    def wait(*, timeout):
+        invocations.append(("wait", timeout))
+        if timeout == 2:
+            raise subprocess.TimeoutExpired("fake-capture", timeout)
+        return -signal.SIGKILL
+
+    process = SimpleNamespace(
+        poll=lambda: None,
+        send_signal=lambda signum: invocations.append(("signal", signum)),
+        kill=lambda: invocations.append("kill"),
+        wait=wait,
+    )
+    monkeypatch.setattr(capture.select, "select", select)
+    monkeypatch.setattr(subprocess, "Popen", lambda *a, **kw: process)
+    assert capture.supervise(["fake-capture"]) == 1
+    assert invocations == [
+        "select",
+        "select",
+        ("signal", signal.SIGINT),
+        ("wait", 2),
+        "kill",
+        ("wait", 1),
+    ]
 
 
 @pytest.mark.parametrize("crash", [False, True])

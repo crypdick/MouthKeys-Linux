@@ -35,7 +35,7 @@ public_modules = [
   "mouthkeys.assistant_history", "mouthkeys.assistant_ui", "mouthkeys.audio",
   "mouthkeys.benchmark", "mouthkeys.cli", "mouthkeys.config", "mouthkeys.credentials",
   "mouthkeys.data_lock", "mouthkeys.delivery", "mouthkeys.dictionary", "mouthkeys.dictionary_transfer",
-  "mouthkeys.engines", "mouthkeys.file_history", "mouthkeys.file_transcription",
+  "mouthkeys.engines", "mouthkeys.file_history", "mouthkeys.file_transcription", "mouthkeys.file_transcription_ui",
   "mouthkeys.forced_alignment", "mouthkeys.formatting", "mouthkeys.gui", "mouthkeys.hotkeys",
   "mouthkeys.lark", "mouthkeys.learning", "mouthkeys.local_api", "mouthkeys.microphone_ui",
   "mouthkeys.model_progress", "mouthkeys.models_ui", "mouthkeys.native_asr", "mouthkeys.native_worker", "mouthkeys.onboarding",

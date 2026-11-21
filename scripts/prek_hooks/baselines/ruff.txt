@@ -452,13 +452,11 @@
 1	src/mouthkeys/file_transcription.py	ANN001	Missing type annotation for function argument `config`
 1	src/mouthkeys/file_transcription.py	ANN001	Missing type annotation for function argument `destination`
 1	src/mouthkeys/file_transcription.py	ANN001	Missing type annotation for function argument `end`
-1	src/mouthkeys/file_transcription.py	ANN001	Missing type annotation for function argument `format`
 1	src/mouthkeys/file_transcription.py	ANN001	Missing type annotation for function argument `max_bytes`
 2	src/mouthkeys/file_transcription.py	ANN001	Missing type annotation for function argument `max_seconds`
 1	src/mouthkeys/file_transcription.py	ANN001	Missing type annotation for function argument `offset`
 1	src/mouthkeys/file_transcription.py	ANN001	Missing type annotation for function argument `on_progress`
-3	src/mouthkeys/file_transcription.py	ANN001	Missing type annotation for function argument `path`
-2	src/mouthkeys/file_transcription.py	ANN001	Missing type annotation for function argument `result`
+2	src/mouthkeys/file_transcription.py	ANN001	Missing type annotation for function argument `path`
 2	src/mouthkeys/file_transcription.py	ANN001	Missing type annotation for function argument `samples`
 1	src/mouthkeys/file_transcription.py	ANN001	Missing type annotation for function argument `segments`
 1	src/mouthkeys/file_transcription.py	ANN001	Missing type annotation for function argument `speaker_count`
@@ -470,9 +468,7 @@
 1	src/mouthkeys/file_transcription.py	ANN003	Missing type annotation for `**details`
 1	src/mouthkeys/file_transcription.py	ANN201	Missing return type annotation for public function `diarize`
 1	src/mouthkeys/file_transcription.py	ANN201	Missing return type annotation for public function `download_diarization`
-1	src/mouthkeys/file_transcription.py	ANN201	Missing return type annotation for public function `export_result`
 1	src/mouthkeys/file_transcription.py	ANN201	Missing return type annotation for public function `label_segments`
-1	src/mouthkeys/file_transcription.py	ANN201	Missing return type annotation for public function `result_text`
 1	src/mouthkeys/file_transcription.py	ANN201	Missing return type annotation for public function `speaker_paths`
 1	src/mouthkeys/file_transcription.py	ANN201	Missing return type annotation for public function `transcribe_file`
 1	src/mouthkeys/file_transcription.py	ANN202	Missing return type annotation for private function `_decode_bounded`
@@ -526,31 +522,28 @@
 1	src/mouthkeys/formatting.py	PLR0912	Too many branches (33 > 12)
 1	src/mouthkeys/formatting.py	PLR0913	Too many arguments in function definition (7 > 5)
 1	src/mouthkeys/formatting.py	PLR0915	Too many statements (90 > 50)
-3	src/mouthkeys/gui.py	ANN001	Missing type annotation for function argument `_`
+2	src/mouthkeys/gui.py	ANN001	Missing type annotation for function argument `_`
 2	src/mouthkeys/gui.py	ANN001	Missing type annotation for function argument `_checked`
 5	src/mouthkeys/gui.py	ANN001	Missing type annotation for function argument `action`
 1	src/mouthkeys/gui.py	ANN001	Missing type annotation for function argument `callback`
 1	src/mouthkeys/gui.py	ANN001	Missing type annotation for function argument `category`
-3	src/mouthkeys/gui.py	ANN001	Missing type annotation for function argument `code`
+2	src/mouthkeys/gui.py	ANN001	Missing type annotation for function argument `code`
 1	src/mouthkeys/gui.py	ANN001	Missing type annotation for function argument `config`
 3	src/mouthkeys/gui.py	ANN001	Missing type annotation for function argument `data`
 1	src/mouthkeys/gui.py	ANN001	Missing type annotation for function argument `engine`
-2	src/mouthkeys/gui.py	ANN001	Missing type annotation for function argument `error`
-4	src/mouthkeys/gui.py	ANN001	Missing type annotation for function argument `event`
+1	src/mouthkeys/gui.py	ANN001	Missing type annotation for function argument `error`
 1	src/mouthkeys/gui.py	ANN001	Missing type annotation for function argument `field`
 1	src/mouthkeys/gui.py	ANN001	Missing type annotation for function argument `importing`
-2	src/mouthkeys/gui.py	ANN001	Missing type annotation for function argument `index`
+1	src/mouthkeys/gui.py	ANN001	Missing type annotation for function argument `index`
 1	src/mouthkeys/gui.py	ANN001	Missing type annotation for function argument `key`
-1	src/mouthkeys/gui.py	ANN001	Missing type annotation for function argument `kind`
 1	src/mouthkeys/gui.py	ANN001	Missing type annotation for function argument `parent`
 1	src/mouthkeys/gui.py	ANN001	Missing type annotation for function argument `profile`
 11	src/mouthkeys/gui.py	ANN001	Missing type annotation for function argument `response`
-3	src/mouthkeys/gui.py	ANN001	Missing type annotation for function argument `result`
+2	src/mouthkeys/gui.py	ANN001	Missing type annotation for function argument `result`
 1	src/mouthkeys/gui.py	ANN001	Missing type annotation for function argument `rule`
 1	src/mouthkeys/gui.py	ANN001	Missing type annotation for function argument `selected`
 1	src/mouthkeys/gui.py	ANN001	Missing type annotation for function argument `stop`
-1	src/mouthkeys/gui.py	ANN001	Missing type annotation for function argument `text`
-3	src/mouthkeys/gui.py	ANN002	Missing type annotation for `*_`
+2	src/mouthkeys/gui.py	ANN002	Missing type annotation for `*_`
 1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `add_dictionary_rule`
 1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `add_prompt_route`
 1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `apply_theme`
@@ -558,15 +551,9 @@
 1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `backup_action`
 1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `backup_page`
 1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `cancel_download`
-1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `cancel_file`
 1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `capture_shortcut`
-1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `choose_file`
-1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `clear_file_history`
 1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `clear_history`
-1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `closeEvent`
-1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `copy_file_result`
 1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `delete_dictionary_rule`
-1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `delete_file_history`
 1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `delete_model`
 1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `delete_profile`
 1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `delete_selected`
@@ -575,14 +562,8 @@
 1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `download_model`
 1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `download_speakers`
 1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `draft_prompt_config`
-1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `dragEnterEvent`
-1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `dropEvent`
 1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `export_dictionary`
-1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `export_file_result`
 1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `field_value`
-1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `file_finished`
-1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `file_page`
-1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `file_process_error`
 1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `fill_dictionary`
 1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `filter_settings`
 1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `help_page`
@@ -602,10 +583,8 @@
 1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `profiles_page`
 1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `provider_action`
 1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `read_download_progress`
-1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `read_file_progress`
 1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `record_prompt_test`
 1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `refresh_delivery_hint`
-1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `refresh_file_history`
 1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `refresh_history`
 1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `refresh_model_choices`
 1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `refresh_profiles`
@@ -622,21 +601,16 @@
 1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `save_profile`
 1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `save_prompt_routes`
 1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `save`
-1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `select_file_history`
 1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `select_profile`
 1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `select`
 1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `selected_action`
 1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `selected_id`
 1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `send`
 1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `setting_group`
-1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `show_file_result`
 1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `show_log`
 1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `start_hotkeys`
 1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `stats_page`
-1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `stop_file_progress`
 1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `train_dictionary`
-1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `transcribe_file`
-1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `update_file_progress`
 1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `update_history`
 1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `update_prompt_test`
 1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `update_training`
@@ -649,18 +623,15 @@
 2	src/mouthkeys/gui.py	ANN204	Missing return type annotation for special method `__init__`
 1	src/mouthkeys/gui.py	C901	`__init__` is too complex (18 > 15)
 1	src/mouthkeys/gui.py	C901	`setting_group` is too complex (16 > 15)
-2	src/mouthkeys/gui.py	DTZ006	`datetime.datetime.fromtimestamp()` called without a `tz` argument
+1	src/mouthkeys/gui.py	DTZ006	`datetime.datetime.fromtimestamp()` called without a `tz` argument
 2	src/mouthkeys/gui.py	FBT002	Boolean default positional argument in function definition
 8	src/mouthkeys/gui.py	FBT003	Boolean positional value in function call
 1	src/mouthkeys/gui.py	ISC004	Unparenthesized implicit string concatenation in collection
-1	src/mouthkeys/gui.py	N802	Function name `closeEvent` should be lowercase
-1	src/mouthkeys/gui.py	N802	Function name `dragEnterEvent` should be lowercase
-1	src/mouthkeys/gui.py	N802	Function name `dropEvent` should be lowercase
-65	src/mouthkeys/gui.py	PLC0415	`import` should be at the top-level of a file
+58	src/mouthkeys/gui.py	PLC0415	`import` should be at the top-level of a file
 1	src/mouthkeys/gui.py	PLR0911	Too many return statements (16 > 6)
 1	src/mouthkeys/gui.py	PLR0912	Too many branches (15 > 12)
 1	src/mouthkeys/gui.py	PLR0912	Too many branches (18 > 12)
-1	src/mouthkeys/gui.py	PLR0915	Too many statements (238 > 50)
+1	src/mouthkeys/gui.py	PLR0915	Too many statements (217 > 50)
 1	src/mouthkeys/gui.py	PLR0915	Too many statements (75 > 50)
 1	src/mouthkeys/gui.py	PLR1714	Consider merging multiple comparisons: `category in ("All settings", group)`. Use a `set` if the elements are hashable.
 1	src/mouthkeys/gui.py	PLW0108	Lambda may be unnecessary; consider inlining inner function
@@ -1452,8 +1423,6 @@
 1	tests/test_file_progress.py	N802	Function name `readAllStandardOutput` should be lowercase
 1	tests/test_file_progress.py	N802	Function name `setArguments` should be lowercase
 1	tests/test_file_progress.py	N802	Function name `setProgram` should be lowercase
-1	tests/test_file_progress.py	N815	Variable `errorOccurred` in class scope should not be mixedCase
-1	tests/test_file_progress.py	N815	Variable `readyReadStandardError` in class scope should not be mixedCase
 2	tests/test_file_progress.py	PLC0415	`import` should be at the top-level of a file
 8	tests/test_forced_alignment.py	PLC0415	`import` should be at the top-level of a file
 1	tests/test_forced_alignment.py	RUF059	Unpacked variable `model` is never used

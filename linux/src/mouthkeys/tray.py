@@ -47,11 +47,7 @@ class Tray(QSystemTrayIcon):
         self.setToolTip("MouthKeys")
 
     def request_quit(self):
-        if self.window is not None and (
-            self.window.jobs
-            or self.window.download is not None
-            or getattr(self.window, "file_process", None) is not None
-        ):
+        if self.window is not None and self.window.busy:
             self.setToolTip("Wait for current settings operation before quitting")
             return
         self.quitting = True

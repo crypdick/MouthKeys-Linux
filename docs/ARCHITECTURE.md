@@ -12,6 +12,8 @@ then dispatches local work or contacts the private Unix socket served by `servic
   `atspi_helper`; `clipboard` can own a temporary paste selection in a separate Qt process.
   Cancellation before delivery wins; unverified destination identity falls back to copy.
 - **UI and optional integrations:** `gui`, `overlay`, `tray`, and `hotkeys` call the service.
+  `file_transcription_ui` owns the file worker and its history; Settings and the tray check whether
+  it is busy before closing.
   `local_api` is opt-in loopback access. `ai_providers` and `ai_stream` handle configured AI
   requests only; imports, status, and Settings opening must not contact providers or download models.
 - **State:** `config.Config.from_mapping` loads settings at the JSON boundary, including old files.

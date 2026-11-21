@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import cast
 
 from PySide6.QtCore import QLocale, QProcess, Qt, QThread, QTimer, Signal
-from PySide6.QtGui import QIcon, QPixmap
+from PySide6.QtGui import QCloseEvent, QDragEnterEvent, QDropEvent, QIcon, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -36,6 +36,7 @@ from PySide6.QtWidgets import (
 from . import __version__
 from .config import CHOICES, RANGES, Config, config_path, state_dir
 from .delivery import automatic_delivery_warning, session
+from .file_transcription_ui import FileTranscriptionPage
 from .processes import python_command
 from .service import ensure_daemon, ensure_overlay, request
 
@@ -250,52 +251,7 @@ class Window(QWidget):
         root = QHBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
-        sidebar = QWidget()
-        sidebar.setObjectName("sidebar")
-        sidebar.setFixedWidth(220)
-        navigation = QVBoxLayout(sidebar)
-        navigation.setContentsMargins(20, 28, 20, 20)
-        navigation.setSpacing(12)
-        mark = QLabel()
-        mark.setPixmap(
-            QPixmap(icon_path).scaled(
-                64,
-                64,
-                Qt.AspectRatioMode.KeepAspectRatio,
-                Qt.TransformationMode.SmoothTransformation,
-            )
-        )
-        navigation.addWidget(mark)
-        brand = QLabel("MOUTHKEYS")
-        brand.setObjectName("brand")
-        navigation.addWidget(brand)
-        tagline = QLabel("WICKED FAST VOICE TO TEXT")
-        tagline.setObjectName("placard")
-        navigation.addWidget(tagline)
-        navigation.addSpacing(28)
-        self.nav = QListWidget()
-        self.nav.setObjectName("navigation")
-        self.nav.addItems(
-            [
-                "History",
-                "App Settings",
-                "Custom Dictionary",
-                "File Transcription",
-                "Stats",
-                "Backup",
-                "Help & Diagnostics",
-                "AI Prompts",
-                "Command / Edit",
-                "Getting Started",
-                "Learning & Vocabulary",
-                "Microphone",
-            ]
-        )
-        navigation.addWidget(self.nav)
-        footer = QLabel("LOCAL DICTATION  /  LINUX")
-        footer.setObjectName("placard")
-        navigation.addWidget(footer)
-        root.addWidget(sidebar)
+        root.addWidget(self._make_navigation(icon_path))
         content = QWidget()
         layout = QVBoxLayout(content)
         layout.setContentsMargins(28, 26, 28, 24)
@@ -657,7 +613,9 @@ class Window(QWidget):
         settings_scroll.setWidget(settings)
         tabs.addWidget(settings_scroll)
         tabs.addWidget(self.dictionary_page())
-        tabs.addWidget(self.file_page())
+        self.file_page = FileTranscriptionPage(tabs, self.save, self.status.setText)
+        tabs.addWidget(self.file_page)
+        self.setAcceptDrops(True)
         tabs.addWidget(self.stats_page())
         tabs.addWidget(self.backup_page())
         tabs.addWidget(self.help_page())
@@ -688,6 +646,54 @@ class Window(QWidget):
         self.timer.timeout.connect(self.poll)
         self.timer.start(700)
         self.poll()
+
+    def _make_navigation(self, icon_path: str) -> QWidget:
+        sidebar = QWidget()
+        sidebar.setObjectName("sidebar")
+        sidebar.setFixedWidth(220)
+        navigation = QVBoxLayout(sidebar)
+        navigation.setContentsMargins(20, 28, 20, 20)
+        navigation.setSpacing(12)
+        mark = QLabel()
+        mark.setPixmap(
+            QPixmap(icon_path).scaled(
+                64,
+                64,
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+        )
+        navigation.addWidget(mark)
+        brand = QLabel("MOUTHKEYS")
+        brand.setObjectName("brand")
+        navigation.addWidget(brand)
+        tagline = QLabel("WICKED FAST VOICE TO TEXT")
+        tagline.setObjectName("placard")
+        navigation.addWidget(tagline)
+        navigation.addSpacing(28)
+        self.nav = QListWidget()
+        self.nav.setObjectName("navigation")
+        self.nav.addItems(
+            [
+                "History",
+                "App Settings",
+                "Custom Dictionary",
+                "File Transcription",
+                "Stats",
+                "Backup",
+                "Help & Diagnostics",
+                "AI Prompts",
+                "Command / Edit",
+                "Getting Started",
+                "Learning & Vocabulary",
+                "Microphone",
+            ]
+        )
+        navigation.addWidget(self.nav)
+        footer = QLabel("LOCAL DICTATION  /  LINUX")
+        footer.setObjectName("placard")
+        navigation.addWidget(footer)
+        return sidebar
 
     def refresh_history(self):
         query = (self.search.text(), self.history_limit)
@@ -1045,279 +1051,16 @@ class Window(QWidget):
                 except Exception as exc:  # allow: exception-handling  # noqa: BLE001
                     self.status.setText(str(exc))
 
-    def file_page(self):
-        page = QWidget()
-        layout = QVBoxLayout(page)
-        self.file_path = QLineEdit()
-        self.file_path.setPlaceholderText("Choose an audio file or drop one here")
-        layout.addWidget(self.file_path)
-        buttons = QHBoxLayout()
-        for label, handler in (
-            ("Choose file", self.choose_file),
-            ("Transcribe", self.transcribe_file),
-            ("Cancel", self.cancel_file),
-            ("Copy result", self.copy_file_result),
-            ("Export text", lambda: self.export_file_result("text")),
-            ("Export JSON", lambda: self.export_file_result("json")),
-        ):
-            button = QPushButton(label)
-            button.clicked.connect(handler)
-            buttons.addWidget(button)
-        layout.addLayout(buttons)
-        self.file_result = None
-        self.file_process = None
-        self.file_progress_label = QLabel("No transcription running")
-        layout.addWidget(self.file_progress_label)
-        self.file_progress = QProgressBar()
-        self.file_progress.setRange(0, 1)
-        self.file_progress.setValue(0)
-        self.file_progress.setFormat("Ready")
-        layout.addWidget(self.file_progress)
-        self.file_text = QTextEdit()
-        self.file_text.setReadOnly(True)
-        self.file_text.setPlaceholderText(
-            "File transcription stays separate from dictation. Speaker labels "
-            "and expected count are configured in App Settings. Models must be"
-            " downloaded explicitly."
-        )
-        split = QHBoxLayout()
-        browser = QWidget()
-        history_layout = QVBoxLayout(browser)
-        self.file_history_search = QLineEdit()
-        self.file_history_search.setPlaceholderText("Search file history")
-        self.file_history_search.textChanged.connect(self.refresh_file_history)
-        history_layout.addWidget(self.file_history_search)
-        self.file_history_list = QListWidget()
-        self.file_history_list.currentRowChanged.connect(self.select_file_history)
-        history_layout.addWidget(self.file_history_list)
-        for text, handler in (
-            ("Delete selected result", self.delete_file_history),
-            ("Clear file history", self.clear_file_history),
-        ):
-            button = QPushButton(text)
-            button.clicked.connect(handler)
-            history_layout.addWidget(button)
-        split.addWidget(browser, 1)
-        split.addWidget(self.file_text, 2)
-        layout.addLayout(split)
-        self.refresh_file_history()
-        self.setAcceptDrops(True)
-        return page
-
-    def refresh_file_history(self, *_):
-        from .file_history import FileHistory
-
-        self.file_rows = FileHistory().rows(self.file_history_search.text())
-        self.file_history_list.clear()
-        for row in self.file_rows:
-            when = datetime.fromtimestamp(row["created"]).strftime("%m-%d %H:%M")
-            self.file_history_list.addItem(f"{when} · {row['name']}\n{row['result']['text'][:70]}")
-
-    def select_file_history(self, index):
-        if 0 <= index < len(self.file_rows):
-            self.show_file_result(self.file_rows[index]["result"])
-
-    def show_file_result(self, result):
-        from .file_transcription import result_text
-
-        self.file_result = result
-        self.file_text.setPlainText(result_text(result))
-        self.status.setText(
-            f"{result['duration']:.1f}s audio · {result['processing_seconds']:.1f}s processing"
-            + (
-                f" · {result['duration'] / result['processing_seconds']:.1f}× realtime"
-                if result["processing_seconds"] > 0
-                else ""
-            )
-            + (
-                f" · {result['confidence']:.0%} model likelihood (not calibrated confidence)"
-                if result.get("confidence") is not None
-                else ""
-            )
-        )
-
-    def delete_file_history(self):
-        from .file_history import FileHistory
-
-        index = self.file_history_list.currentRow()
-        if (
-            0 <= index < len(self.file_rows)
-            and QMessageBox.question(self, "Delete file result", "Delete selected saved result?")
-            == QMessageBox.StandardButton.Yes
-        ):
-            FileHistory().delete(self.file_rows[index]["id"])
-            self.refresh_file_history()
-
-    def clear_file_history(self):
-        from .file_history import FileHistory
-
-        if (
-            QMessageBox.question(self, "Clear file history", "Delete all saved file results?")
-            == QMessageBox.StandardButton.Yes
-        ):
-            FileHistory().clear()
-            self.refresh_file_history()
-
-    def dragEnterEvent(self, event):
+    def dragEnterEvent(self, event: QDragEnterEvent) -> None:  # noqa: N802 - Qt override
         if event.mimeData().hasUrls() and any(u.isLocalFile() for u in event.mimeData().urls()):
             event.acceptProposedAction()
 
-    def dropEvent(self, event):
+    def dropEvent(self, event: QDropEvent) -> None:  # noqa: N802 - Qt override
         urls = [u for u in event.mimeData().urls() if u.isLocalFile()]
         if urls:
-            self.file_path.setText(urls[0].toLocalFile())
+            self.file_page.file_path.setText(urls[0].toLocalFile())
             self.nav.setCurrentRow(3)
             event.acceptProposedAction()
-
-    def choose_file(self):
-        path, _ = QFileDialog.getOpenFileName(self, "Transcribe audio", "", "Audio/video files (*)")
-        if path:
-            self.file_path.setText(path)
-
-    def transcribe_file(self):
-        if self.file_process is not None or not self.save():
-            return
-        if not Path(self.file_path.text()).is_file():
-            self.status.setText("Choose an existing audio file")
-            return
-        self.file_result = None
-        self.file_config = Config.load()
-        self.file_name = self.file_path.text()
-        self.file_progress_buffer = b""
-        self.file_errors = ""
-        self.update_file_progress({"stage": "decode"})
-        self.file_process = QProcess(self)
-        self.file_process.setProgram(sys.executable)
-        self.file_process.setArguments(
-            python_command(
-                "mouthkeys", "transcribe", self.file_path.text(), "--json", "--progress"
-            )[1:]
-        )
-        self.file_text.setPlainText("Transcribing…")
-        self.file_process.readyReadStandardError.connect(self.read_file_progress)
-        self.file_process.finished.connect(self.file_finished)
-        self.file_process.errorOccurred.connect(self.file_process_error)
-        self.file_process.start()
-
-    def file_process_error(self, error):
-        if error == QProcess.ProcessError.FailedToStart and self.file_process is not None:
-            self.file_text.setPlainText(self.file_process.errorString())
-            self.file_process.deleteLater()
-            self.file_process = None
-            self.stop_file_progress("File transcription could not start")
-
-    def update_file_progress(self, event):
-        labels = {
-            "decode": "Decoding audio…",
-            "diarization": "Finding speaker turns…",
-            "transcribe": "Transcribing audio…",
-            "finalize": "Assembling transcript…",
-            "save": "Saving file history…",
-            "export": "Exporting transcript…",
-            "complete": "Transcription complete",
-        }
-        if not isinstance(event, dict) or event.get("stage") not in labels:
-            return
-        text = labels[event["stage"]]
-        if event["stage"] == "complete":
-            self.file_progress.setRange(0, 1)
-            self.file_progress.setValue(1)
-            self.file_progress.setFormat("Complete")
-        elif "total" in event:
-            completed, total = event.get("completed"), event["total"]
-            if not (
-                type(completed) is int
-                and type(total) is int
-                and 0 <= completed <= total <= 1000000
-                and total > 0
-            ):
-                return
-            self.file_progress.setRange(0, total)
-            self.file_progress.setValue(completed)
-            self.file_progress.setFormat("%v / %m chunks")
-            text += f" {completed} / {total} chunks"
-            if event.get("kind") == "uncovered":
-                text += " (uncovered audio)"
-        else:
-            self.file_progress.setRange(0, 0)
-        self.file_progress_label.setText(text)
-
-    def stop_file_progress(self, text):
-        self.file_progress.setRange(0, 1)
-        self.file_progress.setValue(0)
-        self.file_progress.setFormat("Stopped")
-        self.file_progress_label.setText(text)
-
-    def read_file_progress(self):
-        if self.file_process is None:
-            return
-        data = self.file_progress_buffer + bytes(self.file_process.readAllStandardError())
-        lines = data.split(b"\n")
-        self.file_progress_buffer = lines.pop()[-8192:]
-        for line in lines:
-            if line.startswith(b"transcription_progress ") and len(line) <= 8192:
-                try:
-                    self.update_file_progress(json.loads(line.split(b" ", 1)[1]))
-                    continue
-                except (ValueError, TypeError):
-                    pass
-            self.file_errors = (self.file_errors + line.decode(errors="replace") + "\n")[-16384:]
-
-    def file_finished(self, code, _):
-        self.read_file_progress()
-        process, self.file_process = self.file_process, None
-        if process is None:
-            return
-        output = bytes(process.readAllStandardOutput()).decode(errors="replace")
-        error = (self.file_errors + self.file_progress_buffer.decode(errors="replace")).strip()
-        process.deleteLater()
-        try:
-            if code:
-                raise ValueError(error or "File transcription cancelled or failed")
-            result = json.loads(output)
-            if self.file_config.save_history == "on" and self.file_config.save_file_history == "on":
-                from .file_history import FileHistory
-
-                self.update_file_progress({"stage": "save"})
-                FileHistory().add(self.file_name, result, self.file_config.file_history_limit)
-                self.refresh_file_history()
-            self.show_file_result(result)
-            self.update_file_progress({"stage": "complete"})
-        # Report to the Settings UI without duplicating private data in logs.
-        except Exception as exc:  # allow: exception-handling  # noqa: BLE001
-            self.file_result = None
-            self.file_text.setPlainText(str(exc))
-            self.stop_file_progress("File transcription cancelled or failed")
-
-    def cancel_file(self):
-        if self.file_process is not None:
-            self.file_progress_label.setText("Cancelling file transcription…")
-            self.file_process.kill()
-
-    def copy_file_result(self):
-        if self.file_result is not None:
-            from .file_transcription import result_text
-
-            QApplication.clipboard().setText(result_text(self.file_result))
-            self.status.setText("Copied file transcription")
-
-    def export_file_result(self, kind):
-        if self.file_result is None:
-            return
-        path, _ = QFileDialog.getSaveFileName(
-            self, "Export transcription", "transcript." + ("json" if kind == "json" else "txt")
-        )
-        if path:
-            from .file_transcription import export_result
-
-            self.update_file_progress({"stage": "export"})
-            try:
-                export_result(self.file_result, path, "json" if kind == "json" else "txt")
-                self.update_file_progress({"stage": "complete"})
-            # Report to the Settings UI without duplicating private data in logs.
-            except Exception as exc:  # allow: exception-handling  # noqa: BLE001
-                self.stop_file_progress("File export failed")
-                self.status.setText(str(exc))
 
     def stats_page(self):
         from .stats_view import ActivityChart
@@ -2238,8 +1981,12 @@ class Window(QWidget):
             self.download_progress.setRange(0, 100)
             self.download_progress.setValue(0)
 
-    def closeEvent(self, event):
-        if self.jobs or self.download is not None or self.file_process is not None:
+    @property
+    def busy(self) -> bool:
+        return bool(self.jobs) or self.download is not None or self.file_page.running
+
+    def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802 - Qt override
+        if self.busy:
             self.status.setText("Wait for the current operation before closing")
             event.ignore()
             return

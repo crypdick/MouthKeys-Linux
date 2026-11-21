@@ -3,13 +3,22 @@
 import json
 import uuid
 from dataclasses import replace
+from typing import NotRequired, TypedDict, cast
 
 from .config import config_path
 from .operations import write_private
-from .profiles import load_profiles, resolve_profile
+from .profiles import PromptProfile, load_profiles, resolve_profile
 
 
-def validate_routes(routes, profiles=None):
+class PromptRoute(TypedDict):
+    app: str
+    profile: str
+    mode: NotRequired[str]
+
+
+def validate_routes(
+    routes: object, profiles: list[PromptProfile] | None = None
+) -> list[PromptRoute]:
     if not isinstance(routes, list) or len(routes) > 1000:
         raise ValueError("Prompt routes must be a list of at most 1000 applications")
     ids = {p["id"] for p in (load_profiles() if profiles is None else profiles)}
@@ -33,10 +42,10 @@ def validate_routes(routes, profiles=None):
         }:
             raise ValueError("Prompt route selects a missing profile")
         seen.add((rule.get("mode", "dictation"), rule["app"].casefold()))
-    return routes
+    return cast("list[PromptRoute]", routes)
 
 
-def load_routes(profiles=None):
+def load_routes(profiles: list[PromptProfile] | None = None) -> list[PromptRoute]:
     path = config_path().with_name("prompt_routes.json")
     if not path.exists():
         return []
@@ -45,7 +54,7 @@ def load_routes(profiles=None):
     return validate_routes(json.loads(path.read_text()), profiles)
 
 
-def save_routes(routes):
+def save_routes(routes: object) -> None:
     from .config import private_dir
 
     path = config_path().with_name("prompt_routes.json")

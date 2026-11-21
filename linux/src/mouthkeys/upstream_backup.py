@@ -9,6 +9,7 @@ import hashlib
 import ipaddress
 import json
 import uuid
+from collections.abc import Mapping, Sequence
 from dataclasses import asdict
 from pathlib import Path
 from typing import Literal, overload
@@ -17,7 +18,7 @@ from urllib.parse import urlsplit
 from .config import Config
 from .dictionary import Dictionary, DictionaryData
 from .dictionary_transfer import _merge_rules, merge_replacements, replacement_entries
-from .profiles import PROFILE_FIELDS, load_profiles, validate_profiles
+from .profiles import PROFILE_FIELDS, PromptProfile, load_profiles, validate_profiles
 from .routing import load_routes, validate_routes
 from .upstream_backup_sections import (
     MigrationNotes,
@@ -190,7 +191,7 @@ def _draft_profiles(
     current_by_id: dict[str, dict[str, object]],
     reserved: set[str],
     notes: MigrationNotes,
-) -> tuple[list[dict[str, object]], dict[str, str], list[dict[str, object]]]:
+) -> tuple[list[PromptProfile], dict[str, str], list[dict[str, object]]]:
     if provider is None:
         if upstream_profiles:
             notes.skip(
@@ -243,7 +244,7 @@ def _draft_profiles(
                 "credential_source": provider.ai_credential_source,
             }
         )
-    validated: list[dict[str, object]] = validate_profiles(profiles)
+    validated = validate_profiles(profiles)
     if validated:
         notes.warnings.append(
             "Prompts use global provider/model; backup omits per-profile provider pins."
@@ -321,8 +322,8 @@ def _convert_upstream_backup(
     document: object,
     base_config: Config,
     current_dictionary: object,
-    current_profiles: list[dict[str, object]],
-    current_routes: list[dict[str, object]],
+    current_profiles: Sequence[Mapping[str, object]],
+    current_routes: Sequence[Mapping[str, object]],
     *,
     app_map: object = None,
 ) -> tuple[dict[str, object], dict[str, object]]:
@@ -334,7 +335,7 @@ def _convert_upstream_backup(
 
     dictionary, replacement_count = _convert_dictionary(settings, current_dictionary, notes)
     current_by_id = {
-        read_text(profile["id"], "profile ID"): profile for profile in current_profiles
+        read_text(profile["id"], "profile ID"): dict(profile) for profile in current_profiles
     }
     reserved = {base_config.ai_profile, base_config.edit_profile, base_config.command_profile}
     reserved.update(read_text(rule["profile"], "route profile") for rule in current_routes)
@@ -347,9 +348,9 @@ def _convert_upstream_backup(
     pending_bindings = _pending_bindings(
         read_list(document, "appPromptBindings", 1000), mapping, profile_id_map, notes
     )
-    routes = copy.deepcopy(current_routes)
+    routes = [copy.deepcopy(dict(route)) for route in current_routes]
     combined = dict(current_by_id)
-    combined.update({read_text(p["id"], "profile ID"): p for p in profiles})
+    combined.update({p["id"]: dict(p) for p in profiles})
     validate_routes(routes, validate_profiles(list(combined.values())))
 
     history = convert_history(document, notes)
@@ -406,8 +407,8 @@ def convert_upstream_backup(
     document: object,
     base_config: Config,
     current_dictionary: object,
-    current_profiles: list[dict[str, object]],
-    current_routes: list[dict[str, object]],
+    current_profiles: Sequence[Mapping[str, object]],
+    current_routes: Sequence[Mapping[str, object]],
     *,
     app_map: object = None,
 ) -> tuple[dict[str, object], dict[str, object]]:

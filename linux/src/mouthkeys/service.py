@@ -10,18 +10,17 @@ from pathlib import Path
 from typing import cast
 
 from . import __version__, desktop_input
-from .accessibility import read_snapshot
 from .audio import CaptureSession, CaptureTeardownError, check_audio, live_meter
 from .config import Config, private_dir, runtime_dir
 from .control import MAX_MESSAGE
 from .delivery import Delivery
 from .desktop import MediaSession, choose_source, play_sound
 from .formatting import enabled, format_text, parse_send
-from .learning import CorrectionLearner
 from .microphone import MicrophoneSelection, Recording, SwitchOutcome, selection
 from .postprocess import process
 from .pronunciation import PronunciationStore
 from .recording_destination import snapshot_for_stop
+from .recording_learning import RecordingLearning
 from .storage import History
 from .transcribe import Transcriber
 
@@ -129,12 +128,11 @@ class Controller:
         self.assistant_proposal = None
         self.assistant_stream = None
         self.assistant_memory = {}
-        self.learning_stop = threading.Event()
-        self.learning_worker = None
-        self.learning_generation = 0
-        self.learning_proposals = {}
+        self.learning = RecordingLearning(
+            self.lock, self._owns_learning, lambda: self.interrupted, self.report_error
+        )
 
-    def report_error(self, message, kind="error"):
+    def report_error(self, message: str, kind: str = "error") -> None:
         with self.lock:
             self.notice_serial += 1
             self.notice = {
@@ -155,7 +153,7 @@ class Controller:
                 "assistant_stream": self.assistant_stream,
                 "mode": self.job.mode if self.job else "dictation",
                 "loaded_model": copy.deepcopy(getattr(self.transcriber, "loaded_model", None)),
-                "learning_pending": [proposal for _, proposal in self.learning_proposals.values()],
+                "learning_pending": self.learning.pending(),
                 "notice": self.notice,
                 "preview": self.preview_text,
                 "meter": self.meter if self.phase == "recording" else {},
@@ -198,95 +196,106 @@ class Controller:
         if action in ("copy", "paste"):
             return self._manual_delivery(action, data)
         if action in ("learning_pending", "learning_accept", "learning_dismiss"):
-            return self._learning_command(action, data)
+            return self.learning.command(action, data)
         with self.lock:
-            if action == "status":
-                return self.status()
-            if action == "release_hold":
-                if (
-                    self.job
-                    and self.phase in ("starting", "recording", "switching")
-                    and data.get("id") == self.job.item_id
-                ):
-                    self.job.held_activation = False
-                return self.status()
-            from .operations import handle_action
+            return self._locked_command(action, data, _focus_gate)
 
-            result = handle_action(
-                self.history,
-                action,
-                data,
-                allow_mutation=self.phase == "idle" and not self._pending_jobs(),
-            )
-            if result is not NotImplemented:
-                return result
-            if self.interrupted:
-                raise ValueError("Service is shutting down")
-            if action == "cancel":
-                self._cancel_learning()
-                if self.phase == "delivering" and self.job and self.job.send_pending:
-                    if self.job.send_dispatched:
-                        raise ValueError("Send already dispatched; cannot withdraw the key")
-                    self.cancelled = True
-                    self.job.cancelled = True
-                    self.job.cancel_event.set()
-                    self.message = "Send cancelled; text already inserted"
-                    return self.status()
-                if self.phase == "delivering":
-                    raise ValueError(
-                        "Delivery already started; waiting for clipboard/paste to finish"
-                    )
-                self.preview_text = ""
-                self.cancelled = True
-                if self.job:
-                    self.job.cancelled = True
-                    self.job.cancel_event.set()
-                if self.phase in ("recording", "switching", "capture_failed"):
-                    self._stop(None)
-                elif self.phase in ("starting", "stopping", "transcribing", "queued", "loading"):
-                    self.message = "Cancelling; waiting for capture/model to finish"
-                return self.status()
-            if action == "stop":
-                if data.get("id") is not None and (not self.job or data["id"] != self.job.item_id):
-                    return self.status()
-                if self.phase == "starting":
-                    self.job.cancelled = True
-                    self.job.cancel_event.set()
-                    self.message = "Cancelling microphone start"
-                    return self.status()
-                if self.phase not in ("recording", "switching", "capture_failed"):
-                    raise ValueError("Not recording")
-                target = (
-                    "capture-focus"
-                    if self.config.delivery in ("x11", "wayland")
-                    and self.phase != "capture_failed"
-                    and (not data.get("automatic") or data.get("spoken"))
-                    else None
-                )
-                self._stop(target, _focus_gate)
-                return self.status()
-            if self.phase != "idle":
-                raise ValueError(f"Busy ({self.phase}); wait or cancel before {action}")
-            if self._pending_jobs():
-                raise ValueError(f"Busy (queued); wait or cancel before {action}")
-            if action == "warmup":
-                self.config = Config.load()
-                self.cancelled = False
-                self.phase, self.message = "loading", "Loading local model"
-                self.worker = threading.Thread(target=self._warmup, daemon=True)
-                self.worker.start()
-                return self.status()
-            if action == "clear":
-                self._cancel_learning()
-                self.learning_proposals.clear()
-                self.preview_text = ""
-                self.last_text = ""
-                self.assistant_proposal = None
-                self.history.clear()
-                self.item_id = None
-                self.message = "History and recordings cleared"
-                return self.status()
-            raise ValueError(f"Unknown command: {action}")
+    def _locked_command(
+        self, action: str, data: Mapping[str, object], focus_gate: FocusGate
+    ) -> object:
+        if action == "status":
+            return self.status()
+        if action == "release_hold":
+            if (
+                self.job
+                and self.phase in ("starting", "recording", "switching")
+                and data.get("id") == self.job.item_id
+            ):
+                self.job.held_activation = False
+            return self.status()
+        from .operations import handle_action
+
+        result = handle_action(
+            self.history,
+            action,
+            data,
+            allow_mutation=self.phase == "idle" and not self._pending_jobs(),
+        )
+        if result is not NotImplemented:
+            return result
+        if self.interrupted:
+            raise ValueError("Service is shutting down")
+        if action == "cancel":
+            return self._cancel_command()
+        if action == "stop":
+            return self._stop_command(data, focus_gate)
+        return self._idle_command(action)
+
+    def _cancel_command(self) -> dict[str, object]:
+        self.learning.cancel()
+        if self.phase == "delivering" and self.job and self.job.send_pending:
+            if self.job.send_dispatched:
+                raise ValueError("Send already dispatched; cannot withdraw the key")
+            self.cancelled = True
+            self.job.cancelled = True
+            self.job.cancel_event.set()
+            self.message = "Send cancelled; text already inserted"
+            return self.status()
+        if self.phase == "delivering":
+            raise ValueError("Delivery already started; waiting for clipboard/paste to finish")
+        self.preview_text = ""
+        self.cancelled = True
+        if self.job:
+            self.job.cancelled = True
+            self.job.cancel_event.set()
+        if self.phase in ("recording", "switching", "capture_failed"):
+            self._stop(None)
+        elif self.phase in ("starting", "stopping", "transcribing", "queued", "loading"):
+            self.message = "Cancelling; waiting for capture/model to finish"
+        return self.status()
+
+    def _stop_command(self, data: Mapping[str, object], focus_gate: FocusGate) -> dict[str, object]:
+        if data.get("id") is not None and (not self.job or data["id"] != self.job.item_id):
+            return self.status()
+        if self.phase == "starting":
+            self.job.cancelled = True
+            self.job.cancel_event.set()
+            self.message = "Cancelling microphone start"
+            return self.status()
+        if self.phase not in ("recording", "switching", "capture_failed"):
+            raise ValueError("Not recording")
+        target = (
+            "capture-focus"
+            if self.config.delivery in ("x11", "wayland")
+            and self.phase != "capture_failed"
+            and (not data.get("automatic") or data.get("spoken"))
+            else None
+        )
+        self._stop(target, focus_gate)
+        return self.status()
+
+    def _idle_command(self, action: str) -> dict[str, object]:
+        if self.phase != "idle":
+            raise ValueError(f"Busy ({self.phase}); wait or cancel before {action}")
+        if self._pending_jobs():
+            raise ValueError(f"Busy (queued); wait or cancel before {action}")
+        if action == "warmup":
+            self.config = Config.load()
+            self.cancelled = False
+            self.phase, self.message = "loading", "Loading local model"
+            self.worker = threading.Thread(target=self._warmup, daemon=True)
+            self.worker.start()
+            return self.status()
+        if action == "clear":
+            self.learning.clear()
+            self.preview_text = ""
+            self.last_text = ""
+            self.assistant_proposal = None
+            self.history.clear()
+            self.item_id = None
+            self.message = "History and recordings cleared"
+            return self.status()
+        raise ValueError(f"Unknown command: {action}")
 
     def _select_microphone(self, data: Mapping[str, object]) -> dict[str, object]:
         source, persist = selection(data)
@@ -402,7 +411,7 @@ class Controller:
             self.send_armed_at = None
             self.send_disarmed_text = None
             self.last_voice_at = time.monotonic()
-            self._cancel_learning()
+            self.learning.cancel()
             if self.job and self.job.done.is_set() and self.job.edit_consumed:
                 # A new recording supersedes any reviewed edit waiting on desktop work.
                 self.job.cancel_event.set()
@@ -525,86 +534,15 @@ class Controller:
         self.media.resume()
         return self.status()
 
-    def _cancel_learning(self):
-        self.learning_stop.set()
-        self.learning_generation += 1
-
-    def _learning_command(self, action, data):
-        with self.lock:
-            if action == "learning_pending":
-                return [proposal for _, proposal in self.learning_proposals.values()]
-            if self.interrupted:
-                raise ValueError("Service is shutting down")
-            proposal_id = data.get("id")
-            if proposal_id not in self.learning_proposals:
-                raise ValueError("Learning suggestion no longer exists")
-            learner, proposal = self.learning_proposals[proposal_id]
-        # Dictionary writes never hold the controller state lock.
-        if action == "learning_accept":
-            learner.accept(proposal_id)
-        else:
-            learner.dismiss(proposal_id)
-        with self.lock:
-            self.learning_proposals.pop(proposal_id, None)
-        return proposal
-
-    def _start_learning(self, job, text):
-        initial = getattr(self.delivery, "last_verified", None)
-        if not isinstance(initial, dict):
-            return
-        with self.lock:
-            if self.interrupted or job.cancelled or self.job is not job:
-                return
-            self._cancel_learning()
-            stop = self.learning_stop = threading.Event()
-            generation = self.learning_generation
-            # Keep the final mutation behind the generation check even in automatic mode.
-            learner = CorrectionLearner(replace(job.config, learning_confirmation="on"))
-            if not learner.begin(text, initial):
-                return
-            self.learning_worker = threading.Thread(
-                target=self._observe_learning,
-                args=(job, learner, dict(initial), generation, stop),
-                daemon=True,
-            )
-            self.learning_worker.start()
-
-    def _observe_learning(self, job, learner, target, generation, stop):
-        deadline = time.monotonic() + job.config.learning_observe_seconds
-        try:
-            while not stop.wait(0.5) and time.monotonic() < deadline:
-                if Config.load().automatic_learning != "on":
-                    return
-                # The helper itself has a bounded timeout; no desktop calls under state lock.
-                snapshot = read_snapshot(target)
-                if stop.is_set():
-                    return
-                proposal = learner.observe(snapshot)
-                if proposal:
-                    with self.lock:
-                        if (
-                            stop.is_set()
-                            or self.interrupted
-                            or job.cancelled
-                            or self.job is not job
-                            or generation != self.learning_generation
-                        ):
-                            return
-                        if job.config.learning_confirmation == "off":
-                            learner.accept(proposal["id"])
-                        else:
-                            self.learning_proposals[proposal["id"]] = (learner, proposal)
-                            while len(self.learning_proposals) > 200:
-                                self.learning_proposals.pop(next(iter(self.learning_proposals)))
-                    return
-                if learner.observation is None:
-                    return
-        # The job or IPC response reports the failure; avoid duplicating private data in logs.
-        except Exception as exc:  # allow: exception-handling  # noqa: BLE001
-            if not stop.is_set():
-                self.report_error(f"Correction learning unavailable: {exc}")
-        finally:
-            learner.cancel()
+    def _owns_learning(self, recording_id: str) -> bool:
+        # RecordingLearning calls this under the controller state lock.
+        job = self.job
+        return (
+            not self.interrupted
+            and job is not None
+            and job.item_id == recording_id
+            and not job.cancelled
+        )
 
     @staticmethod
     def _edit_target_matches(job):
@@ -772,7 +710,7 @@ class Controller:
         """Stop on logout without interpreting it as the user's discard command."""
         with self.lock:
             self.interrupted = True
-            self._cancel_learning()
+            self.learning.cancel()
             self.cancelled = True
             recorder, self.recorder = self.recorder, None
             for job in self._pending_jobs():
@@ -1303,7 +1241,9 @@ class Controller:
             if plan.should_send and text and result == "copied":
                 send_warning = "Spoken Send skipped: text copied; insertion destination unavailable"
             if result == "pasted" and enabled(config, "automatic_learning"):
-                self._start_learning(job, text)
+                self.learning.start(
+                    job.item_id, job.config, text, getattr(self.delivery, "last_verified", None)
+                )
             if plan.should_send and (
                 not text or result in ("paste_requested", "insert_requested", "pasted")
             ):

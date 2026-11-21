@@ -9,7 +9,10 @@ import re
 import threading
 import time
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, NotRequired, TypedDict, TypeGuard
 
 from .config import Config, config_path, private_dir
 from .data_lock import dictionary_lock
@@ -20,9 +23,21 @@ from .vocabulary import VocabularyStore
 _BOUNDARIES = set(',!?;:"“”()[]{}<>')
 _EDGES = ' \t\r\n.,!?;:"“”‘’()[]{}'
 _STORE_LOCK = threading.RLock()
+MAX_PROPOSALS = 200
 
 
-def changed_range(before, after):
+class CorrectionCandidate(TypedDict):
+    heard: str
+    corrected: str
+
+
+class LearningProposal(CorrectionCandidate):
+    id: str
+    key: str
+    accepted: NotRequired[bool]
+
+
+def changed_range(before: str, after: str) -> tuple[int, int, int]:
     start = 0
     while start < min(len(before), len(after)) and before[start] == after[start]:
         start += 1
@@ -33,7 +48,7 @@ def changed_range(before, after):
     return start, old_end, new_end
 
 
-def _token_range(text, start, end):
+def _token_range(text: str, start: int, end: int) -> tuple[int, int]:
     while start > 0 and not (text[start - 1].isspace() or text[start - 1] in _BOUNDARIES):
         start -= 1
     while end < len(text) and not (text[end].isspace() or text[end] in _BOUNDARIES):
@@ -41,7 +56,9 @@ def _token_range(text, start, end):
     return start, end
 
 
-def correction_candidate(before, after, inserted_start, inserted_end):
+def correction_candidate(
+    before: str, after: str, inserted_start: int, inserted_end: int
+) -> CorrectionCandidate | None:
     if before == after:
         return None
     start, old_end, new_end = changed_range(before, after)
@@ -82,18 +99,24 @@ class Observation:
 
 
 class CorrectionLearner:
-    def __init__(self, config=None, *, clock=time.monotonic, wall_clock=time.time):
+    def __init__(
+        self,
+        config: object = None,
+        *,
+        clock: Callable[[], float] = time.monotonic,
+        wall_clock: Callable[[], float] = time.time,
+    ) -> None:
         self.config = config or Config.load()
         self.clock, self.wall_clock = clock, wall_clock
-        self.observation = None
-        self.proposals = {}
+        self.observation: Observation | None = None
+        self.proposals: dict[str, LearningProposal] = {}
         self.lock = threading.RLock()
 
     @staticmethod
-    def path():
+    def path() -> Path:
         return config_path().with_name("learning.json")
 
-    def _load(self):
+    def _load(self) -> dict[str, Any]:
         path = self.path()
         if not path.exists():
             return {"pairs": {}, "last_shown": 0}
@@ -104,13 +127,13 @@ class CorrectionLearner:
             raise ValueError("Invalid learning policy file")
         return data
 
-    def _save(self, data):
+    def _save(self, data: dict[str, Any]) -> None:
         path = self.path()
         private_dir(path.parent)
         write_private(path, json.dumps(data, ensure_ascii=False).encode())
 
     @staticmethod
-    def _valid_snapshot(snapshot, *, insertion=False):
+    def _valid_snapshot(snapshot: object, *, insertion: bool = False) -> TypeGuard[dict[str, Any]]:
         return (
             isinstance(snapshot, dict)
             and isinstance(snapshot.get("field_id"), str)
@@ -137,7 +160,9 @@ class CorrectionLearner:
             )
         )
 
-    def begin(self, delivered_text, initial_snapshot, config=None):
+    def begin(
+        self, delivered_text: object, initial_snapshot: object, config: object = None
+    ) -> bool:
         with self.lock:
             self.cancel()
             if config is not None:
@@ -164,11 +189,11 @@ class CorrectionLearner:
             )
             return True
 
-    def cancel(self):
+    def cancel(self) -> None:
         with self.lock:
             self.observation = None
 
-    def observe(self, snapshot, now=None):
+    def observe(self, snapshot: object, now: float | None = None) -> LearningProposal | None:
         with self.lock:
             observation = self.observation
             now = self.clock() if now is None else now
@@ -198,7 +223,7 @@ class CorrectionLearner:
             self.cancel()
             return self._suggest(candidate) if candidate else None
 
-    def _suggest(self, candidate):
+    def _suggest(self, candidate: CorrectionCandidate) -> LearningProposal | None:
         with _STORE_LOCK:
             trigger = " ".join(candidate["heard"].casefold().split())
             if any(
@@ -239,20 +264,25 @@ class CorrectionLearner:
             self._save(data)
             if not show:
                 return None
-            proposal = {"id": str(uuid.uuid4()), **candidate, "key": key}
+            proposal: LearningProposal = {
+                "id": str(uuid.uuid4()),
+                "heard": candidate["heard"],
+                "corrected": candidate["corrected"],
+                "key": key,
+            }
             self.proposals[proposal["id"]] = proposal
-            while len(self.proposals) > 200:
+            if len(self.proposals) > MAX_PROPOSALS:
                 del self.proposals[next(iter(self.proposals))]
             if getattr(self.config, "learning_confirmation", "on") != "on":
                 self.accept(proposal["id"])
-                return {**proposal, "accepted": True}
+                proposal["accepted"] = True
             return proposal
 
-    def pending(self):
+    def pending(self) -> list[LearningProposal]:
         with self.lock:
             return list(self.proposals.values())
 
-    def accept(self, proposal_id):
+    def accept(self, proposal_id: str) -> LearningProposal:
         with self.lock, _STORE_LOCK, dictionary_lock():
             proposal = self.proposals[proposal_id]
             data = Dictionary.load()
@@ -285,11 +315,12 @@ class CorrectionLearner:
             del self.proposals[proposal_id]
             return proposal
 
-    def dismiss(self, proposal_id):
+    def dismiss(self, proposal_id: str) -> None:
         with self.lock, _STORE_LOCK:
-            proposal = self.proposals.pop(proposal_id)
+            proposal = self.proposals[proposal_id]
             policy = self._load()
             pair = policy["pairs"][proposal["key"]]
             pair["dismissals"] += 1
             pair["dismissed_until"] = self.wall_clock() + 7 * 86400
             self._save(policy)
+            del self.proposals[proposal_id]

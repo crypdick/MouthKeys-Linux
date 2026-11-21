@@ -19,6 +19,8 @@ then dispatches local work or uses `control` to contact the private Unix socket 
   `desktop_input` probes compositor window identity and runs clipboard and keyboard commands.
   `delivery` decides whether to use those commands and rechecks the destination before sending.
   Cancellation before delivery wins; unverified destination identity falls back to copy.
+  `recording_learning` observes confirmed insertions and coordinates review without holding
+  the controller state lock during AT-SPI reads or dictionary writes.
 - **Command line:** `cli_options` defines argument grammar; `cli` dispatches commands and keeps
   results on stdout and diagnostics on stderr. `desktop_entry` owns XDG launcher and login files
   shared by CLI, Settings, and backup restore.

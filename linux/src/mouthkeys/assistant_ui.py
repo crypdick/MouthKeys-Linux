@@ -7,7 +7,7 @@ import uuid
 from collections.abc import Mapping
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QThread, Signal
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import (
     QComboBox,
@@ -33,22 +33,7 @@ from .assistant_history import (
     validate_messages,
 )
 from .config import Config
-
-
-class AssistantTask(QThread):
-    done = Signal(object)
-
-    def __init__(self, function, parent, cancel_event=None):
-        super().__init__(parent)
-        self.function = function
-        self.cancel_event = cancel_event or threading.Event()
-
-    def run(self):
-        try:
-            self.done.emit({"result": self.function()})
-        # Report to the assistant UI without duplicating private data in logs.
-        except Exception as exc:  # allow: exception-handling  # noqa: BLE001
-            self.done.emit({"error": str(exc)})
+from .qt_control import Task
 
 
 class AssistantPage(QWidget):
@@ -281,7 +266,7 @@ class AssistantPage(QWidget):
         self.reload_chat()
 
     def _task(self, function, callback, cancel_event=None, *, accept_cancelled=False):
-        task = AssistantTask(function, self, cancel_event)
+        task = Task(function, self, cancel_event)
         self.jobs.add(task)
         # Main window must not destroy workers while a provider or command runs.
         self.window.jobs.add(task)

@@ -258,9 +258,9 @@ class Handler(BaseHTTPRequestHandler):
                 )
                 dictionary["replacements"] = merge_replacements(existing, incoming)
                 Dictionary.save(dictionary)
-            entries = dictionary["replacements"]
-            items = [{"id": replacement_id(entry), **entry} for entry in entries]
-            self.answer(200, entries if native else {"count": len(items), "items": items})
+            rules = dictionary["replacements"]
+            items = [{"id": replacement_id(entry), **entry} for entry in rules]
+            self.answer(200, rules if native else {"count": len(items), "items": items})
 
     def transcribe(self, audio):
         from .file_transcription import transcribe_file

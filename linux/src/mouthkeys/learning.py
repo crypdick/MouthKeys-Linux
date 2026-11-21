@@ -12,6 +12,7 @@ import uuid
 from dataclasses import dataclass
 
 from .config import Config, config_path, private_dir
+from .data_lock import dictionary_lock
 from .dictionary import Dictionary
 from .operations import write_private
 from .vocabulary import VocabularyStore
@@ -252,7 +253,7 @@ class CorrectionLearner:
             return list(self.proposals.values())
 
     def accept(self, proposal_id):
-        with self.lock, _STORE_LOCK:
+        with self.lock, _STORE_LOCK, dictionary_lock():
             proposal = self.proposals[proposal_id]
             data = Dictionary.load()
             trigger = proposal["heard"].casefold()

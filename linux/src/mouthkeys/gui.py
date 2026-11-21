@@ -12,7 +12,6 @@ from PySide6.QtGui import QCloseEvent, QDragEnterEvent, QDropEvent, QIcon, QPixm
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
-    QFileDialog,
     QFormLayout,
     QHBoxLayout,
     QLabel,
@@ -26,7 +25,6 @@ from PySide6.QtWidgets import (
     QStackedWidget,
     QTableWidget,
     QTableWidgetItem,
-    QTabWidget,
     QTextEdit,
     QVBoxLayout,
     QWidget,
@@ -37,6 +35,7 @@ from .backup_ui import BackupPage
 from .config import CHOICES, RANGES, Config, config_path, state_dir
 from .control import ensure_daemon, ensure_overlay
 from .desktop_input import automatic_delivery_warning
+from .dictionary_ui import DictionaryPage
 from .file_transcription_ui import FileTranscriptionPage
 from .help_ui import HelpPage
 from .history_ui import HistoryPage
@@ -557,10 +556,6 @@ class Window(QWidget):
         settings_scroll.setWidgetResizable(True)
         settings_scroll.setWidget(settings)
         tabs.addWidget(settings_scroll)
-        tabs.addWidget(self.dictionary_page())
-        self.file_page = FileTranscriptionPage(tabs, self.save, self.status.setText)
-        tabs.addWidget(self.file_page)
-        self.setAcceptDrops(True)
         self._add_auxiliary_pages(tabs)
         self.nav.setCurrentRow(0)
         self.apply_theme()
@@ -571,6 +566,11 @@ class Window(QWidget):
         self.poll()
 
     def _add_auxiliary_pages(self, tabs: QStackedWidget) -> None:
+        self.dictionary_page = DictionaryPage(self.send, self.status.setText)
+        tabs.addWidget(self.dictionary_page)
+        self.file_page = FileTranscriptionPage(tabs, self.save, self.status.setText)
+        tabs.addWidget(self.file_page)
+        self.setAcceptDrops(True)
         tabs.addWidget(StatsPage(self.send))
         self.backup_page = BackupPage(self.send, self.status.setText, self.operation_result)
         tabs.addWidget(self.backup_page)
@@ -587,6 +587,7 @@ class Window(QWidget):
         from .learning_ui import LearningPage
 
         self.learning_page = LearningPage(self)
+        self.dictionary_page.vocabulary_changed.connect(self.learning_page.refresh_words)
         learning_scroll = QScrollArea()
         learning_scroll.setWidgetResizable(True)
         learning_scroll.setWidget(self.learning_page)
@@ -676,197 +677,6 @@ class Window(QWidget):
     def operation_result(self, response: Response) -> None:
         self.status.setText(str(response.get("error", response.get("result", "Done"))))
 
-    def dictionary_page(self):
-        from .dictionary import Dictionary
-
-        page = QWidget()
-        layout = QVBoxLayout(page)
-        hint = QLabel(
-            "Teach replacements, then customize phrases used after your "
-            "Literal prefix. Separate aliases with commas. Disable a rule "
-            "without deleting it."
-        )
-        hint.setWordWrap(True)
-        layout.addWidget(hint)
-        self.dictionary_tabs = QTabWidget()
-        self.dictionary_tables = {}
-        for name in ("replacements", "punctuation", "actions"):
-            table = QTableWidget(0, 3)
-            table.setHorizontalHeaderLabels(
-                ["Spoken phrases (comma-separated)", "Replacement", "Enabled (on/off)"]
-            )
-            table.horizontalHeader().setStretchLastSection(True)
-            table.setColumnWidth(0, 260)
-            table.setColumnWidth(1, 160)
-            self.dictionary_tables[name] = table
-            self.dictionary_tabs.addTab(table, name.capitalize())
-        layout.addWidget(self.dictionary_tabs)
-        training = QHBoxLayout()
-        self.training_replacement = QLineEdit()
-        self.training_replacement.setPlaceholderText("Correct word or phrase to teach")
-        training.addWidget(self.training_replacement)
-        self.training_id = None
-        train = QPushButton("Train by voice")
-        train.clicked.connect(self.train_dictionary)
-        training.addWidget(train)
-        stop_training = QPushButton("Stop training")
-        stop_training.clicked.connect(lambda: self.send("stop"))
-        training.addWidget(stop_training)
-        layout.addLayout(training)
-        buttons = QHBoxLayout()
-        for text, handler in (
-            ("Add rule", self.add_dictionary_rule),
-            ("Delete rule", self.delete_dictionary_rule),
-            ("Save", self.save_dictionary),
-            ("Import", self.import_dictionary),
-            ("Export", self.export_dictionary),
-            ("Reload", self.reload_dictionary),
-            ("Reset spoken formatting", self.reset_spoken_formatting),
-        ):
-            button = QPushButton(text)
-            button.clicked.connect(handler)
-            buttons.addWidget(button)
-        layout.addLayout(buttons)
-        self.fill_dictionary(Dictionary.load())
-        return page
-
-    def train_dictionary(self):
-        if not self.training_replacement.text().strip():
-            self.status.setText("Enter the correct replacement first, then say it aloud")
-            return
-
-        def started(response):
-            if "result" in response:
-                self.training_id = response["result"]["id"]
-
-        self.send("start", {"mode": "training"}, callback=started)
-
-    def update_training(self, result):
-        proposal = result.get("assistant_proposal")
-        if (
-            not self.training_id
-            or result.get("id") != self.training_id
-            or not proposal
-            or proposal.get("mode") != "training"
-        ):
-            return
-        self.training_id = None
-        trigger = proposal["text"].strip().rstrip(".!?")
-        replacement = self.training_replacement.text().strip()
-        if not trigger:
-            self.status.setText("No recognized training phrase; try again")
-            return
-        table = self.dictionary_tables["replacements"]
-        row = table.rowCount()
-        table.insertRow(row)
-        for col, text in enumerate((trigger, replacement, "on")):
-            table.setItem(row, col, QTableWidgetItem(text))
-        self.dictionary_tabs.setCurrentIndex(0)
-        self.status.setText("Training captured. Review recognized phrase and Save dictionary.")
-
-    def fill_dictionary(self, data):
-        self.dictionary_baseline = json.loads(json.dumps(data))
-        for name, table in self.dictionary_tables.items():
-            table.setRowCount(0)
-            for entry in data[name]:
-                row = table.rowCount()
-                table.insertRow(row)
-                aliases = entry["triggers" if name == "replacements" else "aliases"]
-                value = entry["replacement" if name == "replacements" else "symbol"]
-                # Escaped control characters keep newline/tab rules editable in one cell.
-                if name != "replacements":
-                    value = value.replace("\\", "\\\\").replace("\n", "\\n").replace("\t", "\\t")
-                for column, text in enumerate(
-                    (", ".join(aliases), value, "on" if entry.get("enabled", True) else "off")
-                ):
-                    table.setItem(row, column, QTableWidgetItem(text))
-                if name == "replacements" and "id" in entry:
-                    table.item(row, 0).setData(Qt.ItemDataRole.UserRole, entry["id"])
-
-    def add_dictionary_rule(self):
-        table = self.dictionary_tabs.currentWidget()
-        row = table.rowCount()
-        table.insertRow(row)
-        for col, text in enumerate(("", "", "on")):
-            table.setItem(row, col, QTableWidgetItem(text))
-        table.setCurrentCell(row, 0)
-        table.editItem(table.item(row, 0))
-
-    def delete_dictionary_rule(self):
-        table = self.dictionary_tabs.currentWidget()
-        if table.currentRow() >= 0:
-            table.removeRow(table.currentRow())
-
-    def save_dictionary(self):
-        from .dictionary import Dictionary
-
-        try:
-            if Dictionary.load() != self.dictionary_baseline:
-                raise ValueError(
-                    "Dictionary changed (possibly a learned correction). Reload before saving."
-                )
-            data = {}
-            for name, table in self.dictionary_tables.items():
-                entries = []
-                for row in range(table.rowCount()):
-                    values = [
-                        table.item(row, col).text() if table.item(row, col) else ""
-                        for col in range(3)
-                    ]
-                    if values[2] not in ("on", "off"):
-                        raise ValueError("Enabled must be on or off")
-                    value = values[1]
-                    if name != "replacements":
-                        import re
-
-                        value = re.sub(
-                            r"\\([\\nt])", lambda m: {"n": "\n", "t": "\t", "\\": "\\"}[m[1]], value
-                        )
-                    entry = {
-                        "triggers" if name == "replacements" else "aliases": [
-                            v.strip() for v in values[0].split(",") if v.strip()
-                        ],
-                        "replacement" if name == "replacements" else "symbol": value,
-                        "enabled": values[2] == "on",
-                    }
-                    if name == "replacements" and table.item(row, 0):
-                        item_id = table.item(row, 0).data(Qt.ItemDataRole.UserRole)
-                        if item_id:
-                            entry["id"] = item_id
-                    entries.append(entry)
-                data[name] = entries
-            Dictionary.save(data)
-            self.dictionary_baseline = data
-            self.status.setText("Dictionary saved")
-            return True
-        # Report to the Settings UI without duplicating private data in logs.
-        except Exception as exc:  # allow: exception-handling  # noqa: BLE001
-            self.status.setText(str(exc))
-            return False
-
-    def reload_dictionary(self):
-        from .dictionary import Dictionary
-
-        self.fill_dictionary(Dictionary.load())
-
-    def reset_spoken_formatting(self):
-        from .dictionary import Dictionary
-
-        if (
-            QMessageBox.question(
-                self,
-                "Reset spoken formatting",
-                "Restore default punctuation/action rules? Unsaved edits will be discarded.",
-            )
-            != QMessageBox.StandardButton.Yes
-        ):
-            return
-        data = Dictionary.load()
-        defaults = Dictionary.defaults()
-        data.update(punctuation=defaults["punctuation"], actions=defaults["actions"])
-        Dictionary.save(data)
-        self.fill_dictionary(data)
-
     def reset_fillers(self):
         from .regional import UPSTREAM_FILLERS
 
@@ -902,66 +712,6 @@ class Window(QWidget):
         self.regional_banner.refresh()
         if hasattr(self, "setup_page"):
             self.setup_page.regional_banner.refresh()
-
-    def import_dictionary(self):
-        from PySide6.QtWidgets import QInputDialog
-
-        from .dictionary import Dictionary
-
-        path, _ = QFileDialog.getOpenFileName(self, "Import dictionary", "", "JSON (*.json)")
-        if not path:
-            return
-        mode, accepted = QInputDialog.getItem(
-            self,
-            "Import dictionary",
-            "Import replacements and custom words:",
-            ["Merge with existing data", "Replace supplied sections"],
-            0,
-            False,
-        )
-        if not accepted:
-            return
-        try:
-            self.fill_dictionary(
-                Dictionary.import_file(
-                    path, mode="merge" if mode.startswith("Merge") else "replace"
-                )
-            )
-            self.learning_page.refresh_words()
-            self.status.setText("Dictionary and supplied vocabulary imported")
-        # Report to the Settings UI without duplicating private data in logs.
-        except Exception as exc:  # allow: exception-handling  # noqa: BLE001
-            self.status.setText(str(exc))
-
-    def export_dictionary(self):
-        from PySide6.QtWidgets import QInputDialog
-
-        from .dictionary import Dictionary
-
-        path, _ = QFileDialog.getSaveFileName(
-            self, "Export dictionary", "dictionary.json", "JSON (*.json)"
-        )
-        if path and self.save_dictionary():
-            selected, accepted = QInputDialog.getItem(
-                self,
-                "Export dictionary",
-                "Export format:",
-                [
-                    "Linux (includes punctuation/actions)",
-                    "Upstream (enabled replacements + custom words)",
-                ],
-                0,
-                False,
-            )
-            if accepted:
-                try:
-                    Dictionary.export_file(
-                        path, format="native" if selected.startswith("Linux") else "upstream"
-                    )
-                    self.status.setText("Dictionary and vocabulary exported")
-                # Report to the Settings UI without duplicating private data in logs.
-                except Exception as exc:  # allow: exception-handling  # noqa: BLE001
-                    self.status.setText(str(exc))
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:  # noqa: N802 - Qt override
         if event.mimeData().hasUrls() and any(u.isLocalFile() for u in event.mimeData().urls()):
@@ -1392,7 +1142,7 @@ class Window(QWidget):
                 self.learning_page.update_status(result)
                 self.microphone_page.update_status(result)
                 self.update_prompt_test(result)
-                self.update_training(result)
+                self.dictionary_page.update_training(result)
                 self.history_page.refresh_history()
             else:
                 self.loaded_model = None

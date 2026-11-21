@@ -396,8 +396,8 @@ def test_dictionary_editor_preserves_imported_rule_id_when_editing(monkeypatch):
     window = gui.Window()
     window.timer.stop()
     try:
-        window.dictionary_tables["replacements"].item(0, 1).setText("Edited")
-        assert window.save_dictionary()
+        window.dictionary_page.tables["replacements"].item(0, 1).setText("Edited")
+        assert window.dictionary_page.save()
         assert Dictionary.load()["replacements"][0]["id"] == rule_id
         assert Dictionary.apply("heard") == "Edited"
     finally:

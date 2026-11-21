@@ -9,9 +9,10 @@ import select
 import signal
 import subprocess
 import sys
+from collections.abc import Sequence
 
 
-def supervise(args):
+def supervise(args: Sequence[str]) -> int:
     process = subprocess.Popen(args, stdin=subprocess.DEVNULL)  # noqa: S603
     try:
         while process.poll() is None:
@@ -22,11 +23,11 @@ def supervise(args):
         if process.poll() is None:
             process.send_signal(signal.SIGINT)
         try:
-            process.wait(timeout=2)
+            returncode = process.wait(timeout=2)
         except subprocess.TimeoutExpired:
             process.kill()
-            process.wait(timeout=1)
-    return process.returncode if process.returncode >= 0 else 1
+            returncode = process.wait(timeout=1)
+    return returncode if returncode >= 0 else 1
 
 
 if __name__ == "__main__":

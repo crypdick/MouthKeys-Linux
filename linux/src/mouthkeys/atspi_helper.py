@@ -18,19 +18,19 @@ ROOT = ("org.a11y.atspi.Registry", "/org/a11y/atspi/accessible/root")
 LIMIT = 100000
 
 
-def valid_ref(ref):
+def valid_ref(ref: object) -> bool:
     return (
         isinstance(ref, (list, tuple))
         and len(ref) == 2
         and isinstance(ref[0], str)
-        and re.fullmatch(r":\d+\.\d+", ref[0])
+        and re.fullmatch(r":\d+\.\d+", ref[0]) is not None
         and isinstance(ref[1], str)
         and ref[1].startswith("/org/a11y/atspi/accessible/")
     )
 
 
 class Bus:
-    def __init__(self):
+    def __init__(self) -> None:
         import gi
 
         gi.require_version("Atspi", "2.0")
@@ -64,7 +64,14 @@ class Bus:
         )
         self.deadline = time.monotonic() + 1.25
 
-    def call(self, ref, interface, method, signature=None, args=()):
+    def call(
+        self,
+        ref: Sequence[str],
+        interface: str,
+        method: str,
+        signature: str | None = None,
+        args: tuple[object, ...] = (),
+    ) -> tuple[object, ...]:
         if time.monotonic() >= self.deadline:
             raise TimeoutError("Accessibility query timed out")
         parameters = self.GLib.Variant(signature, args) if signature else None
@@ -79,9 +86,10 @@ class Bus:
             80,
             None,
         )
-        return result.unpack()
+        values: tuple[object, ...] = result.unpack()
+        return values
 
-    def prop(self, ref, interface, name):
+    def prop(self, ref: Sequence[str], interface: str, name: str) -> object:
         return self.call(ref, "org.freedesktop.DBus.Properties", "Get", "(ss)", (interface, name))[
             0
         ]
@@ -299,7 +307,7 @@ def operate(bus, request):
     raise ValueError("Unknown accessibility action")
 
 
-def main():
+def main() -> None:
     try:
         line = sys.stdin.buffer.readline(1024 * 1024 + 1)
         if len(line) > 1024 * 1024:

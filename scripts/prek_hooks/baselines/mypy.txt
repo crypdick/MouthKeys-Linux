@@ -76,18 +76,13 @@
 1	src/mouthkeys/assistant_ui.py	no-untyped-call	Call to untyped function "validate_messages" in typed context
 13	src/mouthkeys/assistant_ui.py	no-untyped-def	Function is missing a return type annotation
 16	src/mouthkeys/assistant_ui.py	no-untyped-def	Function is missing a type annotation
-1	src/mouthkeys/atspi_helper.py	no-untyped-call	Call to untyped function "Bus" in typed context
 3	src/mouthkeys/atspi_helper.py	no-untyped-call	Call to untyped function "active_window" in typed context
-1	src/mouthkeys/atspi_helper.py	no-untyped-call	Call to untyped function "call" in typed context
 1	src/mouthkeys/atspi_helper.py	no-untyped-call	Call to untyped function "expected_text" in typed context
 1	src/mouthkeys/atspi_helper.py	no-untyped-call	Call to untyped function "find_focused" in typed context
-1	src/mouthkeys/atspi_helper.py	no-untyped-call	Call to untyped function "main" in typed context
 1	src/mouthkeys/atspi_helper.py	no-untyped-call	Call to untyped function "operate" in typed context
 6	src/mouthkeys/atspi_helper.py	no-untyped-call	Call to untyped function "snapshot" in typed context
 2	src/mouthkeys/atspi_helper.py	no-untyped-call	Call to untyped function "unchanged" in typed context
-4	src/mouthkeys/atspi_helper.py	no-untyped-call	Call to untyped function "valid_ref" in typed context
-2	src/mouthkeys/atspi_helper.py	no-untyped-def	Function is missing a return type annotation
-9	src/mouthkeys/atspi_helper.py	no-untyped-def	Function is missing a type annotation
+6	src/mouthkeys/atspi_helper.py	no-untyped-def	Function is missing a type annotation
 1	src/mouthkeys/atspi_helper.py	var-annotated	Need type annotation for "visited" (hint: "visited: set[<type>] = ...")
 2	src/mouthkeys/audio.py	no-untyped-call	Call to untyped function "CaptureTeardownError" in typed context
 2	src/mouthkeys/audio.py	no-untyped-call	Call to untyped function "_cancelled" in typed context
@@ -132,8 +127,6 @@
 12	src/mouthkeys/benchmark.py	no-untyped-def	Function is missing a type annotation
 1	src/mouthkeys/benchmark.py	union-attr	Item "None" of "Any | None" has no attribute "close"
 1	src/mouthkeys/benchmark.py	var-annotated	Need type annotation for "seen" (hint: "seen: set[<type>] = ...")
-1	src/mouthkeys/capture.py	no-untyped-call	Call to untyped function "supervise" in typed context
-1	src/mouthkeys/capture.py	no-untyped-def	Function is missing a type annotation
 1	src/mouthkeys/cli.py	assignment	Incompatible types in assignment (expression has type "AssistantHistory", variable has type "FileHistory")
 2	src/mouthkeys/cli.py	attr-defined	"FileHistory" has no attribute "get"
 1	src/mouthkeys/cli.py	attr-defined	"FileHistory" has no attribute "new"

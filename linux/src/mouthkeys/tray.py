@@ -11,7 +11,7 @@ from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
 from .config import Config, runtime_dir
 from .desktop import source_names
-from .gui import Request
+from .qt_control import Request
 
 
 class Tray(QSystemTrayIcon):

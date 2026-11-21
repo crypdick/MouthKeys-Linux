@@ -146,7 +146,6 @@
 2	src/mouthkeys/assistant_ui.py	ANN001	Missing type annotation for function argument `response`
 1	src/mouthkeys/assistant_ui.py	ANN001	Missing type annotation for function argument `result`
 1	src/mouthkeys/assistant_ui.py	ANN001	Missing type annotation for function argument `return_to_target`
-1	src/mouthkeys/assistant_ui.py	ANN001	Missing type annotation for function argument `status`
 1	src/mouthkeys/assistant_ui.py	ANN001	Missing type annotation for function argument `window`
 1	src/mouthkeys/assistant_ui.py	ANN002	Missing type annotation for `*_`
 1	src/mouthkeys/assistant_ui.py	ANN201	Missing return type annotation for public function `accept_edit`
@@ -169,7 +168,6 @@
 1	src/mouthkeys/assistant_ui.py	ANN201	Missing return type annotation for public function `show_proposal`
 1	src/mouthkeys/assistant_ui.py	ANN201	Missing return type annotation for public function `show_thinking`
 1	src/mouthkeys/assistant_ui.py	ANN201	Missing return type annotation for public function `switch_chat`
-1	src/mouthkeys/assistant_ui.py	ANN201	Missing return type annotation for public function `update_status`
 1	src/mouthkeys/assistant_ui.py	ANN202	Missing return type annotation for private function `_task`
 2	src/mouthkeys/assistant_ui.py	ANN202	Missing return type annotation for private function `complete`
 1	src/mouthkeys/assistant_ui.py	ANN202	Missing return type annotation for private function `done`
@@ -524,19 +522,18 @@
 1	src/mouthkeys/formatting.py	PLR0915	Too many statements (90 > 50)
 2	src/mouthkeys/gui.py	ANN001	Missing type annotation for function argument `_`
 2	src/mouthkeys/gui.py	ANN001	Missing type annotation for function argument `_checked`
-5	src/mouthkeys/gui.py	ANN001	Missing type annotation for function argument `action`
+4	src/mouthkeys/gui.py	ANN001	Missing type annotation for function argument `action`
 1	src/mouthkeys/gui.py	ANN001	Missing type annotation for function argument `callback`
 1	src/mouthkeys/gui.py	ANN001	Missing type annotation for function argument `category`
 2	src/mouthkeys/gui.py	ANN001	Missing type annotation for function argument `code`
 1	src/mouthkeys/gui.py	ANN001	Missing type annotation for function argument `config`
-3	src/mouthkeys/gui.py	ANN001	Missing type annotation for function argument `data`
+2	src/mouthkeys/gui.py	ANN001	Missing type annotation for function argument `data`
 1	src/mouthkeys/gui.py	ANN001	Missing type annotation for function argument `engine`
 1	src/mouthkeys/gui.py	ANN001	Missing type annotation for function argument `error`
 1	src/mouthkeys/gui.py	ANN001	Missing type annotation for function argument `field`
 1	src/mouthkeys/gui.py	ANN001	Missing type annotation for function argument `importing`
 1	src/mouthkeys/gui.py	ANN001	Missing type annotation for function argument `index`
 1	src/mouthkeys/gui.py	ANN001	Missing type annotation for function argument `key`
-1	src/mouthkeys/gui.py	ANN001	Missing type annotation for function argument `parent`
 1	src/mouthkeys/gui.py	ANN001	Missing type annotation for function argument `profile`
 11	src/mouthkeys/gui.py	ANN001	Missing type annotation for function argument `response`
 2	src/mouthkeys/gui.py	ANN001	Missing type annotation for function argument `result`
@@ -596,7 +593,6 @@
 1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `reset_fillers`
 1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `reset_spoken_formatting`
 1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `run_prompt_test`
-1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `run`
 1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `save_dictionary`
 1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `save_profile`
 1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `save_prompt_routes`
@@ -620,7 +616,7 @@
 3	src/mouthkeys/gui.py	ANN202	Missing return type annotation for private function `received`
 2	src/mouthkeys/gui.py	ANN202	Missing return type annotation for private function `started`
 3	src/mouthkeys/gui.py	ANN202	Missing return type annotation for private function `update`
-2	src/mouthkeys/gui.py	ANN204	Missing return type annotation for special method `__init__`
+1	src/mouthkeys/gui.py	ANN204	Missing return type annotation for special method `__init__`
 1	src/mouthkeys/gui.py	C901	`__init__` is too complex (18 > 15)
 1	src/mouthkeys/gui.py	C901	`setting_group` is too complex (16 > 15)
 1	src/mouthkeys/gui.py	DTZ006	`datetime.datetime.fromtimestamp()` called without a `tz` argument
@@ -956,66 +952,15 @@
 1	src/mouthkeys/operations.py	PLR0911	Too many return statements (9 > 6)
 1	src/mouthkeys/operations.py	PLR0912	Too many branches (18 > 12)
 1	src/mouthkeys/operations.py	PLR0915	Too many statements (57 > 50)
-3	src/mouthkeys/overlay.py	ANN001	Missing type annotation for function argument `action`
-1	src/mouthkeys/overlay.py	ANN001	Missing type annotation for function argument `callback`
-1	src/mouthkeys/overlay.py	ANN001	Missing type annotation for function argument `color`
-1	src/mouthkeys/overlay.py	ANN001	Missing type annotation for function argument `config`
-2	src/mouthkeys/overlay.py	ANN001	Missing type annotation for function argument `data`
-5	src/mouthkeys/overlay.py	ANN001	Missing type annotation for function argument `event`
-1	src/mouthkeys/overlay.py	ANN001	Missing type annotation for function argument `item_id`
-1	src/mouthkeys/overlay.py	ANN001	Missing type annotation for function argument `phase`
-3	src/mouthkeys/overlay.py	ANN001	Missing type annotation for function argument `response`
-1	src/mouthkeys/overlay.py	ANN001	Missing type annotation for function argument `seconds`
-1	src/mouthkeys/overlay.py	ANN001	Missing type annotation for function argument `text`
-2	src/mouthkeys/overlay.py	ANN002	Missing type annotation for `*_`
-1	src/mouthkeys/overlay.py	ANN201	Missing return type annotation for public function `action`
-1	src/mouthkeys/overlay.py	ANN201	Missing return type annotation for public function `active_phase`
-1	src/mouthkeys/overlay.py	ANN201	Missing return type annotation for public function `animate`
-1	src/mouthkeys/overlay.py	ANN201	Missing return type annotation for public function `apply_settings`
-1	src/mouthkeys/overlay.py	ANN201	Missing return type annotation for public function `apply_theme`
-1	src/mouthkeys/overlay.py	ANN201	Missing return type annotation for public function `button_icon`
-1	src/mouthkeys/overlay.py	ANN201	Missing return type annotation for public function `choose_microphone`
-1	src/mouthkeys/overlay.py	ANN201	Missing return type annotation for public function `display_text`
-1	src/mouthkeys/overlay.py	ANN201	Missing return type annotation for public function `launch`
-1	src/mouthkeys/overlay.py	ANN201	Missing return type annotation for public function `live_counters`
-1	src/mouthkeys/overlay.py	ANN201	Missing return type annotation for public function `mouseDoubleClickEvent`
-1	src/mouthkeys/overlay.py	ANN201	Missing return type annotation for public function `mouseMoveEvent`
-1	src/mouthkeys/overlay.py	ANN201	Missing return type annotation for public function `mousePressEvent`
-1	src/mouthkeys/overlay.py	ANN201	Missing return type annotation for public function `mouseReleaseEvent`
-1	src/mouthkeys/overlay.py	ANN201	Missing return type annotation for public function `open_assistant`
-1	src/mouthkeys/overlay.py	ANN201	Missing return type annotation for public function `paintEvent`
-1	src/mouthkeys/overlay.py	ANN201	Missing return type annotation for public function `poll`
-1	src/mouthkeys/overlay.py	ANN201	Missing return type annotation for public function `send`
+1	src/mouthkeys/overlay.py	ANN001	Missing type annotation for function argument `data`
+2	src/mouthkeys/overlay.py	ANN001	Missing type annotation for function argument `response`
 1	src/mouthkeys/overlay.py	ANN201	Missing return type annotation for public function `set_status`
 1	src/mouthkeys/overlay.py	ANN201	Missing return type annotation for public function `show_history`
-1	src/mouthkeys/overlay.py	ANN202	Missing return type annotation for private function `awakened`
-1	src/mouthkeys/overlay.py	ANN202	Missing return type annotation for private function `feedback`
 1	src/mouthkeys/overlay.py	ANN202	Missing return type annotation for private function `received`
-1	src/mouthkeys/overlay.py	ANN204	Missing return type annotation for special method `__init__`
-3	src/mouthkeys/overlay.py	ARG002	Unused method argument: `event`
 1	src/mouthkeys/overlay.py	C901	`set_status` is too complex (18 > 15)
-1	src/mouthkeys/overlay.py	FBT003	Boolean positional value in function call
-1	src/mouthkeys/overlay.py	N802	Function name `mouseDoubleClickEvent` should be lowercase
-1	src/mouthkeys/overlay.py	N802	Function name `mouseMoveEvent` should be lowercase
-1	src/mouthkeys/overlay.py	N802	Function name `mousePressEvent` should be lowercase
-1	src/mouthkeys/overlay.py	N802	Function name `mouseReleaseEvent` should be lowercase
-1	src/mouthkeys/overlay.py	N802	Function name `paintEvent` should be lowercase
 1	src/mouthkeys/overlay.py	PLC0415	`import` should be at the top-level of a file
 1	src/mouthkeys/overlay.py	PLR0912	Too many branches (19 > 12)
-1	src/mouthkeys/overlay.py	PLR0915	Too many statements (62 > 50)
 1	src/mouthkeys/overlay.py	PLR0915	Too many statements (73 > 50)
-1	src/mouthkeys/overlay_assistant.py	ANN001	Missing type annotation for function argument `action`
-1	src/mouthkeys/overlay_assistant.py	ANN001	Missing type annotation for function argument `callback`
-1	src/mouthkeys/overlay_assistant.py	ANN001	Missing type annotation for function argument `data`
-1	src/mouthkeys/overlay_assistant.py	ANN001	Missing type annotation for function argument `event`
-1	src/mouthkeys/overlay_assistant.py	ANN001	Missing type annotation for function argument `panel`
-1	src/mouthkeys/overlay_assistant.py	ANN001	Missing type annotation for function argument `response`
-1	src/mouthkeys/overlay_assistant.py	ANN201	Missing return type annotation for public function `apply_theme`
-1	src/mouthkeys/overlay_assistant.py	ANN201	Missing return type annotation for public function `closeEvent`
-1	src/mouthkeys/overlay_assistant.py	ANN201	Missing return type annotation for public function `send`
-1	src/mouthkeys/overlay_assistant.py	ANN202	Missing return type annotation for private function `received`
-1	src/mouthkeys/overlay_assistant.py	ANN204	Missing return type annotation for special method `__init__`
-1	src/mouthkeys/overlay_assistant.py	N802	Function name `closeEvent` should be lowercase
 2	src/mouthkeys/portal_shortcuts.py	ANN001	Missing type annotation for function argument `_iface`
 2	src/mouthkeys/portal_shortcuts.py	ANN001	Missing type annotation for function argument `_user_data`
 1	src/mouthkeys/portal_shortcuts.py	ANN001	Missing type annotation for function argument `callback`

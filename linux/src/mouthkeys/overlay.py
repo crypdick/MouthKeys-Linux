@@ -1,53 +1,40 @@
 """Datasheet Mono recording panel; independent of the settings window."""
 
-import fcntl
-import pathlib
-import socket
 import subprocess
-import sys
 import time
+from collections.abc import Callable
+from typing import TYPE_CHECKING
 
-from PySide6.QtCore import QPoint, QRect, QRectF, QSize, QSocketNotifier, Qt, QTimer
-from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPen, QPixmap, QTextLayout
+from PySide6.QtCore import QPoint, QRect, QSize, Qt, QTimer
+from PySide6.QtGui import QMouseEvent, QPainter, QPaintEvent
 from PySide6.QtWidgets import QApplication, QMenu, QPushButton, QWidget
 
-from .config import Config, runtime_dir
+from .config import Config
 from .desktop import source_names
-from .gui import Request
 from .lark import BatteryMonitor
 from .overlay_placement import OverlayPlacement
+from .overlay_rendering import (
+    DARK,
+    LIGHT,
+    PanelFrame,
+    PanelRenderer,
+    PanelStatus,
+    active_phase,
+    button_icon,
+    display_text,
+)
 from .processes import python_command
+from .qt_control import Request
 from .trace import Trace
 
-
-def button_icon(action, color):
-    """Small vector marks, independent of installed symbol fonts."""
-    pixmap = QPixmap(20, 20)
-    pixmap.fill(Qt.GlobalColor.transparent)
-    painter = QPainter(pixmap)
-    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-    painter.setPen(QPen(QColor(color), 1.5))
-    if action == "copy":
-        painter.drawRect(4, 3, 10, 11)
-        painter.drawRect(7, 6, 10, 11)
-    elif action == "history":
-        for y in (5, 10, 15):
-            painter.drawLine(4, y, 16, y)
-    elif action == "cancel":
-        painter.drawLine(5, 5, 15, 15)
-        painter.drawLine(5, 15, 15, 5)
-    else:
-        painter.drawArc(4, 4, 12, 12, 35 * 16, 290 * 16)
-        painter.drawLine(16, 3, 16, 8)
-        painter.drawLine(16, 8, 11, 8)
-    painter.end()
-    return QIcon(pixmap)
+if TYPE_CHECKING:
+    from .overlay_assistant import OverlayAssistant
 
 
 class Overlay(QWidget):
     """340 × 130 pill and 30 px rails, matching the native round-six geometry."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__(
             None,
             Qt.WindowType.Tool
@@ -60,20 +47,20 @@ class Overlay(QWidget):
         self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.settings = Config.load()
         self.battery = BatteryMonitor()
-        self.data = {}
+        self.data: PanelStatus = {}
         self.trace = Trace()
         self.meter_frame = None
-        self.text_cache = None
-        self.jobs = set()
+        self.renderer = PanelRenderer()
+        self.jobs: set[Request] = set()
         self.pending = False
         self.active = False
-        self.dismiss_at = None
+        self.dismiss_at: float | None = None
         self.placement = OverlayPlacement(self, self._layout_panel)
-        self.seconds = 0
-        self.notice = None
-        self.notice_serial = None
+        self.seconds: float = 0
+        self.notice: tuple[str, float] | None = None
+        self.notice_serial: int | None = None
         self.failures = 0
-        self.assistant_window = None
+        self.assistant_window: OverlayAssistant | None = None
         self.buttons = {}
         for action, tip in (
             ("history", "Open history"),
@@ -112,30 +99,26 @@ class Overlay(QWidget):
         self.apply_theme()
         QApplication.styleHints().colorSchemeChanged.connect(self.apply_theme)
 
-    def apply_theme(self, *_):
+    def apply_theme(self, *_: object) -> None:
         theme = self.settings.theme
         light = theme == "light" or (
             theme == "system" and QApplication.styleHints().colorScheme() == Qt.ColorScheme.Light
         )
-        self.surface = "#ffffff" if light else "#111214"
-        self.ink = "#111214" if light else "#ebebec"
-        self.edge = "#111214" if light else "#2c2e33"
-        self.dim = "#55565a" if light else "#949597"
-        chip = "#f2f2f4" if light else "#1a1b1f"
+        colors = self.renderer.colors = LIGHT if light else DARK
         self.setStyleSheet(
-            f"QPushButton {{ background: {chip}; color: {self.ink}; border: none;"
+            f"QPushButton {{ background: {colors.chip}; color: {colors.ink}; border: none;"
             "font-size: 20px; border-radius: 0; }"
-            f"QPushButton:hover {{ border: 1px solid {self.ink}; }}"
-            f"QPushButton:pressed {{ background: {self.ink}; color: {self.surface}; }}"
-            f"QPushButton:disabled {{ color: {self.dim}; }}"
+            f"QPushButton:hover {{ border: 1px solid {colors.ink}; }}"
+            f"QPushButton:pressed {{ background: {colors.ink}; color: {colors.surface}; }}"
+            f"QPushButton:disabled {{ color: {colors.dim}; }}"
             f"QPushButton#microphone, QPushButton#assistant {{ "
             f"font-family: monospace; font-size: 10px; "
-            f"background: {self.surface}; color: {self.dim}; padding: 0; }}"
+            f"background: {colors.surface}; color: {colors.dim}; padding: 0; }}"
         )
         for action, button in self.buttons.items():
-            button.setIcon(button_icon(action, self.ink))
+            button.setIcon(button_icon(action, colors.ink))
         if self.assistant_window is not None:
-            self.assistant_window.apply_theme()
+            self.assistant_window.apply_theme(colors)
         self.update()
 
     def _layout_panel(self, bounds: QSize) -> None:
@@ -169,7 +152,7 @@ class Overlay(QWidget):
             round(20 * self.panel_scale),
         )
 
-    def apply_settings(self, config):
+    def apply_settings(self, config: Config) -> None:
         previous = self.settings
         self.settings = config
         if previous.theme != config.theme:
@@ -186,9 +169,8 @@ class Overlay(QWidget):
             config.overlay_style,
         ):
             self.placement.place(config)
-            self.text_cache = None
 
-    def choose_microphone(self):
+    def choose_microphone(self) -> None:
         menu = QMenu(self)
         try:
             names = ["default", *source_names()]
@@ -207,25 +189,26 @@ class Overlay(QWidget):
                 )
         menu.exec(self.mic_button.mapToGlobal(self.mic_button.rect().bottomLeft()))
 
-    def send(self, action, callback=None, item_id=None, data=None):
-        data = (
-            data
-            if data is not None
-            else (
-                {"id": item_id}
-                if item_id
-                else ({"id": self.data["id"]} if action == "copy" and self.data.get("id") else {})
-            )
-        )
+    def send(
+        self,
+        action: str,
+        callback: Callable[[dict[str, object]], None] | None = None,
+        item_id: str | None = None,
+        data: dict[str, object] | None = None,
+    ) -> None:
+        if data is None:
+            selected = item_id or (self.data.get("id") if action == "copy" else None)
+            data = {"id": selected} if selected else {}
         job = Request(action, data, parent=self)
         self.jobs.add(job)
         if callback:
             job.done.connect(callback)
         else:
 
-            def feedback(response):
-                if "error" in response:
-                    self.notice = (response["error"], time.monotonic() + 10)
+            def feedback(response: dict[str, object]) -> None:
+                error = response.get("error")
+                if isinstance(error, str):
+                    self.notice = (error, time.monotonic() + 10)
                     self.dismiss_at = self.notice[1]
                     self.placement.show(self.settings)
                     self.update()
@@ -235,7 +218,7 @@ class Overlay(QWidget):
         job.finished.connect(job.deleteLater)
         job.start()
 
-    def action(self, action):
+    def action(self, action: str) -> None:
         if action == "history":
             self.send("history", self.show_history)
         elif action == "cancel":
@@ -273,18 +256,18 @@ class Overlay(QWidget):
         origin = self.mapToGlobal(QPoint(round(42 * self.panel_scale), 0))
         menu.popup(origin - QPoint(0, menu.sizeHint().height()))
 
-    def open_assistant(self):
+    def open_assistant(self) -> None:
         # Only this explicit click may open an interactive/focusable surface.
         if self.assistant_window is None:
             from .overlay_assistant import OverlayAssistant
 
-            self.assistant_window = OverlayAssistant(self)
+            self.assistant_window = OverlayAssistant(self.renderer.colors, self.poll)
         self.assistant_window.assistant_page.update_status(self.data)
         self.assistant_window.show()
         self.assistant_window.raise_()
         self.assistant_window.activateWindow()
 
-    def poll(self):
+    def poll(self) -> None:
         if self.pending:
             return
         self.pending = True
@@ -396,7 +379,7 @@ class Overlay(QWidget):
         self.buttons["copy"].setEnabled(not active and bool(data.get("preview")))
         self.update()
 
-    def animate(self):
+    def animate(self) -> None:
         if not self.isVisible():
             self.animation.stop()
             return
@@ -417,171 +400,33 @@ class Overlay(QWidget):
         ):
             self.animation.stop()
 
-    def display_text(self):
-        phase = self.data.get("phase", "idle")
-        stream = self.data.get("assistant_stream")
-        text = (
-            stream.get("text", "")
-            if stream and stream.get("mode") == "edit"
-            else self.data.get("preview", "")
+    def display_text(self) -> str:
+        return display_text(self.data, self.settings, self.notice)
+
+    def paintEvent(self, _event: QPaintEvent) -> None:  # noqa: N802 - Qt override
+        frame = PanelFrame(
+            phase=self.data.get("phase", "idle"),
+            text=self.display_text(),
+            preview=self.data.get("preview", ""),
+            seconds=self.seconds,
+            trace=self.trace,
+            compact=self.settings.overlay_style == "compact",
+            border=self.settings.overlay_border == "on",
+            assistant_visible=self.assistant_button.isVisible(),
         )
-        text = text[-self.settings.preview_chars :] if self.settings.live_preview == "on" else ""
-        if phase == "idle":
-            proposal = self.data.get("assistant_proposal")
-            text = (
-                proposal["text"][-self.settings.preview_chars :]
-                if proposal
-                else self.data.get("message", "Ready")
-            )
-        elif phase != "recording":
-            text = (
-                text
-                if self.data.get("mode") == "edit" and text
-                else self.data.get("message", "Working…")
-            )
-        elif not text:
-            text = "Listening…"
-        if self.notice and time.monotonic() < self.notice[1]:
-            text = self.notice[0]
-        return text
+        with QPainter(self) as painter:
+            painter.scale(self.panel_scale, self.panel_scale)
+            self.renderer.draw(painter, frame, self.devicePixelRatioF())
 
-    def paintEvent(self, event):
-        p = QPainter(self)
-        p.scale(self.panel_scale, self.panel_scale)
-        compact = self.settings.overlay_style == "compact"
-        panel_height = 90 if compact else 130
-        baseline = 50 if compact else 87
-        p.fillRect(42, 8, 340, panel_height, QColor(0, 0, 0, 80))
-        p.fillRect(42, 6, 340, panel_height, QColor(self.surface))
-        p.setPen(QColor(self.edge))
-        if self.settings.overlay_border == "on":
-            p.drawRect(42, 6, 339, panel_height - 1)
-        phase = self.data.get("phase", "idle")
-        text = self.display_text()
-        # Lay out prose into three 16 px lines, keeping the newest words in view.
-        font = QFont("sans-serif")
-        font.setPixelSize(13)
-        if self.text_cache is None or self.text_cache[0] != text:
-            layout = QTextLayout(text, font)
-            layout.beginLayout()
-            lines = []
-            while True:
-                line = layout.createLine()
-                if not line.isValid():
-                    break
-                line.setLineWidth(316)
-                lines.append(text[line.textStart() : line.textStart() + line.textLength()])
-            layout.endLayout()
-            self.text_cache = (text, lines[-1:] if compact else lines[-3:])
-        p.setFont(font)
-        p.setPen(QColor(self.dim if phase == "transcribing" else self.ink))
-        for i, part in enumerate(self.text_cache[1]):
-            p.drawText(54, 28 + i * 16, part)
-        p.setPen(QColor(self.edge))
-        p.drawLine(54, baseline, 304, baseline)
-        p.setPen(Qt.PenStyle.NoPen)
-        p.save()
-        p.setClipRect(QRectF(54, baseline - 17, 250, 34))
-        scale = self.devicePixelRatioF()
-        for i, height in enumerate(self.trace.shown):
-            x = round((54 + i * 4 - self.trace.fraction * 4) * scale) / scale
-            top = round((baseline - height / 2) * scale) / scale
-            bottom = round((baseline + height / 2) * scale) / scale
-            p.fillRect(QRectF(x, top, 2, bottom - top), QColor(self.ink))
-        p.restore()
-        if phase == "transcribing":
-            x = 54 + (int(time.monotonic() / (1.05 / 55)) % 55) * 4
-            p.fillRect(x, baseline - 2, 24, 4, QColor("#ff4f1f"))
-        p.setPen(QColor("#ff4f1f"))
-        if phase == "recording":
-            p.fillRect(316, baseline - 3, 6, 6, QColor("#ff4f1f"))
-        else:
-            p.drawRect(316, baseline - 3, 5, 5)
-        mono = QFont("monospace")
-        mono.setPixelSize(14)
-        p.setFont(mono)
-        p.setPen(QColor(self.ink))
-        seconds = int(self.seconds)
-        p.drawText(326, baseline + 5, f"{seconds // 60}:{seconds % 60:02d}")
-        mono.setPixelSize(10)
-        p.setFont(mono)
-        p.setPen(QColor(self.dim))
-        words, wpm = live_counters(self.data.get("preview", ""), self.seconds)
-        if not self.assistant_button.isVisible():
-            p.drawText(
-                54,
-                88 if compact else 124,
-                f"{words} W / {wpm} WPM" if active_phase(phase) else "MOUTHKEYS",
-            )
-        p.drawText(302, 88 if compact else 124, "WORDS")
-        p.end()
-
-    def mousePressEvent(self, event):
+    def mousePressEvent(self, event: QMouseEvent) -> None:  # noqa: N802 - Qt override
         if event.button() == Qt.MouseButton.LeftButton:
             self.placement.begin_drag(event.globalPosition().toPoint())
 
-    def mouseMoveEvent(self, event):
+    def mouseMoveEvent(self, event: QMouseEvent) -> None:  # noqa: N802 - Qt override
         self.placement.drag_to(event.globalPosition().toPoint())
 
-    def mouseReleaseEvent(self, event):
+    def mouseReleaseEvent(self, _event: QMouseEvent) -> None:  # noqa: N802 - Qt override
         self.placement.end_drag()
 
-    def mouseDoubleClickEvent(self, event):
+    def mouseDoubleClickEvent(self, _event: QMouseEvent) -> None:  # noqa: N802 - Qt override
         self.placement.place(self.settings)
-
-
-def active_phase(phase):
-    return phase in (
-        "starting",
-        "recording",
-        "switching",
-        "capture_failed",
-        "stopping",
-        "queued",
-        "transcribing",
-        "delivering",
-        "loading",
-    )
-
-
-def live_counters(text, seconds):
-    words = len(text.split())
-    return words, round(words * 60 / seconds) if seconds > 0 else 0
-
-
-def launch():
-    # A separate lifetime means closing Settings never removes shortcut feedback.
-    with (runtime_dir() / "overlay.lock").open("w") as lock:
-        try:
-            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
-            return 0
-        app = QApplication(sys.argv)
-        app.setApplicationName("MouthKeys")
-        app.setQuitOnLastWindowClosed(False)
-        panel = Overlay()
-        # Wake a resident panel immediately when a shortcut restarts the daemon.
-        path = runtime_dir() / "overlay-wake.sock"
-        path.unlink(missing_ok=True)
-        with socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM) as wake:
-            wake.bind(str(path))
-            pathlib.Path(path).chmod(0o600)
-            wake.setblocking(False)
-            notifier = QSocketNotifier(wake.fileno(), QSocketNotifier.Type.Read)
-
-            def awakened(*_):
-                try:
-                    while wake.recv(64):
-                        pass
-                except BlockingIOError:
-                    pass
-                panel.timer.setInterval(200)
-                panel.poll()
-
-            notifier.activated.connect(awakened)
-            panel.poll()
-            try:
-                return app.exec()
-            finally:
-                notifier.setEnabled(False)
-                path.unlink(missing_ok=True)

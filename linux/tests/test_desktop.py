@@ -2,6 +2,7 @@ from dataclasses import replace
 
 from mouthkeys import desktop
 from mouthkeys.config import Config
+from mouthkeys.overlay_rendering import live_counters
 
 
 def test_microphone_priority_exclusions_and_fallback(monkeypatch):
@@ -58,14 +59,14 @@ def test_sound_disabled_never_spawns_process(monkeypatch):
 def test_configurable_overlay_scales_without_showing_window():
     from PySide6.QtWidgets import QApplication
 
-    from mouthkeys.overlay import Overlay, live_counters
+    from mouthkeys.overlay import Overlay
 
     app = QApplication.instance() or QApplication([])
     panel = Overlay()
     panel.timer.stop()
     panel.apply_settings(Config(overlay_size=150, theme="light", overlay_border="off"))
     assert (panel.width(), panel.height()) == (636, 219)
-    assert panel.surface == "#ffffff"
+    assert panel.renderer.colors.surface == "#ffffff"
     assert live_counters("hello café world", 6) == (3, 30)
     assert live_counters("hello", 0) == (1, 0)
     assert not panel.isVisible()

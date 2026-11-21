@@ -269,7 +269,7 @@ def main(argv: list[str] | None = None) -> int | None:
                 replace(Config.load(), launch_at_startup="on").save()
             print(install_desktop(args.autostart))
         elif args.command == "overlay":
-            from .overlay import launch
+            from .overlay_process import launch
 
             return launch()
         elif args.command == "gui":

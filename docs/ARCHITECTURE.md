@@ -13,6 +13,9 @@ then dispatches local work or uses `control` to contact the private Unix socket 
   `atspi_helper`; `clipboard` can own a temporary paste selection in a separate Qt process.
   Cancellation before delivery wins; unverified destination identity falls back to copy.
 - **UI and optional integrations:** `gui`, `overlay`, `tray`, and `hotkeys` call the service.
+  `overlay_process` owns the passive panel's lifetime and wake socket; `overlay_rendering` draws
+  its current frame without controlling focus, placement, or IPC. `qt_control` sends their
+  control requests without importing Settings or blocking the Qt event loop.
   `file_transcription_ui` owns the file worker and its history; Settings and the tray check whether
   it is busy before closing.
   `local_api` is opt-in loopback access. `ai_providers` and `ai_stream` handle configured AI

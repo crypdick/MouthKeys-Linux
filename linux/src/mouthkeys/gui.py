@@ -7,7 +7,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import cast
 
-from PySide6.QtCore import QLocale, QProcess, Qt, QThread, QTimer, Signal
+from PySide6.QtCore import QLocale, QProcess, Qt, QTimer
 from PySide6.QtGui import QCloseEvent, QDragEnterEvent, QDropEvent, QIcon, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
@@ -35,10 +35,11 @@ from PySide6.QtWidgets import (
 
 from . import __version__
 from .config import CHOICES, RANGES, Config, config_path, state_dir
-from .control import ensure_daemon, ensure_overlay, request
+from .control import ensure_daemon, ensure_overlay
 from .delivery import automatic_delivery_warning, session
 from .file_transcription_ui import FileTranscriptionPage
 from .processes import python_command
+from .qt_control import Request
 
 COMPUTE_TYPES = [
     "default",
@@ -218,21 +219,6 @@ def setting_group(key):
     ):
         return "Speech"
     return "Text formatting"
-
-
-class Request(QThread):
-    done = Signal(object)
-
-    def __init__(self, action, data=None, parent=None):
-        super().__init__(parent)
-        self.action, self.data = action, data or {}
-
-    def run(self):
-        try:
-            self.done.emit({"result": request(self.action, **self.data)})
-        # Report to the Settings UI without duplicating private data in logs.
-        except Exception as exc:  # allow: exception-handling  # noqa: BLE001
-            self.done.emit({"error": str(exc)})
 
 
 class Window(QWidget):

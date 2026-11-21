@@ -154,6 +154,8 @@ def test_config_cli_and_doctor(capsys):
     config = json.loads(capsys.readouterr().out)
     assert config["language"] == "auto"
     assert config["compute_type"] == "default"
+    assert config["delivery"] == "clipboard"
+    assert config["destination_guard"] == "field_then_window"
     assert main(["config", "compute_type", "int8"]) == 0
     assert json.loads(capsys.readouterr().out)["compute_type"] == "int8"
     assert main(["config", "language", "en"]) == 0
@@ -161,6 +163,21 @@ def test_config_cli_and_doctor(capsys):
     assert main(["doctor"]) == 1  # No real desktop is exposed to tests.
     assert json.loads(capsys.readouterr().out)["session"] == "headless"
     assert main(["config", "max_seconds", "zero"]) == 1
+
+
+@pytest.mark.parametrize("stored", [None, "window", "field"])
+def test_destination_guard_loads_existing_settings_and_normalizes_legacy_alias(stored, capsys):
+    from mouthkeys.config import config_path
+
+    path = config_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"destination_guard": stored} if stored else {}))
+    assert main(["config"]) == 0
+    expected = "field" if stored == "field" else "field_then_window"
+    assert json.loads(capsys.readouterr().out)["destination_guard"] == expected
+    assert main(["config", "destination_guard", "window"]) == 0
+    assert json.loads(capsys.readouterr().out)["destination_guard"] == "field_then_window"
+    assert json.loads(path.read_text())["destination_guard"] == "field_then_window"
 
 
 def test_x11_auto_paste_warns_on_wayland_even_with_display(monkeypatch, capsys):

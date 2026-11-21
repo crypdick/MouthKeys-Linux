@@ -159,18 +159,21 @@ does not make Wayland an X11 session. If automatic paste falls back to copy, the
 shows a notice. See `mouthkeys status` for the reason on compact panels. Choose the paste shortcut
 your destination uses.
 
-`destination_guard=field` (default, including existing configurations without this setting)
-requires an identifiable field/pane for automatic insertion and Spoken Send. A window ID alone
-cannot detect a switch between tabs, terminal panes, or fields, so text is copied instead.
-`destination_guard=window` explicitly permits the weaker window-only fallbacks below; choose it
-only when that limitation fits your workflow. `mouthkeys paste` remains an explicit focus-now paste
-in either mode, including Ghostty/other terminals; terminal text always uses clipboard paste.
+**Field first, window fallback** (`destination_guard=field_then_window`) is the default check after
+enabling automatic delivery. MouthKeys uses the captured field or pane when available. If no field
+was identified at capture, it can paste or send in the same focused window on supported desktops.
+A recognized password field blocks fallback.
+Window checks cannot detect switches between tabs, panes, or fields. If a captured field changes,
+MouthKeys copies instead of falling back to the window. Choose **Require field or pane**
+(`destination_guard=field`) to copy whenever field identity is unavailable. Existing explicit
+`field` settings stay unchanged; the old `window` value still works as an alias.
+`mouthkeys paste` remains an explicit focus-now paste in either mode, including Ghostty/other terminals.
 
 | Available desktop evidence | Automatic behavior and limit |
 | --- | --- |
 | AT-SPI editable field | Stable D-Bus object identity, foreground state, text, caret, and selection checks; verified insertion where the toolkit exposes them. Password fields are excluded. |
-| X11 without usable AT-SPI | Copy by default; opt-in window guard permits focused X-window continuity, not tab/pane/field identity. |
-| Sway/Hyprland without usable AT-SPI | Copy by default; opt-in window guard permits container/window continuity, not inner-field identity. |
+| X11 without usable AT-SPI | Window fallback checks X-window continuity, not tab/pane/field identity. |
+| Sway/Hyprland without usable AT-SPI | Window fallback checks container/window continuity, not inner-field identity. |
 | Other Wayland without usable AT-SPI | Clipboard-only fallback; no generic fabricated destination. |
 
 AT-SPI depends on toolkit/accessibility support. Helpers run out of process with bounded timeouts
@@ -775,7 +778,7 @@ configuration before marking a setup verified:
 - Focus safety: switch windows, fields, tabs, terminal panes, and virtual desktops while processing.
   Test active-window changes where a toolkit leaves its old child locally focused. Stale, protected,
   or unidentifiable destinations must not receive automatic text/Send.
-  Test default field guard separately from explicitly weaker window mode; verify focus-now Paste
+  Test field-first window fallback separately from the strict field guard; verify focus-now Paste
   still uses clipboard paste in Ghostty when automatic field-aware delivery is unavailable.
 - Start target and explicit return: verify `target_policy` both values and `return_to_start` off/on;
   no cross-window activation without the latter. Edit replacement must use exactly the captured

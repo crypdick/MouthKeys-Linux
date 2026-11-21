@@ -76,6 +76,33 @@ def test_snapshot_identity_is_unique_bus_and_object_not_names():
     assert atspi_helper.snapshot(bus, REF) is None
 
 
+def test_focused_password_blocks_window_fallback_without_reading_text(monkeypatch):
+    bus = FakeBus()
+    bus.role = bus.password_role
+    call = bus.call
+
+    def password_tree(ref, interface, method, signature=None, args=()):
+        assert interface != atspi_helper.TEXT
+        if ref == atspi_helper.ROOT:
+            return (0,) if method == "GetRole" else ([REF],)
+        return call(ref, interface, method, signature, args)
+
+    bus.call = password_tree
+    monkeypatch.setattr(accessibility, "_request", lambda *args: atspi_helper.find_focused(bus))
+    assert accessibility.read_snapshot() is None
+    monkeypatch.setattr(delivery, "session", lambda: "x11")
+    adapter = delivery.Delivery()
+    monkeypatch.setattr(adapter, "focus", lambda: "42")
+    copies = []
+    monkeypatch.setattr(adapter, "copy", copies.append)
+    monkeypatch.setattr(adapter, "paste_key", lambda _: pytest.fail("Password field pasted into"))
+    config = Config(delivery="x11")
+    target = adapter.capture_target(config)
+    assert target is None
+    assert adapter.deliver("hello", config, target) == "copied"
+    assert copies == ["hello"]
+
+
 def test_local_focused_child_in_inactive_window_is_not_foreground_evidence(monkeypatch):
     bus = FakeBus()
     bus.active = False
@@ -83,7 +110,7 @@ def test_local_focused_child_in_inactive_window_is_not_foreground_evidence(monke
     assert value["focused"] is True
     assert value["foreground"] is False
     monkeypatch.setattr(delivery, "session", lambda: "wayland")
-    monkeypatch.setattr(accessibility, "read_snapshot", lambda *args: value)
+    monkeypatch.setattr(accessibility, "read_snapshot", lambda *args, **kwargs: value)
     adapter = delivery.Delivery()
     monkeypatch.setattr(adapter, "focus", lambda: None)
     monkeypatch.setattr(adapter, "copy", lambda _: None)

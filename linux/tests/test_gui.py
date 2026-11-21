@@ -153,6 +153,9 @@ def test_settings_show_app_and_running_service_versions(monkeypatch):
     monkeypatch.setenv("DISPLAY", ":0")
     monkeypatch.setenv("WAYLAND_DISPLAY", "wayland-0")
     combo = window.fields["delivery"]
+    guard = window.fields["destination_guard"]
+    assert guard.currentData() == "field_then_window"
+    assert guard.currentText() == "Field first, window fallback"
     combo.setCurrentIndex(combo.findData("x11"))
     assert "X11 auto-paste needs an X11 login session" in window.delivery_hint.text()
     combo.setCurrentIndex(combo.findData("clipboard"))
@@ -386,6 +389,35 @@ def test_overlay_deduplicates_meter_frames_and_resets_on_new_recording(monkeypat
     panel.set_status({**data, "id": "b", "meter": {}})
     assert panel.trace.last_voice is None
     assert panel.trace.shown == [2] * 63
+    panel.animation.stop()
+    panel.close()
+    app.processEvents()
+
+
+def test_panel_dismisses_promptly_after_insertion_request(monkeypatch):
+    from PySide6.QtWidgets import QApplication
+
+    from mouthkeys import overlay
+
+    app = QApplication.instance() or QApplication([])
+    panel = overlay.Overlay()
+    panel.timer.stop()
+    hidden = []
+    now = 100.0
+    monkeypatch.setattr(overlay.time, "monotonic", lambda: now)
+    monkeypatch.setattr(panel, "show", lambda: None)
+    monkeypatch.setattr(panel, "hide", lambda: hidden.append(True))
+    panel.set_status({"phase": "delivering", "id": "a"})
+    done = {
+        "phase": "idle",
+        "id": "a",
+        "message": "Insertion requested — transcript saved in history",
+    }
+    panel.set_status(done)
+    assert not hidden
+    now += 1
+    panel.set_status(done)
+    assert hidden == [True]
     panel.animation.stop()
     panel.close()
     app.processEvents()

@@ -413,8 +413,8 @@ class Window(QWidget):
                 ("Wayland auto-paste", "wayland"),
             ],
             "destination_guard": [
-                ("Field / pane identity (recommended)", "field"),
-                ("Window only (cannot detect tab / pane switches)", "window"),
+                ("Field first, window fallback", "field_then_window"),
+                ("Require field or pane", "field"),
             ],
             "paste_backend": ["auto", "xdotool", "wtype", "ydotool"],
             "paste_shortcut": [
@@ -504,10 +504,10 @@ class Window(QWidget):
                 "for this exact provider endpoint; Save API key below. Settings never reads keys."
             ),
             "destination_guard": (
-                "Field mode copies instead of inserting or sending when field identity is "
-                "unavailable. Window mode allows only weaker window continuity checks; "
-                "switching tabs or terminal panes inside that window cannot be detected. "
-                "Explicit Paste latest still pastes at current focus."
+                "Both options check the field or pane when it can be identified. If no field was "
+                "identified, window fallback can still paste or send in the same window, but "
+                "cannot detect tab or pane switches. Require field or pane copies instead. "
+                "Paste latest still pastes at current focus."
             ),
             "pronunciation_aligner_model": (
                 "Blank disables extra alignment. A complete already-cached Whisper model/path "

@@ -1386,8 +1386,8 @@ class Controller:
                         paste_warning = "No destination was captured."
                     elif config.destination_guard == "field" and not isinstance(target, dict):
                         paste_warning = (
-                            "Could not identify the focused field. To allow window-only checks, "
-                            "change Automatic delivery destination checks in Text delivery."
+                            "Could not identify the focused field. "
+                            "Choose “Field first, window fallback” in Text delivery."
                         )
                     else:
                         paste_warning = "Could not verify the original destination was unchanged."

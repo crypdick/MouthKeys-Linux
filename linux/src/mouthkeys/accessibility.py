@@ -43,10 +43,14 @@ def _request(action, target=None, text=None):
         return None
 
 
-def read_snapshot(target=None):
-    """Exact focused field snapshot, or reread a previously captured D-Bus object."""
+def read_snapshot(target=None, *, include_protected=False):
+    """Read a field snapshot, optionally reporting protected focus without field data."""
     value = _request("snapshot", target)
-    if not isinstance(value, dict) or value.get("protected") is not False:
+    if not isinstance(value, dict):
+        return None
+    if include_protected and value.get("protected") is True:
+        return {"protected": True}
+    if value.get("protected") is not False:
         return None
     if not isinstance(value.get("text"), str) or len(value["text"]) > 100000:
         return None

@@ -110,7 +110,7 @@ def test_auto_paste_fallback_explains_why(controller, monkeypatch, desktop, expe
 
     monkeypatch.setattr(delivery, "session", lambda: desktop)
     monkeypatch.setattr(delivery.shutil, "which", lambda name: f"/fake/{name}")
-    Config(delivery="x11").save()
+    Config(delivery="x11", destination_guard="field").save()
     controller.command("start")
     controller.command("stop")
     finish(controller)

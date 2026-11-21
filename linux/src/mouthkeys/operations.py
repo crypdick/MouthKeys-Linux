@@ -271,11 +271,11 @@ def _read_import(path, app_map, expected_sha256=None):
     return data, None, digest
 
 
-def backup_preview(path, *, app_map=None):
+def backup_preview(path: str | Path, *, app_map: object = None) -> dict[str, object]:
     # Preview only validates files/snapshots; never construct history databases.
     data, report, digest = _read_import(path, app_map)
     prepared = _prepare_backup(data)
-    if report is not None:
+    if isinstance(report, dict):
         return report
     return {
         "format": "native",

@@ -2,12 +2,12 @@
 
 import json
 import sys
+from collections.abc import Mapping
 from dataclasses import asdict, replace
-from datetime import datetime
 from pathlib import Path
 from typing import cast
 
-from PySide6.QtCore import QLocale, QProcess, Qt, QTimer
+from PySide6.QtCore import QLocale, QProcess, Qt, QThread, QTimer
 from PySide6.QtGui import QCloseEvent, QDragEnterEvent, QDropEvent, QIcon, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
@@ -18,7 +18,6 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QListWidget,
-    QListWidgetItem,
     QMessageBox,
     QProgressBar,
     QPushButton,
@@ -34,12 +33,16 @@ from PySide6.QtWidgets import (
 )
 
 from . import __version__, desktop_input
+from .backup_ui import BackupPage
 from .config import CHOICES, RANGES, Config, config_path, state_dir
 from .control import ensure_daemon, ensure_overlay
 from .desktop_input import automatic_delivery_warning
 from .file_transcription_ui import FileTranscriptionPage
+from .help_ui import HelpPage
+from .history_ui import HistoryPage
 from .processes import python_command
-from .qt_control import Request
+from .qt_control import Request, Response, ResponseHandler, Task
+from .stats_view import StatsPage
 
 COMPUTE_TYPES = [
     "default",
@@ -228,9 +231,8 @@ class Window(QWidget):
         self.setWindowIcon(QIcon(icon_path))
         self.resize(1000, 680)
         self.setMinimumSize(820, 560)
-        self.jobs = set()
+        self.jobs: set[QThread] = set()
         self.polling = False
-        self.rows = []
         self.download = None
         root = QHBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
@@ -266,49 +268,8 @@ class Window(QWidget):
         self.nav.currentRowChanged.connect(tabs.setCurrentIndex)
         self.nav.currentTextChanged.connect(self.page_title.setText)
         layout.addWidget(tabs)
-        history = QWidget()
-        history_layout = QVBoxLayout(history)
-        self.history_limit = 100
-        self.history_request = None
-        self.history_serial = 0
-        self.search = QLineEdit()
-        self.search.setPlaceholderText("Search transcripts, applications, and windows")
-        self.search.textChanged.connect(lambda: self.refresh_history())
-        history_layout.addWidget(self.search)
-        self.list = QListWidget()
-        self.list.setWordWrap(True)
-        self.list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self.list.currentRowChanged.connect(self.select)
-        history_split = QHBoxLayout()
-        history_split.addWidget(self.list, 1)
-        history_layout.addLayout(history_split, 1)
-        self.preview = QTextEdit()
-        self.preview.setReadOnly(True)
-        history_split.addWidget(self.preview, 2)
-        self.preview.setPlaceholderText(
-            "No History Yet\n\nYour transcriptions will appear here. Start dictating to begin."
-        )
-        row = QHBoxLayout()
-        for text, action in (("Copy", "copy"),):
-            button = QPushButton(text)
-            button.clicked.connect(
-                lambda _checked=False, action=action: self.selected_action(action)
-            )
-            row.addWidget(button)
-        clear = QPushButton("Clear history")
-        clear.clicked.connect(self.clear_history)
-        row.addWidget(clear)
-        delete = QPushButton("Delete selected")
-        delete.clicked.connect(self.delete_selected)
-        row.addWidget(delete)
-        history_layout.addLayout(row)
-        extras = QHBoxLayout()
-        for text, handler in (("Load more", self.load_more),):
-            button = QPushButton(text)
-            button.clicked.connect(handler)
-            extras.addWidget(button)
-        history_layout.addLayout(extras)
-        tabs.addWidget(history)
+        self.history_page = HistoryPage(self.send)
+        tabs.addWidget(self.history_page)
         settings = QWidget()
         form = QFormLayout(settings)
         self.app_version = QLabel(__version__)
@@ -600,9 +561,20 @@ class Window(QWidget):
         self.file_page = FileTranscriptionPage(tabs, self.save, self.status.setText)
         tabs.addWidget(self.file_page)
         self.setAcceptDrops(True)
-        tabs.addWidget(self.stats_page())
-        tabs.addWidget(self.backup_page())
-        tabs.addWidget(self.help_page())
+        self._add_auxiliary_pages(tabs)
+        self.nav.setCurrentRow(0)
+        self.apply_theme()
+        QApplication.styleHints().colorSchemeChanged.connect(self.apply_theme)
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.poll)
+        self.timer.start(700)
+        self.poll()
+
+    def _add_auxiliary_pages(self, tabs: QStackedWidget) -> None:
+        tabs.addWidget(StatsPage(self.send))
+        self.backup_page = BackupPage(self.send, self.status.setText, self.operation_result)
+        tabs.addWidget(self.backup_page)
+        tabs.addWidget(HelpPage())
         tabs.addWidget(self.profiles_page())
         from .assistant_ui import AssistantPage
 
@@ -623,13 +595,6 @@ class Window(QWidget):
 
         self.microphone_page = MicrophonePage(self)
         tabs.addWidget(self.microphone_page)
-        self.nav.setCurrentRow(0)
-        self.apply_theme()
-        QApplication.styleHints().colorSchemeChanged.connect(self.apply_theme)
-        self.timer = QTimer(self)
-        self.timer.timeout.connect(self.poll)
-        self.timer.start(700)
-        self.poll()
 
     def _make_navigation(self, icon_path: str) -> QWidget:
         sidebar = QWidget()
@@ -679,26 +644,6 @@ class Window(QWidget):
         navigation.addWidget(footer)
         return sidebar
 
-    def refresh_history(self):
-        query = (self.search.text(), self.history_limit)
-        if self.history_request == query:
-            return
-        self.history_request = query
-        self.history_serial += 1
-        serial = self.history_serial
-
-        def update(response):
-            if self.history_serial == serial:
-                self.history_request = None
-                if query == (self.search.text(), self.history_limit):
-                    self.update_history(response)
-
-        self.send(
-            "history",
-            {"query": query[0], "limit": query[1]},
-            callback=update,
-        )
-
     def filter_settings(self, category):
         for row, group in self.settings_rows:
             self.settings_form.setRowVisible(row, category == "All settings" or group == category)
@@ -728,24 +673,7 @@ class Window(QWidget):
         except Exception as exc:  # allow: exception-handling  # noqa: BLE001
             self.status.setText(str(exc))
 
-    def load_more(self):
-        self.history_limit = min(10000, self.history_limit + 100)
-        self.refresh_history()
-
-    def selected_id(self):
-        index = self.list.currentRow()
-        return self.rows[index]["id"] if 0 <= index < len(self.rows) else None
-
-    def delete_selected(self):
-        item_id = self.selected_id()
-        if (
-            item_id
-            and QMessageBox.question(self, "Delete transcript", "Delete selected transcript?")
-            == QMessageBox.StandardButton.Yes
-        ):
-            self.send("delete", {"id": item_id}, callback=lambda _: self.refresh_history())
-
-    def operation_result(self, response):
+    def operation_result(self, response: Response) -> None:
         self.status.setText(str(response.get("error", response.get("result", "Done"))))
 
     def dictionary_page(self):
@@ -1046,207 +974,6 @@ class Window(QWidget):
             self.nav.setCurrentRow(3)
             event.acceptProposedAction()
 
-    def stats_page(self):
-        from .stats_view import ActivityChart
-
-        page = QWidget()
-        layout = QVBoxLayout(page)
-        refresh = QPushButton("Refresh stats")
-        refresh.clicked.connect(self.refresh_stats)
-        layout.addWidget(refresh)
-        self.chart_range = QComboBox()
-        self.chart_range.addItem("Last 7 days", 7)
-        self.chart_range.addItem("Last 30 days", 30)
-        layout.addWidget(self.chart_range)
-        self.activity_chart = ActivityChart()
-        self.chart_range.currentIndexChanged.connect(
-            lambda _: self.activity_chart.set_values(
-                self.activity_chart.values, self.chart_range.currentData()
-            )
-        )
-        layout.addWidget(self.activity_chart)
-        self.stats_text = QTextEdit()
-        self.stats_text.setReadOnly(True)
-        self.stats_text.setPlaceholderText(
-            "Refresh to show local dictation activity. Typing speed and "
-            "weekend streak rules are configurable in App Settings."
-        )
-        layout.addWidget(self.stats_text)
-        return page
-
-    def refresh_stats(self):
-        def update(response):
-            if "result" not in response:
-                return
-            result = response["result"]
-            self.activity_chart.set_values(result["daily_words"], self.chart_range.currentData())
-            lines = [
-                f"{result['words']:,} words  ·  {result['transcriptions']:,} dictations",
-                f"{result['current_streak']} day streak  ·  "
-                f"{result['time_saved_seconds'] / 60:.1f} minutes saved",
-                "",
-            ]
-            for name, tally in result["windows"].items():
-                lines.append(
-                    f"{name}: {tally['words']:,} words / {tally['transcriptions']:,} dictations"
-                )
-            lines.extend(
-                [
-                    "",
-                    f"Longest dictation: {result['longest_words']:,} words",
-                    f"Most words in one day: {result['most_words_in_day']:,}",
-                    f"Average length: {result['average_words']} words",
-                    "",
-                    "Daily words:",
-                ]
-            )
-            lines.extend(f"{day}: {words:,}" for day, words in result["daily_words"].items())
-            lines.extend(
-                ["", f"Top apps: {result['top_apps']}", f"Peak hours: {result['peak_hour']}"]
-            )
-            lines.append(f"Best streak: {result.get('best_streak', 0)} days")
-            for label, milestones in result.get("milestones", {}).items():
-                lines.append(
-                    label
-                    + " milestones: "
-                    + " · ".join(
-                        f"{item['target']:,}{' achieved' if item['achieved'] else ''}"
-                        for item in milestones
-                    )
-                )
-            self.stats_text.setPlainText("\n".join(lines))
-
-        self.send("stats", callback=update)
-
-    def backup_page(self):
-        page = QWidget()
-        layout = QVBoxLayout(page)
-        note = QLabel(
-            "Back up settings, dictionary, and transcript history. API keys "
-            "are excluded. Restore merges history by UUID; it does not delete "
-            "existing transcripts. Import previews native and upstream backups, including "
-            "unsupported platform settings. Recordings are not retained."
-        )
-        note.setWordWrap(True)
-        layout.addWidget(note)
-        for text, handler in (
-            ("Export backup", lambda: self.backup_action(False)),
-            ("Import backup", lambda: self.backup_action(True)),
-        ):
-            button = QPushButton(text)
-            button.clicked.connect(handler)
-            layout.addWidget(button)
-        layout.addStretch()
-        return page
-
-    def backup_action(self, importing):
-        if importing:
-            path, _ = QFileDialog.getOpenFileName(self, "Import backup", "", "JSON (*.json)")
-            if not path:
-                return
-            from .assistant_ui import AssistantTask
-            from .operations import backup_preview
-
-            task = AssistantTask(lambda: backup_preview(path), self)
-            self.jobs.add(task)
-
-            def received(response):
-                if "error" in response:
-                    self.status.setText(response["error"])
-                    return
-                report = response["result"]
-                dialog = QMessageBox(self)
-                dialog.setWindowTitle("Review backup import")
-                counts = report.get("counts", {})
-                dialog.setText(
-                    f"{report['format'].capitalize()} backup: "
-                    f"{counts.get('history', 0)} transcripts, "
-                    f"{counts.get('profiles', 0)} profiles, "
-                    f"{counts.get('replacements', 0)} replacement rules."
-                )
-                warnings = report.get("warnings", [])
-                dialog.setInformativeText(
-                    f"{len(warnings)} migration warnings. "
-                    "Review details for settings changes and unsupported data before importing. "
-                    "History merges by UUID; existing recordings remain. Reopen Settings afterward."
-                )
-                dialog.setDetailedText(json.dumps(report, ensure_ascii=False, indent=2))
-                dialog.setStandardButtons(
-                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-                )
-                dialog.setDefaultButton(QMessageBox.StandardButton.No)
-                if dialog.exec() == QMessageBox.StandardButton.Yes:
-                    self.send(
-                        "backup_import",
-                        {"path": path, "expected_sha256": report["file_sha256"]},
-                        callback=self.operation_result,
-                    )
-
-            task.done.connect(received)
-            task.finished.connect(lambda: self.jobs.discard(task))
-            task.finished.connect(task.deleteLater)
-            task.start()
-            return
-        path, _ = QFileDialog.getSaveFileName(
-            self, "Export backup", "mouthkeys-backup.json", "JSON (*.json)"
-        )
-        if path:
-            self.send("backup_export", {"path": path}, callback=self.operation_result)
-
-    def help_page(self):
-        page = QWidget()
-        layout = QVBoxLayout(page)
-        note = QLabel(
-            "Bind mouthkeys toggle / start / stop / cancel / paste"
-            " in i3 or desktop keyboard settings. Hold-to-talk can use "
-            "separate key-press start and key-release stop bindings. Optional "
-            "speech engines need their package extras and explicit model "
-            "downloads. Open README for compositor-specific setup."
-        )
-        note.setWordWrap(True)
-        layout.addWidget(note)
-        for label, handler in (
-            ("Show diagnostic log", self.show_log),
-            ("Report issue", self.report_issue),
-            ("Open Linux guide", self.open_guide),
-        ):
-            button = QPushButton(label)
-            button.clicked.connect(handler)
-            layout.addWidget(button)
-        self.log_text = QTextEdit()
-        self.log_text.setReadOnly(True)
-        layout.addWidget(self.log_text)
-        return page
-
-    def show_log(self):
-        path = state_dir() / "daemon.log"
-        if path.exists():
-            with path.open("rb") as stream:
-                stream.seek(max(0, path.stat().st_size - 100000))
-                self.log_text.setPlainText(stream.read().decode(errors="replace"))
-        else:
-            self.log_text.setPlainText("No diagnostic log yet")
-
-    def report_issue(self):
-        import platform
-        from urllib.parse import urlencode
-
-        from PySide6.QtCore import QUrl
-        from PySide6.QtGui import QDesktopServices
-
-        url = "https://github.com/crypdick/MouthKeys-Linux/issues/new?" + urlencode(
-            {"body": f"MouthKeys {__version__}\nLinux {platform.release()}\n\nDescribe issue:\n"}
-        )
-        QDesktopServices.openUrl(QUrl(url))
-
-    def open_guide(self):
-        from PySide6.QtCore import QUrl
-        from PySide6.QtGui import QDesktopServices
-
-        QDesktopServices.openUrl(
-            QUrl("https://github.com/crypdick/MouthKeys-Linux/blob/main/linux/README.md")
-        )
-
     def cancel_download(self):
         if self.download is not None:
             self.download.kill()
@@ -1430,7 +1157,6 @@ class Window(QWidget):
                 self.prompt_test_id = None
 
     def run_prompt_test(self, _checked=False, config=None):
-        from .assistant_ui import AssistantTask
         from .postprocess import process
 
         try:
@@ -1442,7 +1168,7 @@ class Window(QWidget):
         except Exception as exc:  # allow: exception-handling  # noqa: BLE001
             self.prompt_test_output.setPlainText(str(exc))
             return
-        task = AssistantTask(lambda: process(text, config), self)
+        task = Task(lambda: process(text, config), self)
         self.jobs.add(task)
         task.done.connect(
             lambda response: self.prompt_test_output.setPlainText(
@@ -1620,13 +1346,18 @@ class Window(QWidget):
             f"QListWidget::item:selected {{ background: {ink}; color: {surface}; }}"
         )
 
-    def send(self, action, data=None, callback=None):
+    def send(
+        self,
+        action: str,
+        data: Mapping[str, object] | None = None,
+        callback: ResponseHandler | None = None,
+    ) -> None:
         job = Request(action, data, self)
         self.jobs.add(job)
 
-        def done(response):
+        def done(response: Response) -> None:
             if "error" in response:
-                self.status.setText(response["error"])
+                self.status.setText(str(response["error"]))
             if callback:
                 callback(response)
 
@@ -1662,55 +1393,12 @@ class Window(QWidget):
                 self.microphone_page.update_status(result)
                 self.update_prompt_test(result)
                 self.update_training(result)
-                self.refresh_history()
+                self.history_page.refresh_history()
             else:
                 self.loaded_model = None
                 self.service_version.setText("Unavailable")
 
         self.send("status", callback=update)
-
-    def update_history(self, response):
-        if "result" not in response or response["result"] == self.rows:
-            return
-        selected = self.list.currentRow()
-        selected_id = self.rows[selected]["id"] if 0 <= selected < len(self.rows) else None
-        self.rows = response["result"]
-        self.list.clear()
-        for row in self.rows:
-            date = datetime.fromtimestamp(row["created"]).strftime("%m-%d %H:%M")
-            label = f"{date}  /  {row['status'].upper()}\n{row['text'][:65] or row['error'][:65]}"
-            self.list.addItem(QListWidgetItem(label))
-        index = next((i for i, row in enumerate(self.rows) if row["id"] == selected_id), 0)
-        self.list.setCurrentRow(index if self.rows else -1)
-
-    def select(self, index):
-        if 0 <= index < len(self.rows):
-            row = self.rows[index]
-            text = row["text"] + (f"\n\n{row['error']}" if row["error"] else "")
-            if row.get("duration"):
-                text += (
-                    f"\n\n{row['duration']:.1f}s · {len(row['text'].split())} words · "
-                    f"{len(row['text'])} characters"
-                )
-            if row.get("app") or row.get("window"):
-                text += f"\n{row.get('app', '')} · {row.get('window', '')}"
-            if row.get("raw_text") and row["raw_text"] != row["text"]:
-                text += f"\n\nOriginal transcription:\n{row['raw_text']}"
-            self.preview.setPlainText(text)
-        else:
-            self.preview.clear()
-
-    def selected_action(self, action):
-        index = self.list.currentRow()
-        if 0 <= index < len(self.rows):
-            self.send(action, {"id": self.rows[index]["id"]})
-
-    def clear_history(self):
-        if (
-            QMessageBox.question(self, "Clear history", "Delete all transcripts?")
-            == QMessageBox.StandardButton.Yes
-        ):
-            self.send("clear")
 
     def refresh_delivery_hint(self):
         config = Config(
@@ -1765,7 +1453,6 @@ class Window(QWidget):
     def keyring_action(self, action, *, profile=False):
         from PySide6.QtWidgets import QInputDialog
 
-        from .assistant_ui import AssistantTask
         from .credentials import delete_key, store_key
 
         fields = self.profile_fields if profile else self.fields
@@ -1800,7 +1487,7 @@ class Window(QWidget):
             def function():
                 return delete_key(config)
 
-        task = AssistantTask(function, self)
+        task = Task(function, self)
         self.jobs.add(task)
 
         def received(response):
@@ -1835,12 +1522,11 @@ class Window(QWidget):
     def provider_action(self, action):
         if not self.save():
             return
-        from .assistant_ui import AssistantTask
         from .provider_tools import list_models, verify
 
         config = Config.load()
         function = (lambda: verify(config)) if action == "verify" else (lambda: list_models(config))
-        task = AssistantTask(function, self)
+        task = Task(function, self)
         self.jobs.add(task)
 
         def received(response):
@@ -1967,7 +1653,12 @@ class Window(QWidget):
 
     @property
     def busy(self) -> bool:
-        return bool(self.jobs) or self.download is not None or self.file_page.running
+        return (
+            bool(self.jobs)
+            or self.download is not None
+            or self.file_page.running
+            or self.backup_page.running
+        )
 
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802 - Qt override
         if self.busy:

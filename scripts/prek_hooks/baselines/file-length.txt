@@ -1,4 +1,4 @@
-671	linux/src/mouthkeys/assistant_ui.py
-1820	linux/src/mouthkeys/gui.py
+661	linux/src/mouthkeys/assistant_ui.py
+1536	linux/src/mouthkeys/gui.py
 696	linux/src/mouthkeys/native_asr.py
 1518	linux/src/mouthkeys/service.py

@@ -6,7 +6,9 @@ from math import floor
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QMouseEvent, QPainter, QPaintEvent
-from PySide6.QtWidgets import QWidget
+from PySide6.QtWidgets import QComboBox, QPushButton, QTextEdit, QVBoxLayout, QWidget
+
+from .qt_control import Response, Send
 
 
 class ActivityChart(QWidget):
@@ -66,3 +68,110 @@ class ActivityChart(QWidget):
             self.setToolTip(f"{day}: {count:,} words")
         else:
             self.setToolTip("")
+
+
+def _mapping(value: object) -> dict[str, object]:
+    if not isinstance(value, dict):
+        return {}
+    return {key: item for key, item in value.items() if isinstance(key, str)}
+
+
+def _number(value: object) -> int | float:
+    return value if type(value) is int or type(value) is float else 0
+
+
+def _milestone_lines(value: object) -> list[str]:
+    lines = []
+    for label, milestones in _mapping(value).items():
+        if not isinstance(milestones, list):
+            continue
+        goals = []
+        for item in milestones:
+            goal = _mapping(item)
+            target = goal.get("target")
+            if type(target) is int:
+                goals.append(f"{target:,}{' achieved' if goal.get('achieved') is True else ''}")
+        if goals:
+            lines.append(f"{label} milestones: " + " · ".join(goals))
+    return lines
+
+
+def _stats_lines(result: Mapping[str, object], daily_words: Mapping[str, int]) -> list[str]:
+    words = _number(result.get("words"))
+    dictations = _number(result.get("transcriptions"))
+    streak = _number(result.get("current_streak"))
+    minutes = _number(result.get("time_saved_seconds")) / 60
+    lines = [
+        f"{words:,} words  ·  {dictations:,} dictations",
+        f"{streak} day streak  ·  {minutes:.1f} minutes saved",
+        "",
+    ]
+    for name, value in _mapping(result.get("windows")).items():
+        tally = _mapping(value)
+        lines.append(
+            f"{name}: {_number(tally.get('words')):,} words / "
+            f"{_number(tally.get('transcriptions')):,} dictations"
+        )
+    lines.extend(
+        [
+            "",
+            f"Longest dictation: {_number(result.get('longest_words')):,} words",
+            f"Most words in one day: {_number(result.get('most_words_in_day')):,}",
+            f"Average length: {_number(result.get('average_words'))} words",
+            "",
+            "Daily words:",
+        ]
+    )
+    lines.extend(f"{day}: {words:,}" for day, words in daily_words.items())
+    lines.extend(
+        [
+            "",
+            f"Top apps: {result.get('top_apps', [])}",
+            f"Peak hours: {result.get('peak_hour', [])}",
+            f"Best streak: {_number(result.get('best_streak'))} days",
+        ]
+    )
+    lines.extend(_milestone_lines(result.get("milestones")))
+    return lines
+
+
+class StatsPage(QWidget):
+    def __init__(self, send: Send) -> None:
+        super().__init__()
+        self.send = send
+        layout = QVBoxLayout(self)
+        refresh = QPushButton("Refresh stats")
+        refresh.clicked.connect(self.refresh_stats)
+        layout.addWidget(refresh)
+        self.chart_range = QComboBox()
+        self.chart_range.addItem("Last 7 days", 7)
+        self.chart_range.addItem("Last 30 days", 30)
+        layout.addWidget(self.chart_range)
+        self.activity_chart = ActivityChart()
+        self.chart_range.currentIndexChanged.connect(self.update_chart_range)
+        layout.addWidget(self.activity_chart)
+        self.stats_text = QTextEdit()
+        self.stats_text.setReadOnly(True)
+        self.stats_text.setPlaceholderText(
+            "Refresh to show local dictation activity. Typing speed and "
+            "weekend streak rules are configurable in App Settings."
+        )
+        layout.addWidget(self.stats_text)
+
+    def refresh_stats(self) -> None:
+        self.send("stats", None, self.show_stats)
+
+    def update_chart_range(self, _index: int) -> None:
+        self.activity_chart.set_values(self.activity_chart.values, self.chart_range.currentData())
+
+    def show_stats(self, response: Response) -> None:
+        result = response.get("result")
+        if not isinstance(result, dict):
+            return
+        daily_words = {
+            day: count
+            for day, count in _mapping(result.get("daily_words")).items()
+            if type(count) is int and count >= 0
+        }
+        self.activity_chart.set_values(daily_words, self.chart_range.currentData())
+        self.stats_text.setPlainText("\n".join(_stats_lines(result, daily_words)))

@@ -21,6 +21,8 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
+from .qt_control import Task
+
 
 class ModelBrowser(QDialog):
     def __init__(self, window):
@@ -207,7 +209,6 @@ class ModelBrowser(QDialog):
             self.refresh()
 
     def benchmark(self):
-        from .assistant_ui import AssistantTask
         from .benchmark import run_benchmark
         from .config import Config
         from .gui import field_value
@@ -259,7 +260,7 @@ class ModelBrowser(QDialog):
         progress.setWindowModality(Qt.WindowModality.WindowModal)
         progress.canceled.connect(cancelled.set)
         progress.show()
-        task = AssistantTask(
+        task = Task(
             lambda: run_benchmark(
                 config,
                 fixture,

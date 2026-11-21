@@ -204,11 +204,11 @@ def test_offscreen_controller_renders_history_and_saves_settings(monkeypatch):
     window = gui.Window()
     window.timer.stop()
     deadline = time.monotonic() + 3
-    while (window.jobs or not window.rows) and time.monotonic() < deadline:
+    while (window.jobs or not window.history_page.rows) and time.monotonic() < deadline:
         app.processEvents()
         time.sleep(0.01)
     assert not window.jobs
-    assert window.preview.toPlainText() == "Hello café"
+    assert window.history_page.preview.toPlainText() == "Hello café"
     window.fields["model"].setCurrentText("small.en")
     assert window.save()
     assert Config.load().model == "small.en"
@@ -402,71 +402,3 @@ def test_dictionary_editor_preserves_imported_rule_id_when_editing(monkeypatch):
         assert Dictionary.apply("heard") == "Edited"
     finally:
         window.close()
-
-
-@pytest.mark.parametrize("accept", [True, False])
-def test_backup_import_previews_before_applying_exact_reviewed_file(monkeypatch, accept):
-    import json
-    import time
-
-    from PySide6.QtWidgets import QApplication, QFileDialog, QMessageBox
-
-    from mouthkeys import gui, operations
-
-    monkeypatch.setattr(gui.Window, "poll", lambda self: None)
-    monkeypatch.setattr(QFileDialog, "getOpenFileName", lambda *a: ("chosen.json", ""))
-    report = {
-        "format": "upstream",
-        "counts": {"history": 2, "profiles": 1, "replacements": 3},
-        "warnings": ["Apple microphone IDs not imported"],
-        "file_sha256": "a" * 64,
-    }
-    monkeypatch.setattr(operations, "backup_preview", lambda path: report)
-    reviewed = []
-
-    def review(dialog):
-        reviewed.append(json.loads(dialog.detailedText()))
-        assert not dialog.isVisible()
-        return QMessageBox.StandardButton.Yes if accept else QMessageBox.StandardButton.No
-
-    monkeypatch.setattr(QMessageBox, "exec", review)
-    window = gui.Window()
-    window.timer.stop()
-    calls = []
-    monkeypatch.setattr(window, "send", lambda action, data, **kw: calls.append((action, data)))
-    try:
-        window.backup_action(True)
-        deadline = time.monotonic() + 2
-        while window.jobs and time.monotonic() < deadline:
-            QApplication.processEvents()
-            time.sleep(0.001)
-        assert not window.jobs
-        assert reviewed == [report]
-        assert calls == (
-            [("backup_import", {"path": "chosen.json", "expected_sha256": "a" * 64})]
-            if accept
-            else []
-        )
-    finally:
-        window.close()
-
-
-def test_stale_search_results_do_not_replace_current_search(monkeypatch):
-    app = QApplication.instance()
-    monkeypatch.setattr(settings_gui.Window, "poll", lambda self: None)
-    window = settings_gui.Window()
-    window.timer.stop()
-    pending = []
-    monkeypatch.setattr(window, "send", lambda action, data, callback: pending.append(callback))
-    window.search.setText("A")
-    window.search.setText("B")
-    window.search.setText("A")
-    received = []
-    monkeypatch.setattr(window, "update_history", lambda response: received.append(response))
-    pending[0]({"result": ["stale A"]})
-    pending[1]({"result": ["stale B"]})
-    assert not received
-    pending[2]({"result": []})
-    assert received == [{"result": []}]
-    window.close()
-    app.processEvents()

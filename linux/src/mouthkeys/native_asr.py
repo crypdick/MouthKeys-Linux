@@ -139,14 +139,14 @@ def download_native(model, engine, revision="main", progress=None):
     patterns = ["*.json", "*.safetensors", "*.model", "*.txt", "*.jinja", "*.tiktoken"]
     if engine == "nemo":
         patterns = [NEMO_MODELS.get(model, {}).get("filename", "*.nemo")]
-    options = {}
+    tqdm_class = None
     if progress:
         from .model_progress import progress_tqdm
 
-        options["tqdm_class"] = progress_tqdm(progress)
+        tqdm_class = progress_tqdm(progress)
     try:
         snapshot_download(
-            model, revision=revision, local_dir=path, allow_patterns=patterns, **options
+            model, revision=revision, local_dir=path, allow_patterns=patterns, tqdm_class=tqdm_class
         )
     except Exception as exc:
         if type(exc).__name__ in ("GatedRepoError", "RepositoryNotFoundError"):

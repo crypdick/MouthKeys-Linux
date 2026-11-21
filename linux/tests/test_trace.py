@@ -3,6 +3,15 @@ import pytest
 from mouthkeys.trace import Trace
 
 
+def test_inactive_trace_ignores_audio_before_recording():
+    trace = Trace()
+    trace.ingest(1, 0.25)
+    trace.advance(0.25)
+    assert trace.current == trace.shown == [2] * trace.count
+    assert trace.pending_peak == 0
+    assert trace.last_voice is None
+
+
 def test_voice_moves_between_audio_updates_and_eases_new_bars():
     trace = Trace()
     trace.begin(1)

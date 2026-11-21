@@ -1,33 +1,50 @@
 """Machine-readable progress from the Hub's supported tqdm callback interface."""
 
+from collections.abc import Callable
+from typing import TYPE_CHECKING, TypedDict, cast
 
-def progress_tqdm(callback):
-    from tqdm.auto import tqdm
+from tqdm.auto import tqdm
 
-    class Progress(tqdm):
-        def __init__(self, *args, **kwargs):
+if TYPE_CHECKING:
+    _ProgressBar = tqdm[object]
+else:
+    _ProgressBar = tqdm
+
+
+class DownloadProgress(TypedDict):
+    phase: str
+    completed: float
+    total: float | None
+    unit: str
+    description: str
+
+
+def progress_tqdm(callback: Callable[[DownloadProgress], None]) -> type[_ProgressBar]:
+    class Progress(_ProgressBar):
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            # Forward the Hub's options unchanged except that counters must stay enabled.
             kwargs["disable"] = False
-            super().__init__(*args, **kwargs)
-            self.report()
+            initialize = cast("Callable[..., None]", super().__init__)
+            initialize(*args, **kwargs)
+            self._report()
 
-        def display(self, *args, **kwargs):
-            return None  # UI/CLI renders structured events, not terminal escape sequences.
+        def display(self, *_args: object, **_kwargs: object) -> None:
+            """Use structured events instead of writing terminal escape sequences."""
 
-        def report(self):
-            if hasattr(self, "n"):
-                callback(
-                    {
-                        "phase": "download",
-                        "completed": self.n,
-                        "total": self.total,
-                        "unit": self.unit,
-                        "description": self.desc,
-                    }
-                )
+        def _report(self) -> None:
+            callback(
+                {
+                    "phase": "download",
+                    "completed": self.n,
+                    "total": self.total,
+                    "unit": self.unit,
+                    "description": self.desc,
+                }
+            )
 
-        def update(self, n=1):
+        def update(self, n: float | None = 1) -> bool | None:
             result = super().update(n)
-            self.report()
+            self._report()
             return result
 
     return Progress

@@ -92,9 +92,12 @@ def _download_onnx_revision(model, path, quantization, revision, progress):
     patterns += [
         str(Path(file).with_suffix(".onnx?data")) for file in files if Path(file).suffix == ".onnx"
     ]
-    options = {"tqdm_class": progress_tqdm(progress)} if progress else {}
     snapshot_download(
-        repository, revision=revision, local_dir=path, allow_patterns=patterns, **options
+        repository,
+        revision=revision,
+        local_dir=path,
+        allow_patterns=patterns,
+        tqdm_class=progress_tqdm(progress) if progress else None,
     )
 
 

@@ -2,9 +2,10 @@
 
 import json
 import sys
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from datetime import datetime
 from pathlib import Path
+from typing import cast
 
 from PySide6.QtCore import QLocale, QProcess, Qt, QThread, QTimer, Signal
 from PySide6.QtGui import QIcon, QPixmap
@@ -955,8 +956,6 @@ class Window(QWidget):
         self.status.setText("Upstream filler list restored in editor; Save settings to apply")
 
     def offer_regional_filler(self):
-        from dataclasses import replace
-
         from .regional import region_offer
 
         config = Config.load()
@@ -1672,8 +1671,6 @@ class Window(QWidget):
         return scroll
 
     def draft_prompt_config(self):
-        from dataclasses import replace
-
         values = {
             name: field.toPlainText() if isinstance(field, QTextEdit) else field_value(field)
             for name, field in self.profile_fields.items()
@@ -2039,8 +2036,6 @@ class Window(QWidget):
             return False
 
     def keyring_action(self, action, *, profile=False):
-        from dataclasses import replace
-
         from PySide6.QtWidgets import QInputDialog
 
         from .assistant_ui import AssistantTask
@@ -2157,8 +2152,6 @@ class Window(QWidget):
             return
         import subprocess
 
-        from .config import state_dir
-
         with (state_dir() / "hotkeys.log").open("a") as output:
             Path(output.name).chmod(0o600)
             subprocess.Popen(  # noqa: S603
@@ -2173,7 +2166,9 @@ class Window(QWidget):
     def capture_shortcut(self):
         from .shortcut_capture import ShortcutCapture
 
-        ShortcutCapture(self).exec()
+        ShortcutCapture(
+            self, lambda key, chord: cast("QLineEdit", self.fields[key]).setText(chord)
+        ).exec()
 
     def download_model(self):
         if not self.save() or self.download is not None:

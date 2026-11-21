@@ -69,10 +69,12 @@ addopts = "-n 4 --failed-first --durations=5 --durations-min=1 --timeout=20 --ti
 [tool.coverage.run]
 branch = true
 source = ["mouthkeys"]
+patch = ["subprocess"]
 
 [tool.coverage.report]
 # Headless baseline. Raise as coverage improves; hardware checks are tracked in PARITY.md.
-fail_under = 75
+fail_under = 77.4
+precision = 2
 skip_empty = true
 
 [tool.mypy]

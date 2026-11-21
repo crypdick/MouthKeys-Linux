@@ -1,5 +1,7 @@
 """Focused Qt shortcut editor; actual global ownership belongs to configured backend."""
 
+from collections.abc import Callable
+
 from PySide6.QtGui import QKeySequence
 from PySide6.QtWidgets import (
     QComboBox,
@@ -8,13 +10,16 @@ from PySide6.QtWidgets import (
     QKeySequenceEdit,
     QLabel,
     QVBoxLayout,
+    QWidget,
 )
+
+from .hotkeys import parse_chord
 
 
 class ShortcutCapture(QDialog):
-    def __init__(self, window):
-        super().__init__(window)
-        self.window = window
+    def __init__(self, parent: QWidget, set_shortcut: Callable[[str, str], None]) -> None:
+        super().__init__(parent)
+        self.set_shortcut = set_shortcut
         self.setWindowTitle("Capture shortcut")
         layout = QVBoxLayout(self)
         note = QLabel(
@@ -49,9 +54,7 @@ class ShortcutCapture(QDialog):
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
 
-    def apply(self):
-        from .hotkeys import parse_chord
-
+    def apply(self) -> None:
         chord = (
             self.sequence.keySequence().toString(QKeySequence.SequenceFormat.PortableText).lower()
         )
@@ -60,5 +63,5 @@ class ShortcutCapture(QDialog):
         except ValueError as exc:
             self.feedback.setText(str(exc))
             return
-        self.window.fields[self.target.currentData()].setText(chord)
+        self.set_shortcut(str(self.target.currentData()), chord)
         self.accept()

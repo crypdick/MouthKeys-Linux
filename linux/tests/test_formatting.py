@@ -83,6 +83,17 @@ def test_custom_send_phrase_and_literal_prefix():
     assert not parse_send("verbatim send send", "send send", True, "verbatim").should_send
 
 
+def test_spoken_send_handles_punctuation_only_phrases_and_bounded_lookbehind():
+    text = "Hello"
+    plan = parse_send(text, phrase="!!!", active=True)
+    assert plan.text == text
+    assert not plan.should_send
+
+    plan = parse_send("Hello actually now please send it", active=True)
+    assert plan.should_send
+    assert plan.text == "Hello actually now please"
+
+
 @pytest.mark.parametrize(
     "text,expected",
     [
@@ -349,6 +360,7 @@ def test_saved_dictionary_is_not_replaced_and_rule_edits_take_effect():
         ("I saw slash compact", "I saw slash compact"),
         ("at the rate Paul", "@Paul"),
         ("Mention Paul Smith", "@Paul Smith"),
+        ("Mention Paul  Smith", "Mention Paul  Smith"),
         ("tag ricardo", "@ricardo"),
         ("at sign work", "at sign work"),
         ("mention Paul's work", "mention Paul's work"),

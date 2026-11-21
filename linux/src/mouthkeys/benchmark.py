@@ -1,11 +1,9 @@
 """Explicit, offline, fixture-scoped speech measurements; never record or deliver text."""
 
 import hashlib
-import importlib.metadata
 import json
 import math
 import os
-import platform
 import re
 import signal
 import subprocess
@@ -19,6 +17,7 @@ from dataclasses import asdict, replace
 from datetime import UTC, datetime
 from pathlib import Path
 
+from .benchmark_context import decode_settings, hardware_context, model_identity, software_context
 from .config import Config, private_dir, state_dir
 from .operations import write_private
 
@@ -34,32 +33,6 @@ SCOPE = (
     "One offline WAV fixture, fresh process/model load then one file decode. "
     "OS/device caches not flushed; not general model accuracy."
 )
-
-
-def hardware_context():
-    cpu = "unknown"
-    try:
-        cpu = next(
-            line.split(":", 1)[1].strip()
-            for line in Path("/proc/cpuinfo").read_text().splitlines()
-            if line.startswith("model name")
-        )
-    except (OSError, StopIteration):
-        pass
-    adapters = []
-    for device in Path("/sys/class/drm").glob("card[0-9]*/device"):
-        try:
-            adapters.append(
-                ":".join((device / key).read_text().strip() for key in ("vendor", "device"))
-            )
-        except OSError:
-            pass
-    return {
-        "architecture": platform.machine(),
-        "cpu": cpu,
-        "logical_cpus": os.cpu_count(),
-        "display_adapter_pci_ids": sorted(adapters),
-    }
 
 
 def _distance(left, right):
@@ -256,50 +229,6 @@ def measurements():
         except (OSError, ValueError, TypeError, KeyError):
             continue
     return reports
-
-
-def model_identity(model):
-    path = Path(model).expanduser()
-    return (
-        "local:" + hashlib.sha256(str(path.resolve()).encode()).hexdigest()
-        if path.exists()
-        else model
-    )
-
-
-def software_context():
-    versions = {}
-    for package in (
-        "mouthkeys-linux",
-        "faster-whisper",
-        "ctranslate2",
-        "onnx-asr",
-        "onnxruntime",
-        "torch",
-        "transformers",
-        "nemo_toolkit",
-    ):
-        try:
-            versions[package] = importlib.metadata.version(package)
-        except importlib.metadata.PackageNotFoundError:
-            pass
-    try:
-        driver = Path("/proc/driver/nvidia/version").read_text().strip()
-    except OSError:
-        driver = None
-    return {
-        "python": platform.python_version(),
-        "kernel": platform.release(),
-        "packages": versions,
-        "nvidia_driver": driver,
-    }
-
-
-def decode_settings(config):
-    return {
-        key: getattr(config, key)
-        for key in ("language", "asr_max_tokens", "native_streaming", "streaming_latency")
-    }
 
 
 def matching_measurement(config, reports, context=None):

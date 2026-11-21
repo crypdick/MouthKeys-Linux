@@ -1,10 +1,14 @@
 import fcntl
 import json
 import os
+import threading
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
+from mouthkeys import data_lock
+from mouthkeys.config import config_path, private_dir
 from mouthkeys.data_lock import dictionary_lock
 from mouthkeys.dictionary import Dictionary
 from mouthkeys.dictionary_transfer import decode_document
@@ -190,9 +194,6 @@ def test_merge_native_formatting_keeps_distinct_same_symbol_alias_groups(tmp_pat
 
 
 def test_dictionary_lock_is_reentrant_and_cross_process_wait_is_bounded(monkeypatch):
-    from mouthkeys import data_lock
-    from mouthkeys.config import config_path, private_dir
-
     monkeypatch.setattr(data_lock, "LOCK_TIMEOUT", 0.02)
     lock_path = private_dir(config_path().parent) / ".dictionary-transfer.lock"
     with lock_path.open("w") as other:
@@ -201,3 +202,28 @@ def test_dictionary_lock_is_reentrant_and_cross_process_wait_is_bounded(monkeypa
             pytest.fail("must not bypass the existing file lock")
     with dictionary_lock(), dictionary_lock():
         Dictionary.save(Dictionary.defaults())
+
+
+def test_dictionary_lock_times_out_when_another_thread_holds_it(monkeypatch):
+    monkeypatch.setattr(data_lock, "LOCK_TIMEOUT", 0.02)
+    entered = threading.Event()
+    release = threading.Event()
+
+    def hold():
+        with dictionary_lock():
+            entered.set()
+            assert release.wait(timeout=2)
+
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        worker = executor.submit(hold)
+        try:
+            assert entered.wait(timeout=2)
+            with (
+                pytest.raises(TimeoutError, match="retry after the current operation"),
+                dictionary_lock(),
+            ):
+                pytest.fail("must not enter while another thread holds the lock")
+        finally:
+            release.set()
+        worker.result(timeout=2)
+    Dictionary.save(Dictionary.defaults())

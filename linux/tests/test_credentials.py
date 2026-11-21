@@ -64,6 +64,29 @@ def test_keyring_validates_returned_secrets(monkeypatch, raw):
         request_headers(Config(ai_credential_source="secret-service"), "compatible")
 
 
+@pytest.mark.parametrize(
+    ("status", "message"),
+    [(1, "No accessible API key for this endpoint"), (2, "Keyring operation failed")],
+)
+def test_keyring_refuses_failed_lookup_without_using_output(monkeypatch, status, message):
+    monkeypatch.setenv("MOUTHKEYS_AI_API_KEY", "fallback-key")
+    monkeypatch.setattr(
+        credentials.subprocess,
+        "run",
+        lambda args, **kwargs: subprocess.CompletedProcess(args, status, stdout=b"unused-key"),
+    )
+    with pytest.raises(RuntimeError, match=message) as error:
+        credentials.api_key(Config(ai_credential_source="secret-service"))
+    assert "unused-key" not in str(error.value)
+    assert "fallback-key" not in str(error.value)
+
+
+def test_store_key_rejects_an_empty_secret_before_opening_keyring(monkeypatch):
+    monkeypatch.setattr(credentials, "_run", lambda *a, **kw: pytest.fail("Keyring probe"))
+    with pytest.raises(ValueError, match="Provide a nonempty API key"):
+        credentials.store_key(Config(), "")
+
+
 def test_cli_credential_stdin_never_echoes_or_saves_secret(monkeypatch, capsys):
     from mouthkeys.cli import main
 

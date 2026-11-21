@@ -25,9 +25,10 @@ available outside disposable feature worktrees. To run a single gate:
 - **Size:** New Python files are limited to 400 code-containing lines. Existing oversized files
   may shrink, not grow. Prioritize `gui` and `service`; extract complete workflows without
   changing signal ownership, locking, cancellation, or delivery order.
-- **Coverage:** Headless branch/line coverage starts at 75%, with 100% as the target. Raise the floor
-  when measured coverage improves. Desktop and optional pretrained-model checks remain separate;
-  see [the parity ledger](../linux/PARITY.md). Don't count manual checks as automated coverage.
+- **Coverage:** The combined headless line and branch coverage floor is 77.4%, with 100% as the target.
+  The gate includes Python subprocesses started by the tests. Raise the floor when measured coverage
+  improves. Desktop and optional pretrained-model checks remain separate; see
+  [the parity ledger](../linux/PARITY.md). Don't count manual checks as automated coverage.
 - **Runtime:** Beartype checks annotated parameters and returns. Keep plain JSON/IPC validation:
   runtime annotations are not complete container checks. System GI and model SDKs not installed
   in the headless environment are scoped mypy exceptions, not blanket import suppression.

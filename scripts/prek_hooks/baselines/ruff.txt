@@ -245,13 +245,12 @@
 1	src/mouthkeys/audio.py	PLR0911	Too many return statements (7 > 6)
 2	src/mouthkeys/audio.py	SIM115	Use a context manager for opening files
 1	src/mouthkeys/benchmark.py	ANN001	Missing type annotation for function argument `cancel_event`
-4	src/mouthkeys/benchmark.py	ANN001	Missing type annotation for function argument `config`
+3	src/mouthkeys/benchmark.py	ANN001	Missing type annotation for function argument `config`
 1	src/mouthkeys/benchmark.py	ANN001	Missing type annotation for function argument `context`
 1	src/mouthkeys/benchmark.py	ANN001	Missing type annotation for function argument `destination`
 1	src/mouthkeys/benchmark.py	ANN001	Missing type annotation for function argument `fixture`
 1	src/mouthkeys/benchmark.py	ANN001	Missing type annotation for function argument `hypothesis`
 1	src/mouthkeys/benchmark.py	ANN001	Missing type annotation for function argument `left`
-1	src/mouthkeys/benchmark.py	ANN001	Missing type annotation for function argument `model`
 2	src/mouthkeys/benchmark.py	ANN001	Missing type annotation for function argument `path`
 1	src/mouthkeys/benchmark.py	ANN001	Missing type annotation for function argument `pid`
 1	src/mouthkeys/benchmark.py	ANN001	Missing type annotation for function argument `proc`
@@ -265,13 +264,9 @@
 1	src/mouthkeys/benchmark.py	ANN001	Missing type annotation for function argument `timeout`
 1	src/mouthkeys/benchmark.py	ANN001	Missing type annotation for function argument `value`
 1	src/mouthkeys/benchmark.py	ANN201	Missing return type annotation for public function `accuracy`
-1	src/mouthkeys/benchmark.py	ANN201	Missing return type annotation for public function `decode_settings`
-1	src/mouthkeys/benchmark.py	ANN201	Missing return type annotation for public function `hardware_context`
 1	src/mouthkeys/benchmark.py	ANN201	Missing return type annotation for public function `matching_measurement`
 1	src/mouthkeys/benchmark.py	ANN201	Missing return type annotation for public function `measurements`
-1	src/mouthkeys/benchmark.py	ANN201	Missing return type annotation for public function `model_identity`
 1	src/mouthkeys/benchmark.py	ANN201	Missing return type annotation for public function `run_benchmark`
-1	src/mouthkeys/benchmark.py	ANN201	Missing return type annotation for public function `software_context`
 1	src/mouthkeys/benchmark.py	ANN201	Missing return type annotation for public function `worker_main`
 1	src/mouthkeys/benchmark.py	ANN202	Missing return type annotation for private function `_artifact_identity`
 1	src/mouthkeys/benchmark.py	ANN202	Missing return type annotation for private function `_copy_fixture`
@@ -285,10 +280,7 @@
 7	src/mouthkeys/benchmark.py	PLC0415	`import` should be at the top-level of a file
 1	src/mouthkeys/benchmark.py	PLR0912	Too many branches (14 > 12)
 1	src/mouthkeys/benchmark.py	PLR0913	Too many arguments in function definition (6 > 5)
-1	src/mouthkeys/benchmark.py	SIM105	Use `contextlib.suppress(OSError)` instead of `try`-`except`-`pass`
-1	src/mouthkeys/benchmark.py	SIM105	Use `contextlib.suppress(OSError, StopIteration)` instead of `try`-`except`-`pass`
 1	src/mouthkeys/benchmark.py	SIM105	Use `contextlib.suppress(ProcessLookupError)` instead of `try`-`except`-`pass`
-1	src/mouthkeys/benchmark.py	SIM105	Use `contextlib.suppress(importlib.metadata.PackageNotFoundError)` instead of `try`-`except`-`pass`
 1	src/mouthkeys/capture.py	ANN001	Missing type annotation for function argument `args`
 1	src/mouthkeys/capture.py	ANN201	Missing return type annotation for public function `supervise`
 1	src/mouthkeys/cli.py	ANN001	Missing type annotation for function argument `autostart`
@@ -335,18 +327,6 @@
 1	src/mouthkeys/clipboard.py	TRY300	Consider moving this statement to an `else` block
 3	src/mouthkeys/config.py	PLC0415	`import` should be at the top-level of a file
 1	src/mouthkeys/config.py	TRY004	Prefer `TypeError` exception for invalid type
-1	src/mouthkeys/credentials.py	ANN001	Missing type annotation for function argument `action`
-5	src/mouthkeys/credentials.py	ANN001	Missing type annotation for function argument `config`
-2	src/mouthkeys/credentials.py	ANN001	Missing type annotation for function argument `key`
-1	src/mouthkeys/credentials.py	ANN001	Missing type annotation for function argument `secret`
-1	src/mouthkeys/credentials.py	ANN201	Missing return type annotation for public function `api_key`
-1	src/mouthkeys/credentials.py	ANN201	Missing return type annotation for public function `delete_key`
-1	src/mouthkeys/credentials.py	ANN201	Missing return type annotation for public function `store_key`
-1	src/mouthkeys/credentials.py	ANN201	Missing return type annotation for public function `validate_key`
-1	src/mouthkeys/credentials.py	ANN202	Missing return type annotation for private function `_attributes`
-1	src/mouthkeys/credentials.py	ANN202	Missing return type annotation for private function `_run`
-1	src/mouthkeys/credentials.py	PLC0415	`import` should be at the top-level of a file
-1	src/mouthkeys/data_lock.py	ANN201	Missing return type annotation for public function `dictionary_lock`
 1	src/mouthkeys/delivery.py	ANN001	Missing type annotation for function argument `allow_without_insert`
 1	src/mouthkeys/delivery.py	ANN001	Missing type annotation for function argument `args`
 3	src/mouthkeys/delivery.py	ANN001	Missing type annotation for function argument `before_send`
@@ -703,7 +683,7 @@
 1	src/mouthkeys/gui.py	N802	Function name `closeEvent` should be lowercase
 1	src/mouthkeys/gui.py	N802	Function name `dragEnterEvent` should be lowercase
 1	src/mouthkeys/gui.py	N802	Function name `dropEvent` should be lowercase
-69	src/mouthkeys/gui.py	PLC0415	`import` should be at the top-level of a file
+65	src/mouthkeys/gui.py	PLC0415	`import` should be at the top-level of a file
 1	src/mouthkeys/gui.py	PLR0911	Too many return statements (16 > 6)
 1	src/mouthkeys/gui.py	PLR0912	Too many branches (15 > 12)
 1	src/mouthkeys/gui.py	PLR0912	Too many branches (18 > 12)
@@ -719,7 +699,6 @@
 1	src/mouthkeys/hotkeys.py	ANN001	Missing type annotation for function argument `mode`
 1	src/mouthkeys/hotkeys.py	ANN001	Missing type annotation for function argument `send`
 1	src/mouthkeys/hotkeys.py	ANN001	Missing type annotation for function argument `token`
-1	src/mouthkeys/hotkeys.py	ANN001	Missing type annotation for function argument `value`
 1	src/mouthkeys/hotkeys.py	ANN001	Missing type annotation for function argument `when`
 1	src/mouthkeys/hotkeys.py	ANN002	Missing type annotation for `*_`
 1	src/mouthkeys/hotkeys.py	ANN201	Missing return type annotation for public function `bindings`
@@ -729,7 +708,6 @@
 1	src/mouthkeys/hotkeys.py	ANN201	Missing return type annotation for public function `events`
 1	src/mouthkeys/hotkeys.py	ANN201	Missing return type annotation for public function `finish`
 1	src/mouthkeys/hotkeys.py	ANN201	Missing return type annotation for public function `launch`
-1	src/mouthkeys/hotkeys.py	ANN201	Missing return type annotation for public function `parse_chord`
 1	src/mouthkeys/hotkeys.py	ANN202	Missing return type annotation for private function `consume`
 1	src/mouthkeys/hotkeys.py	ANN202	Missing return type annotation for private function `terminate`
 2	src/mouthkeys/hotkeys.py	ANN204	Missing return type annotation for special method `__init__`
@@ -884,18 +862,6 @@
 1	src/mouthkeys/microphone_ui.py	RUF100	Unused `noqa` directive (unused: `S607`)
 1	src/mouthkeys/microphone_ui.py	S607	Starting a process with a partial executable path
 1	src/mouthkeys/microphone_ui.py	TRY300	Consider moving this statement to an `else` block
-1	src/mouthkeys/model_progress.py	ANN001	Missing type annotation for function argument `callback`
-1	src/mouthkeys/model_progress.py	ANN001	Missing type annotation for function argument `n`
-2	src/mouthkeys/model_progress.py	ANN002	Missing type annotation for `*args`
-2	src/mouthkeys/model_progress.py	ANN003	Missing type annotation for `**kwargs`
-1	src/mouthkeys/model_progress.py	ANN201	Missing return type annotation for public function `progress_tqdm`
-1	src/mouthkeys/model_progress.py	ANN202	Missing return type annotation for private function `display`
-1	src/mouthkeys/model_progress.py	ANN202	Missing return type annotation for private function `report`
-1	src/mouthkeys/model_progress.py	ANN202	Missing return type annotation for private function `update`
-1	src/mouthkeys/model_progress.py	ANN204	Missing return type annotation for special method `__init__`
-1	src/mouthkeys/model_progress.py	ARG002	Unused method argument: `args`
-1	src/mouthkeys/model_progress.py	ARG002	Unused method argument: `kwargs`
-1	src/mouthkeys/model_progress.py	PLC0415	`import` should be at the top-level of a file
 1	src/mouthkeys/models_ui.py	ANN001	Missing type annotation for function argument `event`
 1	src/mouthkeys/models_ui.py	ANN001	Missing type annotation for function argument `response`
 1	src/mouthkeys/models_ui.py	ANN001	Missing type annotation for function argument `window`
@@ -1174,25 +1140,20 @@
 1	src/mouthkeys/profiles.py	PLR0912	Too many branches (22 > 12)
 2	src/mouthkeys/profiles.py	TRY004	Prefer `TypeError` exception for invalid type
 2	src/mouthkeys/pronunciation.py	ANN001	Missing type annotation for function argument `alignment`
-8	src/mouthkeys/pronunciation.py	ANN001	Missing type annotation for function argument `audio`
+6	src/mouthkeys/pronunciation.py	ANN001	Missing type annotation for function argument `audio`
 2	src/mouthkeys/pronunciation.py	ANN001	Missing type annotation for function argument `budget`
 1	src/mouthkeys/pronunciation.py	ANN001	Missing type annotation for function argument `candidate`
 1	src/mouthkeys/pronunciation.py	ANN001	Missing type annotation for function argument `end`
 1	src/mouthkeys/pronunciation.py	ANN001	Missing type annotation for function argument `enrolled`
-1	src/mouthkeys/pronunciation.py	ANN001	Missing type annotation for function argument `first`
 2	src/mouthkeys/pronunciation.py	ANN001	Missing type annotation for function argument `label`
 1	src/mouthkeys/pronunciation.py	ANN001	Missing type annotation for function argument `margin`
 2	src/mouthkeys/pronunciation.py	ANN001	Missing type annotation for function argument `max_seconds`
 2	src/mouthkeys/pronunciation.py	ANN001	Missing type annotation for function argument `profiles`
-1	src/mouthkeys/pronunciation.py	ANN001	Missing type annotation for function argument `second`
 1	src/mouthkeys/pronunciation.py	ANN001	Missing type annotation for function argument `start`
 1	src/mouthkeys/pronunciation.py	ANN001	Missing type annotation for function argument `store`
 3	src/mouthkeys/pronunciation.py	ANN001	Missing type annotation for function argument `text`
 1	src/mouthkeys/pronunciation.py	ANN001	Missing type annotation for function argument `threshold`
-1	src/mouthkeys/pronunciation.py	ANN201	Missing return type annotation for public function `acoustic_distance`
-1	src/mouthkeys/pronunciation.py	ANN201	Missing return type annotation for public function `acoustic_features`
 1	src/mouthkeys/pronunciation.py	ANN202	Missing return type annotation for private function `_correct_spans`
-1	src/mouthkeys/pronunciation.py	ANN202	Missing return type annotation for private function `_samples`
 1	src/mouthkeys/pronunciation.py	ANN202	Missing return type annotation for private function `_span_distance`
 1	src/mouthkeys/pronunciation.py	ANN202	Missing return type annotation for private function `close`
 1	src/mouthkeys/pronunciation.py	ANN202	Missing return type annotation for private function `read`
@@ -1224,12 +1185,6 @@
 1	src/mouthkeys/provider_tools.py	C901	`list_models` is too complex (18 > 15)
 1	src/mouthkeys/provider_tools.py	PLR0912	Too many branches (19 > 12)
 3	src/mouthkeys/provider_tools.py	TRY004	Prefer `TypeError` exception for invalid type
-1	src/mouthkeys/regional.py	ANN001	Missing type annotation for function argument `config`
-1	src/mouthkeys/regional.py	ANN001	Missing type annotation for function argument `dictation`
-1	src/mouthkeys/regional.py	ANN001	Missing type annotation for function argument `region`
-1	src/mouthkeys/regional.py	ANN001	Missing type annotation for function argument `zone`
-1	src/mouthkeys/regional.py	ANN201	Missing return type annotation for public function `region_offer`
-1	src/mouthkeys/regional.py	PLW2901	`for` loop variable `message` overwritten by assignment target
 1	src/mouthkeys/regional_ui.py	ANN001	Missing type annotation for function argument `dictation`
 1	src/mouthkeys/regional_ui.py	ANN001	Missing type annotation for function argument `keep`
 1	src/mouthkeys/regional_ui.py	ANN001	Missing type annotation for function argument `on_change`
@@ -1364,10 +1319,6 @@
 1	src/mouthkeys/setup_languages.py	ANN201	Missing return type annotation for public function `routes`
 1	src/mouthkeys/setup_languages.py	ANN202	Missing return type annotation for private function `add`
 1	src/mouthkeys/setup_languages.py	PLC0415	`import` should be at the top-level of a file
-1	src/mouthkeys/shortcut_capture.py	ANN001	Missing type annotation for function argument `window`
-1	src/mouthkeys/shortcut_capture.py	ANN201	Missing return type annotation for public function `apply`
-1	src/mouthkeys/shortcut_capture.py	ANN204	Missing return type annotation for special method `__init__`
-1	src/mouthkeys/shortcut_capture.py	PLC0415	`import` should be at the top-level of a file
 1	src/mouthkeys/spoken_send.py	FBT001	Boolean-typed positional argument in function definition
 1	src/mouthkeys/spoken_send.py	FBT002	Boolean default positional argument in function definition
 1	src/mouthkeys/spoken_send.py	RUF100	Unused `noqa` directive (unused: `FBT001`, `FBT002`)
@@ -1552,7 +1503,6 @@
 5	tests/test_delivery.py	PLW0108	Lambda may be unnecessary; consider inlining inner function
 5	tests/test_delivery.py	PT006	Wrong type passed to first argument of `pytest.mark.parametrize`; expected `tuple`
 21	tests/test_desktop.py	PLC0415	`import` should be at the top-level of a file
-2	tests/test_dictionary_transfer.py	PLC0415	`import` should be at the top-level of a file
 1	tests/test_dictionary_transfer.py	PT006	Wrong type passed to first argument of `pytest.mark.parametrize`; expected `tuple`
 1	tests/test_dictionary_transfer.py	PT011	`pytest.raises(ValueError)` is too broad, set the `match` parameter or use a more specific exception
 1	tests/test_dictionary_transfer.py	PTH116	`os.stat()` should be replaced by `Path.stat()`, `Path.owner()`, or `Path.group()`
@@ -1581,18 +1531,15 @@
 2	tests/test_learning.py	PT011	`pytest.raises(ValueError)` is too broad, set the `match` parameter or use a more specific exception
 1	tests/test_local_api.py	PLC0415	`import` should be at the top-level of a file
 1	tests/test_local_api.py	PT006	Wrong type passed to first argument of `pytest.mark.parametrize`; expected `tuple`
-7	tests/test_microphone_capture.py	PLC0415	`import` should be at the top-level of a file
-1	tests/test_microphone_capture.py	PLW0108	Lambda may be unnecessary; consider inlining inner function
+3	tests/test_microphone_capture.py	PLC0415	`import` should be at the top-level of a file
 2	tests/test_microphone_ui.py	RUF059	Unpacked variable `fields` is never used
 2	tests/test_mode_routing.py	PLC0415	`import` should be at the top-level of a file
 1	tests/test_mode_routing.py	PT011	`pytest.raises(ValueError)` is too broad, set the `match` parameter or use a more specific exception
 5	tests/test_native_asr.py	PLC0415	`import` should be at the top-level of a file
-1	tests/test_native_asr.py	PT006	Wrong type passed to first argument of `pytest.mark.parametrize`; expected `tuple`
-1	tests/test_native_asr.py	RUF059	Unpacked variable `calls` is never used
 5	tests/test_native_worker.py	PLC0415	`import` should be at the top-level of a file
-3	tests/test_pipeline.py	PLC0415	`import` should be at the top-level of a file
+1	tests/test_pipeline.py	PLC0415	`import` should be at the top-level of a file
 1	tests/test_pipeline.py	PT006	Wrong type passed to first argument of `pytest.mark.parametrize`; expected `tuple`
-2	tests/test_pipeline.py	PT011	`pytest.raises(ValueError)` is too broad, set the `match` parameter or use a more specific exception
+1	tests/test_pipeline.py	PT011	`pytest.raises(ValueError)` is too broad, set the `match` parameter or use a more specific exception
 1	tests/test_pipeline_options.py	PLC0415	`import` should be at the top-level of a file
 1	tests/test_postprocess.py	PT006	Wrong type passed to first argument of `pytest.mark.parametrize`; expected `tuple`
 2	tests/test_pronunciation.py	PLC0415	`import` should be at the top-level of a file
@@ -1607,7 +1554,7 @@
 1	tests/test_service_learning.py	PLC0415	`import` should be at the top-level of a file
 1	tests/test_service_learning.py	PT006	Wrong type passed to first argument of `pytest.mark.parametrize`; expected `tuple`
 1	tests/test_service_sessions.py	PT011	`pytest.raises(ValueError)` is too broad, set the `match` parameter or use a more specific exception
-7	tests/test_setup.py	PLC0415	`import` should be at the top-level of a file
+6	tests/test_setup.py	PLC0415	`import` should be at the top-level of a file
 1	tests/test_setup.py	PT006	Wrong type passed to first argument of `pytest.mark.parametrize`; expected `tuple`
 4	tests/test_speech_parity.py	PLC0415	`import` should be at the top-level of a file
 1	tests/test_speech_parity.py	PT006	Wrong type passed to first argument of `pytest.mark.parametrize`; expected `tuple`

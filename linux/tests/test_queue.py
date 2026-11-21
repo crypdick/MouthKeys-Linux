@@ -7,7 +7,7 @@ from mouthkeys.config import Config
 from mouthkeys.service import Controller
 from mouthkeys.storage import History
 
-from .test_pipeline import FakeRecorder
+from .pipeline_support import FakeRecorder
 
 
 class OrderedTranscriber:

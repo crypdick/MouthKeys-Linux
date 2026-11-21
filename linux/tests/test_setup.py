@@ -1,11 +1,14 @@
 """Language routes and regional offers stay local and non-delivering."""
 
+import locale
 from dataclasses import replace
+from pathlib import Path
 
 import pytest
 
 from mouthkeys.config import Config
 from mouthkeys.regional import CANADIAN_ZONES, CENTRAL_ZONES, REGIONS, region_offer
+from mouthkeys.regional_ui import RegionalFillerBanner
 from mouthkeys.setup_languages import COHERE, PARAKEET_V3, languages, routes
 
 
@@ -107,8 +110,6 @@ def setup_window():
 def test_regional_banner_is_inline_once_and_syncs_settings_without_other_writes(monkeypatch, keep):
     from PySide6.QtWidgets import QApplication
 
-    from mouthkeys.regional_ui import RegionalFillerBanner
-
     Config(remove_filler_words="on", filler_words="um,EH,eh", audio_source="saved-source").save()
     monkeypatch.setenv("TZ", "America/Toronto")
     window = setup_window()
@@ -132,6 +133,20 @@ def test_regional_banner_is_inline_once_and_syncs_settings_without_other_writes(
     assert not window.isVisible()
     banner.answer(not keep)
     assert Config.load() == saved
+
+
+def test_stale_regional_banner_cannot_overwrite_answer_from_another_surface(monkeypatch):
+    monkeypatch.setenv("TZ", "America/Toronto")
+    Config(remove_filler_words="on", filler_words="um,eh").save()
+    setup = RegionalFillerBanner(setup_window())
+    settings = RegionalFillerBanner(setup_window())
+    assert not setup.isHidden()
+    assert not settings.isHidden()
+    setup.answer(False)
+    settings.answer(True)
+    assert settings.isHidden()
+    assert Config.load().regional_filler_answered == "on"
+    assert Config.load().filler_words == "um,eh"
 
 
 def test_setup_language_route_is_explicit_local_and_invalidates_stale_tryouts(monkeypatch):
@@ -197,3 +212,19 @@ def test_setup_tryout_refreshes_regional_offer_using_only_its_current_result(mon
     assert setup.result.toPlainText() == "Ope, you betcha"
     assert setup.tryout_id is None
     assert not window.isVisible()
+
+
+def test_regional_offer_resolves_localtime_zone_when_tz_is_unset(monkeypatch):
+    monkeypatch.delenv("TZ", raising=False)
+    monkeypatch.setattr(locale, "getlocale", lambda: ("en_US", "UTF-8"))
+    system_link = Path("/usr/share/zoneinfo/America/Detroit")
+    original = Path.resolve
+
+    def resolve(path, *args, **kwargs):
+        return system_link if path == Path("/etc/localtime") else original(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "resolve", resolve)
+    offer = region_offer(Config(remove_filler_words="on"))
+    assert offer is not None
+    assert offer["region"] == "michigan"
+    assert offer["word"] == "eh"

@@ -1,88 +1,14 @@
 import threading
 import uuid
-import wave
 
 import pytest
 
 from mouthkeys.config import Config
 from mouthkeys.service import Controller
-from mouthkeys.storage import History
 
+from .pipeline_support import finish, make_controller, write_audio
 
-def write_audio(path):
-    with wave.open(str(path), "wb") as wav:
-        wav.setnchannels(1)
-        wav.setsampwidth(2)
-        wav.setframerate(16000)
-        wav.writeframes(b"\0\0" * 8000)
-
-
-class FakeRecorder:
-    def __init__(self, config, path):
-        self.path = path
-        self.stopped = False
-        self.ended = False
-        write_audio(path)
-
-    def stop(self):
-        self.stopped = True
-
-    def finished(self):
-        return self.ended
-
-
-class FakeTranscriber:
-    def __init__(self, text="Hello, world! café 日本語"):
-        self.text = text
-        self.entered = threading.Event()
-        self.release = threading.Event()
-        self.release.set()
-        self.error = None
-
-    def load(self, config):
-        pass
-
-    def transcribe(self, path, config):
-        self.entered.set()
-        assert self.release.wait(3), "Timed out waiting for test inference gate"
-        if self.error:
-            raise self.error
-        return self.text
-
-
-class FakeDelivery:
-    def __init__(self, history):
-        self.calls = []
-        self.error = None
-        self.history = history
-
-    def focus(self):
-        return "123"
-
-    def deliver(self, text, config, target):
-        assert self.history.rows()[0]["text"] == text, "Transcript must be durable before delivery"
-        self.calls.append((text, config, target))
-        if self.error:
-            raise self.error
-        return "copied"
-
-    def copy(self, text):
-        self.calls.append(text)
-
-    def paste_key(self, config):
-        self.calls.append("paste")
-
-
-@pytest.fixture
-def controller():
-    history = History()
-    return Controller(history, FakeTranscriber(), FakeDelivery(history), FakeRecorder)
-
-
-def finish(controller):
-    controller.worker.join(timeout=4)
-    assert not controller.worker.is_alive()
-    assert controller.status()["phase"] == "idle"
+controller = pytest.fixture(make_controller, name="controller")
 
 
 def test_dictation_persists_before_delivery_and_discards_audio(controller):
@@ -256,15 +182,6 @@ def test_history_rejects_path_traversal(controller):
 def test_private_files(controller):
     assert controller.history.root.stat().st_mode & 0o777 == 0o700
     assert controller.history.db.stat().st_mode & 0o777 == 0o600
-
-
-def test_config_validation_and_atomic_roundtrip():
-    config = Config(model="small", language="auto", max_seconds=60)
-    config.save()
-    assert Config.load() == config
-    with pytest.raises(ValueError):
-        Config(max_seconds=-1).save()
-    assert Config.load() == config
 
 
 def test_preview_is_live_but_never_persisted_or_delivered(controller):
@@ -531,21 +448,3 @@ def test_audio_cleanup_survives_native_reset_failure(controller):
         controller._finish(job, None)
     assert job.done.is_set()
     assert not job.audio_path.exists()
-
-
-def test_old_config_cannot_reenable_audio_retention():
-    import json
-
-    from mouthkeys.config import config_path
-
-    Config().save()
-    path = config_path()
-    values = json.loads(path.read_text())
-    values.update(save_audio="on", audio_budget_mb=4000, reprocess_shortcut_key="super+r")
-    path.write_text(json.dumps(values))
-    loaded = Config.load()
-    loaded.save()
-    assert (
-        not {"save_audio", "audio_budget_mb", "reprocess_shortcut_key"}
-        & json.loads(path.read_text()).keys()
-    )

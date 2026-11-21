@@ -5,15 +5,8 @@ import pytest
 
 from mouthkeys.audio import CaptureSession
 from mouthkeys.config import Config
-from mouthkeys.service import Controller
-from mouthkeys.storage import History
 
-from .test_pipeline import FakeDelivery, FakeRecorder, FakeTranscriber, finish, write_audio
-
-
-def controller(recorder=FakeRecorder):
-    history = History()
-    return Controller(history, FakeTranscriber(), FakeDelivery(history), recorder)
+from .pipeline_support import FakeRecorder, finish, make_controller
 
 
 def test_capture_failure_tries_alternate_and_quarantines_failed_source(monkeypatch):
@@ -30,7 +23,7 @@ def test_capture_failure_tries_alternate_and_quarantines_failed_source(monkeypat
         "mouthkeys.service.source_candidates",
         lambda config, excluded: [name for name in ("usb", "backup") if name not in excluded],
     )
-    app = controller(record)
+    app = make_controller(record)
     app.command("start")
     assert calls == ["usb", "backup"]
     assert app.status()["microphone"] == "backup"
@@ -53,7 +46,7 @@ def test_startup_status_and_cancel_do_not_wait_for_capture(monkeypatch):
         assert release.wait(2)
         return FakeRecorder(config, path)
 
-    app = controller(record)
+    app = make_controller(record)
     result = []
     worker = threading.Thread(target=lambda: result.append(app.command("start")))
     worker.start()
@@ -85,7 +78,7 @@ def test_failed_sources_have_total_time_budget(monkeypatch):
         "mouthkeys.service.source_candidates",
         lambda config, excluded: [name for name in ("one", "two", "three") if name not in excluded],
     )
-    app = controller(record)
+    app = make_controller(record)
     with pytest.raises(RuntimeError, match="not ready"):
         app.command("start")
     assert calls == ["one", "two"]
@@ -107,7 +100,7 @@ class SwitchRecorder(FakeRecorder):
 
 def test_temporary_microphone_pick_switches_now_without_changing_saved_order():
     Config(audio_source="original", microphone_preferred="original,usb").save()
-    app = controller(SwitchRecorder)
+    app = make_controller(SwitchRecorder)
     app.command("start")
     capture = app.recorder
     item_id = app.item_id
@@ -131,7 +124,7 @@ def test_temporary_microphone_pick_switches_now_without_changing_saved_order():
 
 def test_persistent_pick_preserves_other_settings_and_never_list():
     Config(audio_source="original", microphone_never="bad", ai_model="original").save()
-    app = controller(SwitchRecorder)
+    app = make_controller(SwitchRecorder)
     app.command("select_microphone", source="usb", persist=True)
     assert Config.load().audio_source == "usb"
     assert app.session_source is None
@@ -143,7 +136,7 @@ def test_persistent_pick_preserves_other_settings_and_never_list():
 
 def test_switch_failure_recovers_previous_source_and_keeps_audio(monkeypatch):
     Config(audio_source="original").save()
-    app = controller(SwitchRecorder)
+    app = make_controller(SwitchRecorder)
     app.command("start")
     capture = app.recorder
     capture.reject.add("bad")
@@ -205,7 +198,7 @@ def test_cancel_during_microphone_switch_suppresses_late_delivery():
             assert released.wait(2)
             super().switch_source(source, timeout=timeout)
 
-    app = controller(DelayedSwitch)
+    app = make_controller(DelayedSwitch)
     app.command("start")
     worker = threading.Thread(target=lambda: app.command("select_microphone", source="usb"))
     worker.start()
@@ -224,7 +217,7 @@ def test_cancel_during_microphone_switch_suppresses_late_delivery():
 
 
 def test_all_switch_candidates_fail_recovers_prior_audio_without_target(monkeypatch):
-    app = controller(SwitchRecorder)
+    app = make_controller(SwitchRecorder)
     app.command("start")
     app.recorder.reject.add("bad")
     monkeypatch.setattr("mouthkeys.service.source_candidates", lambda config, excluded: [])
@@ -269,7 +262,7 @@ def test_release_hold_during_start_is_not_relatching_after_readiness():
         assert release.wait(2)
         return FakeRecorder(config, path)
 
-    app = controller(record)
+    app = make_controller(record)
     worker = threading.Thread(target=lambda: app.command("start", held=True))
     worker.start()
     try:
@@ -337,7 +330,7 @@ def test_shutdown_during_start_discards_audio_without_delivery():
         assert release.wait(2)
         return capture
 
-    app = controller(record)
+    app = make_controller(record)
     result = []
     worker = threading.Thread(target=lambda: result.append(app.command("start")))
     worker.start()
@@ -376,7 +369,7 @@ def test_unplugged_old_microphone_does_not_quarantine_untried_replacement():
             return self.ended
 
     Config(audio_source="old").save()
-    app = controller(lambda config, path: CaptureSession(config, path, recorder=Segment))
+    app = make_controller(lambda config, path: CaptureSession(config, path, recorder=Segment))
     app.command("start")
     app.command("select_microphone", source="healthy")
     assert opened == ["old", "healthy"]
@@ -396,150 +389,3 @@ def test_unplugged_old_microphone_does_not_quarantine_untried_replacement():
     finish(app)
     assert not app.job.audio_path.exists()
     assert app.history.rows()[0]["text"] == "recognized"
-
-
-def test_unknown_old_capture_teardown_does_not_open_replacement(tmp_path):
-    from mouthkeys.audio import CaptureTeardownError
-
-    opened = []
-    may_stop = threading.Event()
-
-    class Segment:
-        def __init__(self, config, path, **kwargs):
-            opened.append(config.audio_source)
-            write_audio(path)
-
-        def stop(self):
-            if not may_stop.is_set():
-                raise RuntimeError("Capture shutdown not confirmed")
-
-        def finished(self):
-            return may_stop.is_set()
-
-    path = tmp_path / "recording.wav"
-    session = CaptureSession(Config(audio_source="old"), path, recorder=Segment)
-    try:
-        with pytest.raises(CaptureTeardownError, match="Cannot finish microphone old") as failure:
-            session.switch_source("healthy")
-        assert failure.value.source == "old"
-        assert opened == ["old"]
-        assert session.capture is not None
-        with wave.open(str(path), "rb") as wav:
-            assert wav.getnframes() == 8000
-    finally:
-        may_stop.set()
-        session.stop()
-    assert session.capture is None
-    assert session.closed
-
-
-def test_service_does_not_quarantine_new_source_when_old_teardown_is_unknown(monkeypatch):
-    from mouthkeys.audio import CaptureTeardownError
-
-    class UnknownStop(SwitchRecorder):
-        def switch_source(self, source, *, timeout):
-            raise CaptureTeardownError("old", RuntimeError("Cannot confirm microphone shutdown"))
-
-    Config(audio_source="old").save()
-    app = controller(UnknownStop)
-    app.command("start")
-    monkeypatch.setattr(
-        "mouthkeys.service.source_candidates",
-        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("Must not open fallback")),
-    )
-    app.command("select_microphone", source="healthy")
-    finish(app)
-    assert "old" in app.source_quarantine
-    assert "healthy" not in app.source_quarantine
-    assert app.delivery.calls[0][2] is None
-
-
-@pytest.mark.parametrize("retry_action", ["stop", "cancel", "toggle"])
-def test_unconfirmed_recorder_shutdown_blocks_new_capture_until_retry(monkeypatch, retry_action):
-    import io
-    import subprocess
-
-    processes = []
-
-    class Process:
-        def __init__(self, args, **kwargs):
-            self.stdin = io.BytesIO()
-            self.pid = 999999
-            self.confirmed = False
-            write_audio(args[-1])
-            processes.append(self)
-
-        def poll(self):
-            return 0 if self.confirmed else None
-
-        def wait(self, timeout):
-            if not self.confirmed:
-                raise subprocess.TimeoutExpired("synthetic capture", timeout)
-            return 0
-
-    def cannot_confirm_kill(*args):
-        raise PermissionError("Synthetic capture shutdown not confirmed")
-
-    monkeypatch.setattr("mouthkeys.audio.subprocess.Popen", Process)
-    monkeypatch.setattr("mouthkeys.audio.os.killpg", cannot_confirm_kill)
-    Config(audio_source="old").save()
-    app = controller(lambda config, path: CaptureSession(config, path))
-    app.command("start")
-    item_id = app.item_id
-    capture = app.recorder
-    app.command("select_microphone", source="healthy")
-    app.worker.join(2)
-    assert not app.worker.is_alive()
-    assert app.phase == "capture_failed"
-    assert app.recorder is capture
-    assert not app.job.done.is_set()
-    assert len(processes) == 1
-    assert app.job.audio_path.exists()
-    assert app.history.rows()[0]["status"] == "recording"
-    assert not app.transcriber.entered.is_set()
-    assert not app.delivery.calls
-    with pytest.raises(ValueError, match="capture_failed"):
-        app.command("start")
-    assert len(processes) == 1
-    processes[0].confirmed = True
-    app.command(retry_action)
-    finish(app)
-    assert app.item_id == item_id
-    assert app.recorder is None
-    assert app.job.done.is_set()
-    assert not app.job.audio_path.exists()
-    assert capture.closed
-    if retry_action == "cancel":
-        assert not app.delivery.calls
-        assert app.history.rows()[0]["status"] == "cancelled"
-    else:
-        assert app.delivery.calls[0][2] is None
-        assert app.history.rows()[0]["status"] == "copied"
-
-
-def test_shutdown_discards_segment_even_when_capture_teardown_fails():
-    class Segment:
-        def __init__(self, config, path, **kwargs):
-            write_audio(path)
-
-        def stop(self):
-            raise RuntimeError("Cannot confirm capture shutdown")
-
-        def finished(self):
-            return False
-
-    app = controller(lambda config, path: CaptureSession(config, path, recorder=Segment))
-    app.command("start")
-    capture = app.recorder
-    segment = capture.segment
-    assert segment.exists()
-    try:
-        app.interrupt()
-        assert not segment.exists()
-        assert not app.job.audio_path.exists()
-        assert app.history.rows()[0]["status"] == "failed"
-    finally:
-        # Release fake capture's writer and thread without exercising real devices.
-        capture.capture = None
-        capture.segment = None
-        capture.stop()

@@ -11,8 +11,8 @@ from mouthkeys.pronunciation import PronunciationStore
 from mouthkeys.service import Controller
 from mouthkeys.storage import History
 
+from .pipeline_support import FakeDelivery, FakeRecorder, FakeTranscriber, finish
 from .test_learning import snapshot
-from .test_pipeline import FakeDelivery, FakeRecorder, FakeTranscriber, finish
 
 
 def app(text="wurld", recorder=FakeRecorder):

@@ -8,7 +8,7 @@ from mouthkeys.config import Config, state_dir
 from mouthkeys.service import Controller
 from mouthkeys.storage import History
 
-from .test_pipeline import FakeDelivery, FakeRecorder, FakeTranscriber, finish
+from .pipeline_support import FakeDelivery, FakeRecorder, FakeTranscriber, finish
 
 
 @pytest.mark.parametrize(

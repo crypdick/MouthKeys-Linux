@@ -299,3 +299,18 @@ def test_wall_deadline_bounds_scanning_even_before_any_dtw(monkeypatch):
 def test_alignment_rejects_invalid_timestamps(timestamp):
     with pytest.raises(ValueError, match="Invalid aligned word timing"):
         align_words("one", [{"word": "one", "start": 0, "end": timestamp}])
+
+
+def test_alignment_rejects_a_nonlist_word_payload():
+    with pytest.raises(ValueError, match="Invalid word alignment"):
+        align_words("one", {"word": "one", "start": 0, "end": 1})
+
+
+def test_alignment_rejects_negative_recording_duration():
+    with pytest.raises(ValueError, match="Invalid alignment duration"):
+        align_words("", [], duration=-1)
+
+
+def test_alignment_rejects_entries_without_a_word_string():
+    with pytest.raises(ValueError, match="Invalid aligned word"):
+        align_words("one", [{"start": 0, "end": 1}])

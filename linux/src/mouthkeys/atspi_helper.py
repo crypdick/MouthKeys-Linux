@@ -8,6 +8,7 @@ import json
 import re
 import sys
 import time
+from collections.abc import Sequence
 
 ACCESSIBLE = "org.a11y.atspi.Accessible"
 TEXT = "org.a11y.atspi.Text"
@@ -86,7 +87,7 @@ class Bus:
         ]
 
 
-def has_state(words, state):
+def has_state(words: Sequence[int], state: int) -> bool:
     return len(words) > state // 32 and bool(words[state // 32] & (1 << (state % 32)))
 
 
@@ -120,7 +121,8 @@ def snapshot(bus, ref, *, require_focus=True, window=None):
         return None
     try:
         foreground = active_window(bus, ref)
-    except Exception:
+    # A stale toolkit object is unavailable; never log field or bus payloads.
+    except Exception:  # allow: exception-handling  # noqa: BLE001
         foreground = None
     count = bus.prop(ref, TEXT, "CharacterCount")
     caret = bus.prop(ref, TEXT, "CaretOffset")
@@ -148,7 +150,8 @@ def snapshot(bus, ref, *, require_focus=True, window=None):
     app_name = ""
     try:
         app_name = bus.prop((ref[0], ROOT[1]), ACCESSIBLE, "Name")
-    except Exception:
+    # A stale toolkit object is unavailable; never log field or bus payloads.
+    except Exception:  # allow: exception-handling  # noqa: BLE001, S110
         pass
     # A snapshot spans several D-Bus calls. Reject edits/focus changes during it,
     # rather than returning an early caret/focus bit alongside later text.
@@ -168,7 +171,8 @@ def snapshot(bus, ref, *, require_focus=True, window=None):
     try:
         if active_window(bus, ref) != foreground:
             return None
-    except Exception:
+    # A stale toolkit object is unavailable; never log field or bus payloads.
+    except Exception:  # allow: exception-handling  # noqa: BLE001
         if foreground is not None:
             return None
     return {
@@ -213,7 +217,8 @@ def find_focused(bus):
                 return value
             children = bus.call(ref, ACCESSIBLE, "GetChildren")[0]
             pending.extend(reversed([child for child in children if valid_ref(child)]))
-        except Exception:
+        # A stale toolkit object is unavailable; never log field or bus payloads.
+        except Exception:  # allow: exception-handling  # noqa: BLE001, S112
             continue
     return None
 
@@ -286,7 +291,8 @@ def operate(bus, request):
             return None
         try:
             bus.call(ref, TEXT, "SetCaretOffset", "(i)", (before["selection_start"] + len(text),))
-        except Exception:
+        # A stale toolkit object is unavailable; never log field or bus payloads.
+        except Exception:  # allow: exception-handling  # noqa: BLE001, S110
             pass  # An accepted insertion must not be retried if caret placement is unsupported.
         result = snapshot(bus, ref, window=before)
         return result if result and result["text"] == expected else None
@@ -299,9 +305,10 @@ def main():
         if len(line) > 1024 * 1024:
             raise ValueError("Accessibility request too large")
         value = operate(Bus(), json.loads(line))
-    except Exception:
+    # A stale toolkit object is unavailable; never log field or bus payloads.
+    except Exception:  # allow: exception-handling  # noqa: BLE001
         value = None
-    print(json.dumps(value, ensure_ascii=False))
+    print(json.dumps(value, ensure_ascii=False))  # noqa: T201
 
 
 if __name__ == "__main__":

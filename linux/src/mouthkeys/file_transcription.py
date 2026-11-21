@@ -28,8 +28,10 @@ def speaker_paths():
 
 def _fetch(url, destination, max_bytes=512 * 1024 * 1024):
     """Download into a staging directory with a bounded size and private permissions."""
+    if not url.startswith("https://"):
+        raise ValueError("Speaker model downloads require HTTPS")
     with tempfile.NamedTemporaryFile(dir=destination.parent) as stream:
-        with urllib.request.urlopen(url, timeout=30) as response:
+        with urllib.request.urlopen(url, timeout=30) as response:  # noqa: S310
             total = 0
             while chunk := response.read(1024 * 1024):
                 total += len(chunk)

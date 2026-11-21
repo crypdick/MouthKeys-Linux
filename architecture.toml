@@ -1,0 +1,107 @@
+version = 2
+source_roots = [
+  {path = "linux/src/mouthkeys", module = "mouthkeys"},
+  {path = "linux/tests", module = "tests"},
+  {path = "scripts/prek_hooks", module = "scripts.prek_hooks"},
+]
+standalone_modules = [
+  "scripts.prek_hooks.check_exception_handling",
+  "scripts.prek_hooks.check_file_length",
+  "scripts.prek_hooks.check_private_test_imports",
+  "scripts.prek_hooks.check_timeless_comments",
+]
+check_package_cycles = true
+
+[roles.primitives]
+allowed_dependencies = []
+[roles.desktop]
+allowed_dependencies = ["primitives"]
+[roles.app]
+allowed_dependencies = ["primitives", "desktop"]
+[roles.tools]
+allowed_dependencies = []
+[roles.tests]
+allowed_dependencies = ["primitives", "desktop", "app", "tools"]
+
+# The application is one flat package; many use cases currently share this owner.
+# Promote a cohesive unit only when it has a real interface and dependency contract.
+[[packages]]
+name = "app"
+root = "mouthkeys"
+role = "app"
+public_modules = [
+  "mouthkeys",
+  "mouthkeys.ai_providers", "mouthkeys.ai_stream", "mouthkeys.assistance",
+  "mouthkeys.assistant_history", "mouthkeys.assistant_ui", "mouthkeys.audio",
+  "mouthkeys.benchmark", "mouthkeys.cli", "mouthkeys.config", "mouthkeys.credentials",
+  "mouthkeys.data_lock", "mouthkeys.delivery", "mouthkeys.dictionary", "mouthkeys.dictionary_transfer",
+  "mouthkeys.engines", "mouthkeys.file_history", "mouthkeys.file_transcription",
+  "mouthkeys.forced_alignment", "mouthkeys.formatting", "mouthkeys.gui", "mouthkeys.hotkeys",
+  "mouthkeys.lark", "mouthkeys.learning", "mouthkeys.local_api", "mouthkeys.microphone_ui",
+  "mouthkeys.model_progress", "mouthkeys.models_ui", "mouthkeys.native_asr", "mouthkeys.native_worker", "mouthkeys.onboarding",
+  "mouthkeys.operations", "mouthkeys.overlay", "mouthkeys.overlay_assistant",
+  "mouthkeys.portal_shortcuts", "mouthkeys.postprocess", "mouthkeys.profiles",
+  "mouthkeys.pronunciation", "mouthkeys.provider_tools", "mouthkeys.regional", "mouthkeys.regional_ui", "mouthkeys.routing",
+  "mouthkeys.service", "mouthkeys.setup_languages", "mouthkeys.shortcut_capture", "mouthkeys.storage",
+  "mouthkeys.transcribe", "mouthkeys.tray", "mouthkeys.upstream_backup", "mouthkeys.vocabulary",
+]
+
+[[packages]]
+name = "processes"
+root = "mouthkeys.processes"
+role = "primitives"
+public_modules = ["mouthkeys.processes"]
+
+[[packages]]
+name = "word_alignment"
+root = "mouthkeys.word_alignment"
+role = "primitives"
+public_modules = ["mouthkeys.word_alignment"]
+
+[[packages]]
+name = "waveform"
+root = "mouthkeys.trace"
+role = "primitives"
+public_modules = ["mouthkeys.trace"]
+
+[[packages]]
+name = "capture"
+root = "mouthkeys.capture"
+role = "desktop"
+public_modules = ["mouthkeys.capture"]
+
+[[packages]]
+name = "desktop"
+root = "mouthkeys.desktop"
+role = "desktop"
+public_modules = ["mouthkeys.desktop"]
+
+[[packages]]
+name = "accessibility"
+root = "mouthkeys.accessibility"
+role = "desktop"
+public_modules = ["mouthkeys.accessibility"]
+
+[[packages]]
+name = "atspi_helper"
+root = "mouthkeys.atspi_helper"
+role = "desktop"
+public_modules = ["mouthkeys.atspi_helper"]
+
+[[packages]]
+name = "clipboard"
+root = "mouthkeys.clipboard"
+role = "desktop"
+public_modules = ["mouthkeys.clipboard"]
+
+[[packages]]
+name = "tests"
+root = "tests"
+role = "tests"
+public_modules = []
+
+[[packages]]
+name = "repository_tools"
+root = "scripts.prek_hooks"
+role = "tools"
+public_modules = ["scripts.prek_hooks.architecture.api"]

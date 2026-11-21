@@ -3,5 +3,5 @@
 import sys
 
 
-def python_command(module="mouthkeys", *args):
+def python_command(module: str = "mouthkeys", *args: str) -> list[str]:
     return [sys.executable, "-P", "-m", module, *args]

@@ -12,7 +12,7 @@ import sys
 
 
 def supervise(args):
-    process = subprocess.Popen(args, stdin=subprocess.DEVNULL)
+    process = subprocess.Popen(args, stdin=subprocess.DEVNULL)  # noqa: S603
     try:
         while process.poll() is None:
             readable, _, _ = select.select([sys.stdin.buffer], [], [], 0.1)

@@ -39,7 +39,7 @@ def _run(config, action, *, secret=None):
         args += ["--label=MouthKeys AI API key"]
     args += _attributes(config)
     try:
-        result = subprocess.run(
+        result = subprocess.run(  # noqa: S603
             args,
             input=secret.encode() if secret is not None else None,
             stdout=subprocess.PIPE if action == "lookup" else subprocess.DEVNULL,

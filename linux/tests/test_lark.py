@@ -45,7 +45,7 @@ def test_heartbeat_revalidates_open_device_before_any_status_write(monkeypatch):
     monkeypatch.setattr(lark.os, "open", lambda *args: 42)
     monkeypatch.setattr(lark.os, "close", closed.append)
 
-    def ioctl(fd, request, data, mutable):
+    def ioctl(fd, request, data, _mutable):
         number = request & 255
         calls.append((number, bytes(data)))
         if number == 3:
@@ -66,7 +66,7 @@ def test_heartbeat_revalidates_open_device_before_any_status_write(monkeypatch):
     assert closed == [42]
     calls.clear()
 
-    def wrong_device(fd, request, data, mutable):
+    def wrong_device(fd, request, data, _mutable):
         calls.append(request & 255)
         data[:] = struct.pack("IHH", 3, 1, 2)
 

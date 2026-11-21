@@ -111,7 +111,7 @@ DEFAULT_PUNCTUATION_RULES = [
 ]
 
 
-def phrase_pattern(phrase):
+def phrase_pattern(phrase: str) -> str:
     return r"(?<!\w)" + r"\s+".join(re.escape(word) for word in phrase.split()) + r"(?!\w)"
 
 

@@ -6,7 +6,7 @@ import sys
 from dataclasses import asdict, replace
 from pathlib import Path
 
-from . import __version__
+from .cli_options import build_parser
 from .config import RANGES, Config
 
 
@@ -73,128 +73,29 @@ def read_app_map(path):
     return mapping
 
 
-def main(argv=None):
-    parser = argparse.ArgumentParser(description="MouthKeys — local Linux dictation")
-    parser.add_argument("--version", action="version", version=f"MouthKeys {__version__}")
-    commands = parser.add_subparsers(dest="command", required=True)
-    microphone = commands.add_parser(
-        "microphone", help="Select microphone, including during capture"
-    )
-    microphone.add_argument("source", help="PulseAudio source name, or default")
-    microphone.add_argument(
-        "--persist", action="store_true", help="Also save source for future sessions"
-    )
-    credential = commands.add_parser("credential", help="Store/delete an AI key in desktop keyring")
-    credential.add_argument("action", choices=["set", "delete"])
-    credential.add_argument("--profile", help="Use endpoint from this saved profile UUID")
-    credential.add_argument(
-        "--stdin", action="store_true", help="Read key from stdin instead of hidden prompt"
-    )
-    for action in (
-        "gui",
-        "tray",
-        "hotkeys",
-        "overlay",
-        "daemon",
-        "start",
-        "stop",
-        "toggle",
-        "cancel",
-        "status",
-        "history",
-        "stats",
-        "audio-usage",
-        "warmup",
-        "doctor",
-        "shutdown",
-    ):
-        command = commands.add_parser(action)
-        if action in ("start", "toggle"):
-            command.add_argument("--profile", help="Prompt profile UUID, default, or off")
-            command.add_argument(
-                "--mode",
-                choices=["dictation", "command", "edit", "training", "pronunciation"],
-                default="dictation",
-            )
-            command.add_argument("--label", default="")
-            command.add_argument("--selected-text", default="")
-        if action == "history":
-            command.add_argument("--query", default="")
-            command.add_argument("--limit", type=int, default=100)
-            command.add_argument("--offset", type=int, default=0)
-    for action in ("copy", "paste", "delete"):
-        commands.add_parser(action).add_argument(
-            "--id", required=action == "delete", help="History entry UUID (required for delete)"
-        )
-    accept = commands.add_parser(
-        "accept-edit", help="Replace the unchanged captured Edit selection"
-    )
-    accept.add_argument("--id", required=True, help="Edit recording UUID shown in status")
-    accept.add_argument(
-        "--return-to-target",
-        action="store_true",
-        help="Explicitly return focus to the captured field before replacement",
-    )
-    download_parser = commands.add_parser("download", help="Explicitly download a local model")
-    download_parser.add_argument("model", nargs="?")
-    transcribe_parser = commands.add_parser("transcribe", help="Transcribe a file to stdout only")
-    transcribe_parser.add_argument("file", type=Path)
-    transcribe_parser.add_argument("--json", action="store_true")
-    transcribe_parser.add_argument("--output", type=Path)
-    transcribe_parser.add_argument("--save-history", action="store_true")
-    transcribe_parser.add_argument(
-        "--progress", action="store_true", help="Write structured stage progress to stderr"
-    )
-    benchmark = commands.add_parser(
-        "benchmark", help="Measure an already-installed model offline without desktop delivery"
-    )
-    benchmark.add_argument("file", type=Path, help="Existing audio fixture (at most ten minutes)")
-    benchmark.add_argument("--reference-file", type=Path, help="Exact UTF-8 reference for WER/CER")
-    benchmark.add_argument("--timeout", type=float, default=600)
-    benchmark.add_argument("--model", help="Override model without changing saved configuration")
-    benchmark.add_argument("--engine", choices=["whisper", "onnx", "transformers", "nemo"])
-    benchmark.add_argument("--device", choices=["cpu", "cuda", "auto"])
-    benchmark.add_argument("--compute-type")
-    benchmark.add_argument("--revision", dest="model_revision")
-    files = commands.add_parser("file-history")
-    files.add_argument("--query", default="")
-    files = commands.add_parser("delete-file-history")
-    files.add_argument("--id")
-    files.add_argument("--yes", action="store_true", required=True)
-    chats = commands.add_parser("assistant-history", help="Manage saved Command/Edit chats")
-    chats.add_argument("--mode", choices=["command", "edit"])
-    chats.add_argument("--id")
-    chats.add_argument("--new", action="store_true")
-    chats.add_argument("--select", action="store_true")
-    chats.add_argument("--rename")
-    chats.add_argument("--delete", action="store_true")
-    chats.add_argument("--yes", action="store_true")
-    commands.add_parser("download-speakers", help="Explicitly download diarization models")
-    commands.add_parser("models", help="List locally known models and cache status")
-    commands.add_parser("delete-model").add_argument("model")
-    for action in ("backup-export", "backup-import", "backup-preview"):
-        command = commands.add_parser(action)
-        command.add_argument("path", type=Path)
-        if action == "backup-import":
-            command.add_argument("--yes", action="store_true", required=True)
-        if action in ("backup-import", "backup-preview"):
-            command.add_argument(
-                "--app-map", type=Path, help="JSON object mapping macOS app IDs to Linux identities"
-            )
-    commands.add_parser("delete-audio").add_argument("--yes", action="store_true", required=True)
-    for action in ("dictionary-import", "dictionary-export"):
-        command = commands.add_parser(action)
-        command.add_argument("path", type=Path)
-        if action == "dictionary-import":
-            command.add_argument("--yes", action="store_true", required=True)
-            command.add_argument("--mode", choices=["merge", "replace"], default="replace")
-        else:
-            command.add_argument("--format", choices=["native", "upstream"], default="native")
-    config_parser = commands.add_parser("config", help="Show config, or set one value")
-    config_parser.add_argument("key", nargs="?", choices=list(asdict(Config())))
-    config_parser.add_argument("value", nargs="?")
-    commands.add_parser("clear-history").add_argument("--yes", action="store_true", required=True)
-    commands.add_parser("install-desktop").add_argument("--autostart", action="store_true")
+def _configure(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
+    config = asdict(Config.load())
+    if args.key:
+        if args.value is None:
+            parser.error("config KEY requires VALUE")
+        config[args.key] = int(args.value) if args.key in RANGES else args.value
+        updated = Config.from_mapping(config)
+        updated.save()
+        config = asdict(updated)
+        if args.key in ("delivery", "paste_backend", "insertion_mode"):
+            from .delivery import automatic_delivery_warning
+
+            if warning := automatic_delivery_warning(updated):
+                print(f"Warning: {warning}", file=sys.stderr)
+        if args.key in ("launch_at_startup", "show_window_at_login", "tray"):
+            apply_startup(Config.load())
+    elif args.value:
+        parser.error("config requires KEY VALUE")
+    print(json.dumps(config, indent=2))
+
+
+def main(argv: list[str] | None = None) -> int | None:
+    parser = build_parser()
     args = parser.parse_args(argv)
     try:
         if args.command == "credential":
@@ -242,24 +143,7 @@ def main(argv=None):
             result = run_benchmark(config, args.file, reference=reference, timeout=args.timeout)
             print(json.dumps(result, ensure_ascii=False, indent=2))
         elif args.command == "config":
-            config = asdict(Config.load())
-            if args.key:
-                if args.value is None:
-                    parser.error("config KEY requires VALUE")
-                config[args.key] = int(args.value) if args.key in RANGES else args.value
-                updated = Config(**config)
-                updated.save()
-                config = asdict(updated)
-                if args.key in ("delivery", "paste_backend", "insertion_mode"):
-                    from .delivery import automatic_delivery_warning
-
-                    if warning := automatic_delivery_warning(updated):
-                        print(f"Warning: {warning}", file=sys.stderr)
-                if args.key in ("launch_at_startup", "show_window_at_login", "tray"):
-                    apply_startup(Config.load())
-            elif args.value:
-                parser.error("config requires KEY VALUE")
-            print(json.dumps(config, indent=2))
+            _configure(args, parser)
         elif args.command == "download":
             from .transcribe import download
 
@@ -436,12 +320,14 @@ def main(argv=None):
 
                     try:
                         ensure_overlay()
-                    except Exception as exc:
+                    # The CLI reports the failure on stderr.
+                    except Exception as exc:  # allow: exception-handling  # noqa: BLE001
                         print(f"MouthKeys panel: {exc}", file=sys.stderr)
             print(json.dumps(result, indent=2))
         return 0
     except KeyboardInterrupt:
         return 130
-    except Exception as exc:
+    # The CLI reports the failure on stderr.
+    except Exception as exc:  # allow: exception-handling  # noqa: BLE001
         print(f"MouthKeys: {exc}", file=sys.stderr)
         return 1

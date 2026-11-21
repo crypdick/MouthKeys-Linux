@@ -1,12 +1,13 @@
 import json
 
 import pytest
-from test_assistant_history import receipt, turn
-from test_assistant_sessions import controller, proposal
-from test_pipeline import finish
 
 from mouthkeys.assistant_history import AssistantHistory, pending_executions
 from mouthkeys.config import Config, state_dir
+
+from .test_assistant_history import receipt, turn
+from .test_assistant_sessions import controller, proposal
+from .test_pipeline import finish
 
 
 @pytest.mark.parametrize("fail", [False, True])
@@ -68,4 +69,5 @@ def test_invalid_execution_context_is_rejected_before_recording():
             assistant_history=[],
             assistant_executions=[{"message_count": 100, "result": receipt()}],
         )
-    assert app.job is None and app.recorder is None
+    assert app.job is None
+    assert app.recorder is None

@@ -77,7 +77,8 @@ class Tray(QSystemTrayIcon):
         config = Config.load()
         try:
             names = ["default", *source_names()]
-        except Exception:
+        # The microphone menu remains usable when enumeration fails.
+        except Exception:  # allow: exception-handling  # noqa: BLE001
             names = ["default"]
         excluded = {s.strip() for s in config.microphone_never.split(",")}
         for name in names:
@@ -87,7 +88,7 @@ class Tray(QSystemTrayIcon):
             action.setCheckable(True)
             action.setChecked(name == config.audio_source)
             action.triggered.connect(
-                lambda checked=False, name=name: replace(Config.load(), audio_source=name).save()
+                lambda _checked=False, name=name: replace(Config.load(), audio_source=name).save()
             )
 
     def send(self, action, callback=None):

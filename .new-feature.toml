@@ -1,0 +1,3 @@
+target_branch = "main"
+setup = ["uv sync --project linux --python 3.13 --extra gui --locked"]
+pre_merge = ["./linux/check.sh"]

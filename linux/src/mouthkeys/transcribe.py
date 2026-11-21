@@ -239,10 +239,11 @@ class Transcriber:
         self.covered = end
         return " ".join([*self.committed, self.pending]).strip()
 
-    def transcribe(self, path: Path, config: Config):
+    def transcribe(self, path: str | Path, config: Config):
         """Finalize a live session, or decode a standalone file from its beginning."""
         from .audio import read_audio_from
 
+        path = Path(path)
         key = self._stream_key(path, config)
         self.words = []
         self.last_alignment = None

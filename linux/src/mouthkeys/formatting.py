@@ -7,87 +7,17 @@ No desktop effects here.
 
 import re
 import unicodedata
-from dataclasses import dataclass
 
 from .dictionary import Dictionary, phrase_pattern
+from .format_whitespace import NEWLINES, horizontal, rstrip_horizontal
+from .literal_formatting import apply_literal_formatting as apply_literal_formatting
+from .literal_formatting import literal_autocomplete_spacing as literal_autocomplete_spacing
+from .spoken_send import SendPlan as SendPlan
+from .spoken_send import parse_send as parse_send
 
 
 def enabled(config, key):
     return getattr(config, key, "off") == "on"
-
-
-@dataclass(frozen=True)
-class SendPlan:
-    text: str
-    should_send: bool = False
-
-
-_SENTENCE_WORDS = set(
-    "not never cannot dont doesnt didnt wont cant shouldnt wouldnt couldnt isnt arent wasnt "
-    "werent havent hasnt mustnt i you we they he she i'll you'll we'll they'll he'll she'll "
-    "i'd you'd we'd they'd will would can could should shall may might must do does did gonna "
-    "wanna gotta to".split()
-)
-_PASSED_WORDS = set(
-    (
-        "just already also really actually probably definitely still ever even only then now please"
-    ).split()
-)
-_OBJECT_MARKERS = set("thank thanks to for with at from about by of without".split())
-
-
-def _sentence_owns_phrase(prefix):
-    end = len(prefix)
-    for _ in range(3):
-        match = re.search(r"([\w'’]+)\s*$", prefix[:end])
-        if not match:
-            return False
-        word = match[1].casefold().replace("’", "'")
-        if word in {"i", "you", "we", "they", "he", "she"}:
-            preceding = re.search(r"([\w'’]+)\s*$", prefix[: match.start()])
-            return not (preceding and preceding[1].casefold() in _OBJECT_MARKERS)
-        if word in _SENTENCE_WORDS or word.endswith("n't"):
-            return True
-        if word not in _PASSED_WORDS:
-            return False
-        end = match.start()
-    return False
-
-
-def parse_send(text, phrase="send it", active=False, literal_prefix="literal"):
-    if not active or not phrase.strip():
-        return SendPlan(text)
-    parts = re.findall(r"\w+", phrase)
-    if not parts:
-        return SendPlan(text)
-    pattern = r"[\s,.:;!?]+".join(re.escape(word) for word in parts)
-    suffix = r"[\s,.:;!?]*$"
-    literal = re.search(
-        phrase_pattern(literal_prefix) + r"[\s,:;]+(" + pattern + ")" + suffix,
-        text,
-        re.IGNORECASE,
-    )
-    if literal:
-        return SendPlan(text[: literal.start()] + literal[1])
-    tail = re.search(r"[\W_]*$", text)
-    if tail and any(q in tail[0] for q in ("?", "？")):
-        return SendPlan(text)
-    # A repeated phrase can be a command even if its first occurrence was a sentence.
-    matches = list(re.finditer(r"(?<!\w)" + pattern + r"(?!\w)", text, re.IGNORECASE))
-    for match in matches:
-        rest = text[match.end() :]
-        if not re.fullmatch(r"(?:[\s,.:;!?]+" + pattern + r")*" + suffix, rest, re.I):
-            continue
-        prefix = text[: match.start()]
-        if _sentence_owns_phrase(prefix):
-            continue
-        prefix = re.sub(
-            r"(?i)(?:\bgo ahead and|\band then|\band|\blet's|\bjust)\s*[,;:]?\s*$", "", prefix
-        ).rstrip(" ,;:")
-        if re.fullmatch(r"(?i)(?:um|uh|er|please|just)[\s,]*", prefix):
-            prefix = ""
-        return SendPlan(prefix, True)
-    return SendPlan(text)
 
 
 _DOUBLED_Q = re.compile(
@@ -96,7 +26,6 @@ _DOUBLED_Q = re.compile(
 )
 _TRAILING_Q = re.compile(r"(?<![\w'’\-/\\.@#$=~])(?:q|cue)[\s.,;:!?]*$", re.I)
 _REPLACED_ENDINGS = set(",.;:!…")
-_NEWLINES = set("\n\r\v\f\u0085\u2028\u2029")
 
 
 def _ending_question(text):
@@ -133,7 +62,7 @@ def apply_question_mark_shortcut(text, literal_prefix="literal"):
         if not following:
             rest = ""
             break
-        output += spacing if any(c in _NEWLINES for c in spacing) else " "
+        output += spacing if any(c in NEWLINES for c in spacing) else " "
         word = re.match(r"\S+", following)[0]
         rest = following[0].upper() + following[1:] if word == word.lower() else following
     result = output + rest
@@ -176,9 +105,9 @@ def format_text(
     if enabled(config, "smart_capitalization") and context is not None:
         boundary = None
         for character in reversed(context):
-            if character in _NEWLINES:
+            if character in NEWLINES:
                 break
-            if _horizontal(character) or character in "\"'”’»›)]}」』":
+            if horizontal(character) or character in "\"'”’»›)]}」』":
                 continue
             boundary = character
             break
@@ -199,17 +128,6 @@ def _first_letter_case(text, *, upper):
             changed = character.upper() if upper else character.lower()
             return text[:index] + changed + text[index + 1 :]
     return text
-
-
-def _horizontal(text):
-    return bool(text) and all(c.isspace() and c not in _NEWLINES for c in text)
-
-
-def _rstrip_horizontal(text):
-    end = len(text)
-    while end and _horizontal(text[end - 1]):
-        end -= 1
-    return text[:end]
 
 
 def _punctuation_spacing(rule):
@@ -275,7 +193,7 @@ def apply_spoken_punctuation(text, data, prefix="literal"):
             cursor = index
             for word_index, word in enumerate(words):
                 if word_index:
-                    if cursor >= len(tokens) or not _horizontal(tokens[cursor]):
+                    if cursor >= len(tokens) or not horizontal(tokens[cursor]):
                         break
                     cursor += 1
                 if cursor >= len(tokens) or tokens[cursor].casefold() != word:
@@ -294,7 +212,7 @@ def apply_spoken_punctuation(text, data, prefix="literal"):
         at += direction
         while 0 <= at < len(parts):
             value, kind = parts[at]
-            if kind != "text" or not _horizontal(value):
+            if kind != "text" or not horizontal(value):
                 return parts[at]
             at += direction
         return None
@@ -325,18 +243,18 @@ def apply_spoken_punctuation(text, data, prefix="literal"):
         if kind not in {"line", "paragraph", "tab", "space"}:
             continue
         if index and parts[index - 1][1] == "text":
-            before = _rstrip_horizontal(parts[index - 1][0])
+            before = rstrip_horizontal(parts[index - 1][0])
             if before.endswith(".") and not before.endswith(".."):
                 parts[index - 1][0] = before[:-1]
         if index + 1 < len(parts) and parts[index + 1][1] == "text":
             after = parts[index + 1][0]
             stripped = after
-            while stripped and _horizontal(stripped[0]):
+            while stripped and horizontal(stripped[0]):
                 stripped = stripped[1:]
             allowed = ".," if kind in {"line", "paragraph"} else "."
             if stripped and stripped[0] in allowed and not stripped.startswith(stripped[0] * 2):
                 stripped = stripped[1:]
-                while stripped and _horizontal(stripped[0]):
+                while stripped and horizontal(stripped[0]):
                     stripped = stripped[1:]
                 parts[index + 1][0] = stripped
     result = ""
@@ -353,106 +271,16 @@ def apply_spoken_punctuation(text, data, prefix="literal"):
             kind = "left" if quote_open[toggle] else "right"
             quote_open[toggle] = not quote_open[toggle]
         if kind != "left":
-            result = _rstrip_horizontal(result)
-        if kind == "around" and result and result[-1] not in _NEWLINES:
+            result = rstrip_horizontal(result)
+        if kind == "around" and result and result[-1] not in NEWLINES:
             result += " "
         result += symbol
         index += 1
         if kind != "right":
-            while index < len(parts) and parts[index][1] == "text" and _horizontal(parts[index][0]):
+            while index < len(parts) and parts[index][1] == "text" and horizontal(parts[index][0]):
                 index += 1
         if kind == "around" and any(
-            kind != "text" or (value and not _horizontal(value)) for value, kind in parts[index:]
+            kind != "text" or (value and not horizontal(value)) for value, kind in parts[index:]
         ):
             result += " "
     return result
-
-
-_SLASH_REJECTED = set(
-    "a an and as at back backslash be been being bin by comma desktop documents dot downloads "
-    "etc for forward from home in is library local mark of on or period private question quote "
-    "quotes semicolon slash slashes source sources src the tmp to user users usr var volumes "
-    "was were with without".split()
-)
-_SLASH_LEAD_INS = set(
-    (
-        "call choose do enter execute open pick press run say select send start try type use write"
-    ).split()
-)
-_MENTION_REJECTED = set(
-    "a an airport breakfast brunch class dinner home hotel house lunch meeting night noon office "
-    "place restaurant school shop store the today tomorrow work yesterday".split()
-)
-_MENTION_LEAD_INS = set(
-    "add ask cc dm hello hey hi invite message notify ping send tag tell".split()
-)
-
-
-def _lead_in(text, start, allowed):
-    prefix = text[:start].strip()
-    if not prefix or prefix[-1] in ".!?:;([{":
-        return True
-    words = re.findall(r"[a-zA-Z0-9_-]+", prefix)
-    return not words or words[-1].casefold() in allowed
-
-
-def apply_literal_formatting(text, *, app_name=None, app_id=None, window_title=None):
-    """Upstream's opt-in slash commands and explicit/contextual mentions."""
-    haystack = " ".join(value or "" for value in (app_name, app_id, window_title)).casefold()
-    relaxed = any(app in haystack for app in ("slack", "discord", "teams"))
-    token = r"([A-Za-z][A-Za-z0-9_-]{1,39})(?![A-Za-z0-9_-])"
-    for pattern, spoken in (
-        (r"(?<!\w)/\s+" + token, False),
-        (r"(?<!\w)(?:forward\s+slash|slash)\s+" + token, True),
-    ):
-
-        def slash(match, spoken=spoken, source=text):
-            command = match[1].lower()
-            if command in _SLASH_REJECTED or not re.search(r"[a-z0-9_-]$", command):
-                return match[0]
-            if spoken and not _lead_in(source, match.start(), _SLASH_LEAD_INS):
-                return match[0]
-            return "/" + command
-
-        text = re.sub(pattern, slash, text, flags=re.I)
-    name = r"([A-Za-z][A-Za-z0-9_.-]*(?:\s+[A-Z][A-Za-z0-9_.-]*){0,2})(?![A-Za-z0-9_.-])"
-    for pattern, is_relaxed in (
-        (r"(?<![\w@])(?i:at\s+(?:sign|the\s+rate)|tag|mention)\s+" + name, False),
-        (r"(?<![\w@])[Aa]t\s+" + name, True),
-    ):
-        if is_relaxed and not relaxed:
-            continue
-
-        def mention(match, is_relaxed=is_relaxed, source=text):
-            words = match[1].split(" ")
-            if any(word.lower() in _MENTION_REJECTED for word in words):
-                return match[0]
-            if any(not re.fullmatch(r"[A-Za-z0-9_.-]+", word) for word in words):
-                return match[0]
-            if is_relaxed and (
-                any(not word[:1].isupper() for word in words)
-                or not _lead_in(source, match.start(), _MENTION_LEAD_INS)
-            ):
-                return match[0]
-            if source[match.end() : match.end() + 1] in {"'", "’"}:
-                return match[0]
-            return "@" + match[1].strip()
-
-        text = re.sub(pattern, mention, text)
-    return text
-
-
-def literal_autocomplete_spacing(text, *, app_name=None, app_id=None, window_title=None):
-    haystack = " ".join(value or "" for value in (app_name, app_id, window_title)).casefold()
-    if not text or not _horizontal(text[-1]):
-        return text
-    stripped = _rstrip_horizontal(text)
-    if any(app in haystack for app in ("codex", "chatgpt", "claude", "cursor", "windsurf")):
-        if re.fullmatch(r"/[A-Za-z][A-Za-z0-9_-]{1,39}", stripped):
-            return stripped
-    if any(app in haystack for app in ("slack", "discord", "teams")):
-        if re.search(
-            r"(?<![\w@])@[A-Za-z][A-Za-z0-9_.-]*(?:\s+[A-Z][A-Za-z0-9_.-]*){0,2}$", stripped
-        ):
-            return stripped
-    return text

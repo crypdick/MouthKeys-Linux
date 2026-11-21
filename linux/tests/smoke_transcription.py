@@ -120,7 +120,8 @@ def main(argv=None):
                 fixture, config, transcriber=transcriber, on_progress=stages.append
             )
             assert "hello" in result["text"].casefold()
-            assert result["segments"] and result["duration"] > 0
+            assert result["segments"]
+            assert result["duration"] > 0
             assert [event["stage"] for event in stages] == ["decode", "transcribe", "finalize"]
             item_id = FileHistory().add(fixture.name, result)
             saved = next(row for row in FileHistory().rows() if row["id"] == item_id)

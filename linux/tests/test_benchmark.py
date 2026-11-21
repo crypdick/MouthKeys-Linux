@@ -128,7 +128,8 @@ def test_cancel_and_timeout_reap_worker_without_report(monkeypatch, tmp_path, ca
         benchmark.run_benchmark(
             Config(), wav(tmp_path / "fixture.wav"), timeout=1, cancel_event=event
         )
-    assert observed["killed"] and observed["process"].waited
+    assert observed["killed"]
+    assert observed["process"].waited
     assert not list((state_dir() / "benchmarks").glob("*.json"))
 
 
@@ -160,7 +161,8 @@ def test_measurement_provenance_uses_private_snapshot_and_disables_optional_data
 
     def transcribe(path, cfg, **options):
         observed["fixture"] = path
-        assert path != fixture and path.read_bytes() == fixture.read_bytes()
+        assert path != fixture
+        assert path.read_bytes() == fixture.read_bytes()
         assert path.stat().st_mode & 0o777 == 0o600
         assert options["max_seconds"] == 600
         return {"text": "Hello world", "duration": 1}

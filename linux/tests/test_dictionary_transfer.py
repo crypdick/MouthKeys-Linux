@@ -197,9 +197,7 @@ def test_dictionary_lock_is_reentrant_and_cross_process_wait_is_bounded(monkeypa
     lock_path = private_dir(config_path().parent) / ".dictionary-transfer.lock"
     with lock_path.open("w") as other:
         fcntl.flock(other, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        with pytest.raises(TimeoutError, match="another process"):
-            with dictionary_lock():
-                pytest.fail("must not bypass the existing file lock")
-    with dictionary_lock():
-        with dictionary_lock():
-            Dictionary.save(Dictionary.defaults())
+        with pytest.raises(TimeoutError, match="another process"), dictionary_lock():
+            pytest.fail("must not bypass the existing file lock")
+    with dictionary_lock(), dictionary_lock():
+        Dictionary.save(Dictionary.defaults())

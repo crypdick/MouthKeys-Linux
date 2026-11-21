@@ -1,4 +1,5 @@
 import json
+import pathlib
 from types import SimpleNamespace
 
 import pytest
@@ -85,7 +86,7 @@ def test_recorder_waits_for_bluetooth_even_when_virtual_samples_exist(
 
     class Process:
         def __init__(self, args, **kwargs):
-            self.stdin = open(os.devnull, "wb")
+            self.stdin = pathlib.Path(os.devnull).open("wb")
             processes.append(self)
             with wave.open(str(path), "wb") as wav:
                 wav.setnchannels(1)

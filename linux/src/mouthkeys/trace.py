@@ -7,29 +7,29 @@ class Trace:
     count = 63
     sample = 1 / 12
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.begin(0)
         self.live = False
 
-    def begin(self, now):
+    def begin(self, now: float) -> None:
         self.current = [2.0] * self.count
         self.shown = self.current.copy()
         self.live = True
         self.last_frame = now
         self.window_start = now
-        self.last_voice = None
+        self.last_voice: float | None = None
         self.window_peak = self.pending_peak = 0.0
-        self.quiet_floor = None
+        self.quiet_floor: float | None = None
         self.loud_peak = 0.2
         self.fraction = 0.0
-        self.stopped_at = None
+        self.stopped_at: float | None = None
         self.stop_from = self.shown.copy()
 
     @property
-    def gate(self):
+    def gate(self) -> float:
         return (self.quiet_floor or 0) + 0.4 * 15 / 55
 
-    def ingest(self, level, now):
+    def ingest(self, level: float, now: float) -> None:
         if not self.live:
             return
         level = min(1.0, max(0.0, level))
@@ -38,7 +38,7 @@ class Trace:
         if level > self.gate:
             self.last_voice = now
 
-    def advance(self, now):
+    def advance(self, now: float) -> None:
         dt = min(0.25, max(0, now - self.last_frame))
         self.last_frame = max(self.last_frame, now)
         if not self.live:
@@ -68,14 +68,14 @@ class Trace:
                         0, (self.pending_peak - self.gate) / max(0.001, self.loud_peak - self.gate)
                     ),
                 )
-                self.current = self.current[1:] + [2 + 28 * amplitude**1.15]
-                self.shown = self.shown[1:] + [2.0]
+                self.current = [*self.current[1:], 2 + 28 * amplitude**1.15]
+                self.shown = [*self.shown[1:], 2.0]
                 self.pending_peak = 0.0
                 self.fraction -= 1
         ease = 1 - math.exp(-dt / 0.045)  # ~135 ms to settle, as on macOS.
         self.shown = [a + (b - a) * ease for a, b in zip(self.shown, self.current, strict=True)]
 
-    def stop(self, now):
+    def stop(self, now: float) -> None:
         if self.live:
             self.advance(now)
             self.live = False

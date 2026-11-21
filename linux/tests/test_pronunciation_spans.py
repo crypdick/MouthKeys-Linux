@@ -4,10 +4,11 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from test_pronunciation import utterance
 
 from mouthkeys.pronunciation import PronunciationStore, acoustic_distance, acoustic_features
 from mouthkeys.word_alignment import align_words
+
+from .test_pronunciation import utterance
 
 
 def fixture():
@@ -222,20 +223,24 @@ def test_shared_word_intervals_are_replaced_as_one_range_not_duplicated():
     assert (result["corrections"][0]["word_start"], result["corrections"][0]["word_end"]) == (0, 2)
 
 
-def test_acoustic_endpoint_guard_rejects_swallowing_unrelated_neighbors():
-    from mouthkeys.pronunciation import _span_distance
+@pytest.mark.parametrize("bad_edge", ["before", "after"])
+def test_acoustic_endpoint_guard_rejects_swallowing_unrelated_neighbors(bad_edge):
+    voice = trained()
+    unrelated = utterance(base=1800, seconds=0.35)
+    samples = np.concatenate([unrelated, voice] if bad_edge == "before" else [voice, unrelated])
 
-    voice = fixture()
-    before = utterance(base=1800, seconds=0.35)
-    # No ASR text is consulted by this acoustic edge check.
-    assert (
-        _span_distance(acoustic_features(np.concatenate([before, voice])), acoustic_features(voice))
-        > 0.18
-    )
-    assert (
-        _span_distance(acoustic_features(np.concatenate([voice, before])), acoustic_features(voice))
-        > 0.18
-    )
+    def correction(audio):
+        alignment = {
+            "text": "mouthkeys",
+            "words": [{"word": "mouthkeys", "start": 0, "end": len(audio) / 16000}],
+        }
+        return PronunciationStore.correct_spans(alignment["text"], audio, alignment)
+
+    assert correction(voice)["text"] == "MouthKeys"
+    result = correction(samples)
+    assert result["comparisons"] == 2
+    assert result["text"] == "mouthkeys"
+    assert result["corrections"] == []
 
 
 def test_actual_wav_recording_reads_only_requested_audio_windows(tmp_path):
@@ -288,3 +293,9 @@ def test_wall_deadline_bounds_scanning_even_before_any_dtw(monkeypatch):
     assert result["truncated"]
     assert result["comparisons"] == 0
     assert result["text"] == text
+
+
+@pytest.mark.parametrize("timestamp", [True, float("nan"), 10**400])
+def test_alignment_rejects_invalid_timestamps(timestamp):
+    with pytest.raises(ValueError, match="Invalid aligned word timing"):
+        align_words("one", [{"word": "one", "start": 0, "end": timestamp}])

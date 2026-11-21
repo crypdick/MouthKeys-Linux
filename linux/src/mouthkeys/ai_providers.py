@@ -21,11 +21,11 @@ PROVIDER_ENDPOINTS = {
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
-    def redirect_request(self, req, fp, code, msg, headers, newurl):
+    def redirect_request(self, _req, _fp, _code, _msg, _headers, _newurl):
         raise ValueError("AI endpoint redirected; configure its final URL explicitly")
 
 
-def endpoint_url(value):
+def endpoint_url(value: str) -> str:
     parsed = urllib.parse.urlsplit(value)
     if (
         parsed.scheme not in ("http", "https")
@@ -128,7 +128,7 @@ def request_json(endpoint, config, *, body=None, opener=None):
     payload = json.dumps(body).encode() if body is not None else None
     if payload is not None and len(payload) > MAX_RESPONSE:
         raise ValueError("AI cleanup request exceeds 1 MB")
-    request = urllib.request.Request(
+    request = urllib.request.Request(  # noqa: S310
         endpoint_url(endpoint),
         data=payload,
         headers=request_headers(config, provider),

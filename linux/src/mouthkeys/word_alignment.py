@@ -5,30 +5,49 @@ Every other character, including punctuation and case, must agree in order.
 """
 
 import math
+from typing import NewType, TypedDict, TypeGuard
 
 MAX_WORDS = 10000
 
 
-def align_words(text, words, *, duration=None):
+CharacterOffset = NewType("CharacterOffset", int)
+
+
+class AlignedWord(TypedDict):
+    word: str
+    start: float
+    end: float
+    char_start: CharacterOffset
+    char_end: CharacterOffset
+
+
+def _valid_time(value: object) -> TypeGuard[float]:
+    # Exact numeric types: bool is not a timestamp.
+    if not isinstance(value, (int, float)) or type(value) not in (int, float):
+        return False
+    try:
+        return math.isfinite(value)
+    except OverflowError:
+        return False
+
+
+def align_words(text: str, words: object, *, duration: float | None = None) -> list[AlignedWord]:
     if not isinstance(text, str) or not isinstance(words, list) or len(words) > MAX_WORDS:
         raise ValueError("Invalid word alignment")
-    if duration is not None and (
-        type(duration) not in (int, float) or not math.isfinite(duration) or duration < 0
-    ):
+    if duration is not None and (not _valid_time(duration) or duration < 0):
         raise ValueError("Invalid alignment duration")
-    output, cursor, previous_start, previous_end = [], 0, 0.0, 0.0
+    output: list[AlignedWord] = []
+    cursor, previous_start, previous_end = 0, 0.0, 0.0
     for word in words:
         if not isinstance(word, dict) or not isinstance(word.get("word"), str):
-            raise ValueError("Invalid aligned word")
+            raise ValueError("Invalid aligned word")  # noqa: TRY004 - one invalid alignment contract
         token = word["word"].strip()
         start, end = word.get("start"), word.get("end")
         if (
             not token
             or len(token) > 1000
-            or type(start) not in (int, float)
-            or type(end) not in (int, float)
-            or not math.isfinite(start)
-            or not math.isfinite(end)
+            or not _valid_time(start)
+            or not _valid_time(end)
             or not 0 <= start <= end
             or start < previous_start
             or end < previous_end
@@ -48,18 +67,28 @@ def align_words(text, words, *, duration=None):
                 raise ValueError("Word alignment does not match transcript")
             else:
                 cursor += 1
-        output.append({**word, "char_start": first, "char_end": cursor})
-        previous_start, previous_end = float(start), float(end)
+        aligned: AlignedWord = {
+            **word,  # Preserve provider/provenance metadata.
+            "word": word["word"],
+            "start": start,
+            "end": end,
+            "char_start": CharacterOffset(first),
+            "char_end": CharacterOffset(cursor),
+        }
+        output.append(aligned)
+        previous_start, previous_end = start, end
     if text[cursor:].strip():
         raise ValueError("Word alignment does not cover transcript")
     return output
 
 
-def lexical_span(text, first, last):
+def lexical_span(
+    text: str, first: AlignedWord, last: AlignedWord
+) -> tuple[CharacterOffset, CharacterOffset]:
     """Exclude edge punctuation so a replacement cannot swallow surrounding syntax."""
-    start, end = first["char_start"], last["char_end"]
+    start, end = int(first["char_start"]), int(last["char_end"])
     while start < end and not (text[start].isalnum() or text[start] == "_"):
         start += 1
     while end > start and not (text[end - 1].isalnum() or text[end - 1] == "_"):
         end -= 1
-    return start, end
+    return CharacterOffset(start), CharacterOffset(end)

@@ -10,7 +10,7 @@ from dataclasses import asdict
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
-from .config import Config, without_audio_retention
+from .config import Config
 
 
 def write_private(path, data):
@@ -151,7 +151,7 @@ def _prepare_backup(data):
         current_config = asdict(Config.load())
     except (OSError, ValueError, TypeError):
         current_config = asdict(Config())
-    config = Config(**without_audio_retention({**current_config, **data["config"]})).validate()
+    config = Config.from_mapping({**current_config, **data["config"]})
     rows = data["history"]
     if not isinstance(rows, list) or len(rows) > 1000000:
         raise ValueError("Invalid backup history")
@@ -311,7 +311,7 @@ def backup_import(history, path, *, app_map=None, expected_sha256=None):
             names = list(row)
             placeholders = ",".join("?" for _ in names)
             connection.execute(
-                f"INSERT OR REPLACE INTO history ({','.join(names)}) VALUES ({placeholders})",
+                f"INSERT OR REPLACE INTO history ({','.join(names)}) VALUES ({placeholders})",  # noqa: S608
                 list(row.values()),
             )
     Dictionary.save(prepared["dictionary"])

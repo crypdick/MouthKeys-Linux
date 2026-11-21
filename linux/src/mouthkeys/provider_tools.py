@@ -14,11 +14,14 @@ from .ai_providers import _completion, _request_payload, endpoint_url, request_j
 from .profiles import resolve_profile
 
 
-def _origin(url):
+def _origin(url: str) -> tuple[str, str, int]:
     parsed = urllib.parse.urlsplit(endpoint_url(url))
+    hostname = parsed.hostname
+    if hostname is None:
+        raise ValueError("Missing provider hostname")
     return (
         parsed.scheme,
-        parsed.hostname.lower(),
+        hostname.lower(),
         parsed.port if parsed.port is not None else (443 if parsed.scheme == "https" else 80),
     )
 

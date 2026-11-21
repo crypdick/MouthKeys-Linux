@@ -185,7 +185,7 @@ class Features:
     def __init__(self, values):
         self.values = list(values)
 
-    def size(self, dimension):
+    def size(self, _dimension):
         return len(self.values)
 
     def to(self, *args, **kwargs):

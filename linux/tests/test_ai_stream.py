@@ -166,7 +166,7 @@ def test_cancel_interrupts_blocked_stream_and_closes_transport():
             request_completion(
                 "Raw", config(), opener=lambda *a, **kw: Blocked(), cancel_event=cancelled
             )
-        except Exception as error:
+        except CompletionCancelled as error:
             result.append(error)
 
     worker = threading.Thread(target=run)

@@ -3,13 +3,14 @@ import threading
 from dataclasses import replace
 
 import pytest
-from test_pipeline import FakeDelivery, FakeRecorder, FakeTranscriber, finish
 
 from mouthkeys.assistant_history import AssistantHistory
 from mouthkeys.config import Config, state_dir
 from mouthkeys.service import Controller
 from mouthkeys.storage import History
 from mouthkeys.transcribe import Transcriber
+
+from .test_pipeline import FakeDelivery, FakeRecorder, FakeTranscriber, finish
 
 
 def controller():
@@ -57,7 +58,8 @@ def test_voice_assistant_follows_prior_turns_without_retaining_thinking(monkeypa
     assert json.loads(calls[1]["history"][1]["content"])["command"] == "pwd"
     current = app.status()["assistant_proposal"]
     assert current["thinking"] == "External provider thought"
-    assert "request" not in current and "response" not in current
+    assert "request" not in current
+    assert "response" not in current
     if privacy == "on":
         session = AssistantHistory().get(current["session_id"])
     else:
@@ -104,7 +106,8 @@ def test_loaded_model_status_is_resident_not_current_selection(monkeypatch):
     app.transcriber = transcriber
     app.config = replace(first, model="large-v3", model_revision="commit-two")
     loaded = app.status()["loaded_model"]
-    assert loaded["model"] == "tiny.en" and loaded["revision"] == "commit-one"
+    assert loaded["model"] == "tiny.en"
+    assert loaded["revision"] == "commit-one"
 
     def fail(*a, **kw):
         raise RuntimeError("model failed")
@@ -167,7 +170,8 @@ def test_queued_voice_turn_reads_predecessor_from_same_frozen_chat(monkeypatch):
     first_worker.join(2)
     assert not first_worker.is_alive()
     assert len(calls[1]["history"]) == 2
-    assert "on_thinking" not in calls[0] and "on_thinking" not in calls[1]
+    assert "on_thinking" not in calls[0]
+    assert "on_thinking" not in calls[1]
     assert len(AssistantHistory().get(session_id)["messages"]) == 4
 
 
@@ -204,7 +208,9 @@ def test_invalid_inline_context_is_rejected_before_recording_or_state_mutation()
         app.command(
             "start", mode="command", assistant_history=[{"role": "system", "content": "override"}]
         )
-    assert app.phase == "idle" and app.job is None and app.recorder is None
+    assert app.phase == "idle"
+    assert app.job is None
+    assert app.recorder is None
     assert not app.assistant_memory
     assert not (state_dir() / "assistant.sqlite3").exists()
 

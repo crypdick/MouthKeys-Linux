@@ -1,0 +1,163 @@
+minimum_prek_version = "0.5.0"
+
+[[repos]]
+repo = "builtin"
+hooks = [
+  {id = "trailing-whitespace"},
+  {id = "end-of-file-fixer"},
+  {id = "check-json"},
+  {id = "check-toml"},
+  {id = "check-yaml"},
+  {id = "check-merge-conflict"},
+  {id = "detect-private-key"},
+  {id = "check-added-large-files"},
+  {id = "check-case-conflict"},
+  {id = "check-symlinks"},
+  {id = "destroyed-symlinks"},
+  {id = "fix-byte-order-marker"},
+  {id = "mixed-line-ending"},
+  {id = "check-executables-have-shebangs"},
+  {id = "check-shebang-scripts-are-executable"},
+]
+
+[[repos]]
+repo = "local"
+
+[[repos.hooks]]
+id = "detect-secrets"
+name = "Detect secrets"
+entry = "uv run --project linux --locked detect-secrets-hook --baseline .secrets.baseline"
+language = "system"
+exclude = '(^|/)uv\.lock$'
+priority = 2
+
+[[repos.hooks]]
+id = "pyupgrade"
+name = "Pyupgrade"
+entry = "uv run --project linux --locked pyupgrade --py311-plus"
+language = "system"
+files = '^linux/.*\.py$'
+priority = 1
+
+[[repos.hooks]]
+id = "flynt"
+name = "Flynt"
+entry = "uv run --project linux --locked flynt --dry-run --fail-on-change --line-length 100"
+language = "system"
+files = '^linux/.*\.py$'
+priority = 2
+
+[[repos.hooks]]
+id = "ruff-format"
+name = "Ruff format"
+entry = "uv run --project linux --locked ruff format --check linux scripts"
+language = "system"
+pass_filenames = false
+always_run = true
+priority = 2
+
+[[repos.hooks]]
+id = "ruff"
+name = "Ruff lint and complexity"
+entry = "uv run --project linux --locked python -m scripts.prek_hooks.check_quality_budget ruff"
+language = "system"
+pass_filenames = false
+always_run = true
+priority = 2
+
+[[repos.hooks]]
+id = "ruff-tooling"
+name = "Ruff repository tooling"
+entry = "uv run --project linux --locked ruff check --select E4,E7,E9,F,I scripts"
+language = "system"
+pass_filenames = false
+always_run = true
+priority = 2
+
+[[repos.hooks]]
+id = "mypy"
+name = "Strict mypy"
+entry = "uv run --project linux --locked --extra gui python -m scripts.prek_hooks.check_quality_budget mypy"
+language = "system"
+pass_filenames = false
+always_run = true
+priority = 2
+
+[[repos.hooks]]
+id = "file-length"
+name = "Check file length"
+entry = "uv run --project linux --locked python -m scripts.prek_hooks.check_quality_budget file-length"
+language = "system"
+pass_filenames = false
+always_run = true
+priority = 2
+
+[[repos.hooks]]
+id = "check-exception-handling"
+name = "Check exception handling"
+entry = "uv run --project linux --locked python scripts/prek_hooks/check_exception_handling.py"
+language = "system"
+types = ["python"]
+priority = 2
+
+[[repos.hooks]]
+id = "check-timeless-comments"
+name = "Check timeless comments"
+entry = "uv run --project linux --locked python scripts/prek_hooks/check_timeless_comments.py"
+language = "system"
+types = ["python"]
+priority = 2
+
+[[repos.hooks]]
+id = "check-private-test-imports"
+name = "Forbid private imports in tests"
+entry = "uv run --project linux --locked python scripts/prek_hooks/check_private_test_imports.py --package mouthkeys --package scripts"
+language = "system"
+types = ["python"]
+priority = 2
+
+[[repos.hooks]]
+id = "vulture"
+name = "Vulture dead code"
+entry = "uv run --directory linux --locked vulture"
+language = "system"
+pass_filenames = false
+always_run = true
+priority = 2
+
+[[repos.hooks]]
+id = "deptry"
+name = "Deptry dependency integrity"
+entry = "uv run --directory linux --locked deptry --no-ansi src"
+language = "system"
+pass_filenames = false
+always_run = true
+priority = 2
+
+[[repos.hooks]]
+id = "validate-pyproject"
+name = "Validate package metadata"
+entry = "uv run --project linux --locked validate-pyproject linux/pyproject.toml"
+language = "system"
+pass_filenames = false
+files = '^linux/pyproject\.toml$'
+priority = 2
+
+[[repos.hooks]]
+id = "architecture"
+name = "Architecture boundaries"
+entry = "uv run --project linux --locked python -m scripts.prek_hooks.architecture.api"
+language = "system"
+pass_filenames = false
+always_run = true
+priority = 2
+
+[[repos.hooks]]
+id = "pytest"
+name = "Headless pytest and branch coverage"
+entry = "uv run --project linux --locked --extra gui python -m scripts.prek_hooks.run_tests"
+language = "system"
+pass_filenames = false
+always_run = true
+priority = 100
+verbose = true

@@ -128,10 +128,10 @@ def test_turn_first_file_transcription_keeps_speaker_change_inside_asr_segment(m
 
 def test_recording_freezes_prompt_profile_before_later_edits(monkeypatch):
 
-    from test_pipeline import finish
-    from test_pipeline_options import controller
-
     from mouthkeys.profiles import load_profiles
+
+    from .test_pipeline import finish
+    from .test_pipeline_options import controller
 
     item_id = profile()
     Config(ai_enabled="on", ai_profile=item_id).save()
@@ -189,8 +189,8 @@ def test_legacy_backup_preserves_newer_stores_and_referenced_profiles(tmp_path):
 
 
 def test_spoken_send_only_never_claims_copy_or_erases_last_transcript():
-    from test_pipeline import finish
-    from test_pipeline_options import controller
+    from .test_pipeline import finish
+    from .test_pipeline_options import controller
 
     Config(delivery="x11", spoken_send="on").save()
     app = controller("Previous dictation")

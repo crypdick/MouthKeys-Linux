@@ -194,11 +194,13 @@ def test_upstream_import_preserves_history_metadata_and_merges_existing_data(tmp
     assert row["created"] == datetime.fromisoformat("2026-11-01T20:00:00+00:00").timestamp()
     assert row["raw_text"] == "raw private words"
     assert row["text"] == "Final private words."
-    assert row["app"] == "Editor" and row["window"] == "notes"
+    assert row["app"] == "Editor"
+    assert row["window"] == "notes"
     assert row["was_ai_processed"] == 1
     assert row["ai_processing_model"] == "actual-cleanup-model"
     assert row["ai_processing_error"] is None
-    assert row["duration"] == 2.5 and row["model"] == "whisper-medium"
+    assert row["duration"] == 2.5
+    assert row["model"] == "whisper-medium"
     assert not history.recording(HISTORY_ID).exists()
     assert history.get(existing_id)["text"] == "Existing transcript"
     assert Dictionary.apply("old mouth keys") == "Existing MouthKeys"
@@ -229,7 +231,8 @@ def test_import_without_audio_does_not_mislabel_ai_model_as_speech_model(tmp_pat
     history = History()
     backup_import(history, source_file(tmp_path, document))
     row = history.get(HISTORY_ID)
-    assert row["model"] == "" and row["duration"] == 0
+    assert row["model"] == ""
+    assert row["duration"] == 0
     assert row["ai_processing_model"] == "actual-cleanup-model"
 
 
@@ -251,7 +254,8 @@ def test_apple_engine_device_shortcuts_and_credentials_are_not_guessed(tmp_path)
     )
     report = backup_preview(source_file(tmp_path, document))
     assert "selectedSpeechModel" in report["unmapped"]
-    assert "engine" not in report["changes"] and "model" not in report["changes"]
+    assert "engine" not in report["changes"]
+    assert "model" not in report["changes"]
     assert "MUST-NOT-IMPORT" not in json.dumps(report)
     assert "ai_endpoint" not in report["changes"]
     assert report["pending_profiles"][0]["endpoint"] == "http://localhost:1234/v1/chat/completions"
@@ -319,7 +323,8 @@ def test_read_bounds_actual_bytes_and_pure_conversion_does_not_mutate_arguments(
     dictionary = Dictionary.defaults()
     before = copy.deepcopy(dictionary)
     convert_upstream_backup(document, Config(), dictionary, [], [])
-    assert document == original and dictionary == before
+    assert document == original
+    assert dictionary == before
 
 
 def test_imported_drafts_do_not_change_active_profiles_providers_or_app_routes():
@@ -373,7 +378,8 @@ def test_imported_drafts_do_not_change_active_profiles_providers_or_app_routes()
         profiles=[existing, draft],
         routes=converted["prompt_routes"],
     )
-    assert selected.ai_endpoint == base.ai_endpoint and selected.ai_model == base.ai_model
+    assert selected.ai_endpoint == base.ai_endpoint
+    assert selected.ai_model == base.ai_model
     again, _ = convert_upstream_backup(
         upstream_document(),
         base,

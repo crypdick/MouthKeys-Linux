@@ -7,7 +7,9 @@ GlobalShortcuts; running that backend explicitly may open its consent dialog.
 import ctypes
 import ctypes.util
 import fcntl
+import logging
 import os
+import pathlib
 import queue
 import re
 import select
@@ -18,6 +20,8 @@ import time
 
 from .config import Config, runtime_dir, state_dir
 from .processes import python_command
+
+logger = logging.getLogger(__name__)
 
 MODIFIERS = {"shift": 1, "ctrl": 4, "control": 4, "alt": 8, "super": 64, "meta": 64, "win": 64}
 
@@ -364,8 +368,10 @@ def launch():
                         activation.finish()
                     else:
                         activation.event(*value)
-                except Exception as exc:
-                    print(f"Shortcut: {exc}", flush=True)
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning(
+                        "Shortcut action failed", extra={"error_type": type(exc).__name__}
+                    )
 
         worker = threading.Thread(target=consume, daemon=True)
         worker.start()
@@ -414,8 +420,8 @@ def ensure_hotkeys():
         except BlockingIOError:
             return
     with (state_dir() / "hotkeys.log").open("a") as output:
-        os.chmod(output.name, 0o600)
-        subprocess.Popen(
+        pathlib.Path(output.name).chmod(0o600)
+        subprocess.Popen(  # noqa: S603
             python_command("mouthkeys", "hotkeys"),
             stdin=subprocess.DEVNULL,
             stdout=output,

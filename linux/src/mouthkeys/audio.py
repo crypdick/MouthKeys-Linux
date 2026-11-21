@@ -18,7 +18,7 @@ def bluetooth_capture_ready(source):
     if source == "default":
         try:
             source = subprocess.run(
-                ["pactl", "get-default-source"],
+                ["pactl", "get-default-source"],  # noqa: S607
                 capture_output=True,
                 text=True,
                 check=True,
@@ -30,7 +30,7 @@ def bluetooth_capture_ready(source):
         return True
     try:
         result = subprocess.run(
-            ["pactl", "-f", "json", "list", "sources"],
+            ["pactl", "-f", "json", "list", "sources"],  # noqa: S607
             capture_output=True,
             text=True,
             check=True,
@@ -43,7 +43,7 @@ def bluetooth_capture_ready(source):
         if selected_source.get("properties", {}).get("bluez5.loopback") not in (True, "true"):
             return True  # Native PulseAudio capture does not need a PipeWire graph.
         result = subprocess.run(
-            ["pw-dump", "Node"],
+            ["pw-dump", "Node"],  # noqa: S607
             capture_output=True,
             text=True,
             check=True,
@@ -73,7 +73,7 @@ class Recorder:
         self.last_error = ""
         self.process = None
         try:
-            self.process = subprocess.Popen(
+            self.process = subprocess.Popen(  # noqa: S603
                 [
                     *python_command("mouthkeys.capture"),
                     "ffmpeg",
@@ -266,10 +266,12 @@ class CaptureSession:
         if capture:
             try:
                 capture.stop()
-            except Exception as exc:
+            # Carry device failure back to the capture owner for teardown and recovery.
+            except Exception as exc:  # allow: exception-handling
                 try:
                     ended = capture.finished()
-                except Exception:
+                # If capture state is unreadable, assume the device has not stopped.
+                except Exception:  # allow: exception-handling  # noqa: BLE001
                     ended = False
                 if not ended:
                     # Retain ownership for a subsequent stop; never overlap a
@@ -292,7 +294,8 @@ class CaptureSession:
             try:
                 with self.lock:
                     self._drain()
-            except Exception as exc:
+            # Carry device failure back to the capture owner for teardown and recovery.
+            except Exception as exc:  # allow: exception-handling  # noqa: BLE001
                 self.failure = exc
                 self.stopping.set()
 
@@ -358,13 +361,12 @@ def _read_live_audio(path: Path, seconds):
     """Read bounded samples and their frame cursor before the WAV is finalized."""
     import numpy as np
 
-    with path.open("rb") as source:
-        with wave.open(source, "rb") as wav:
-            if (wav.getnchannels(), wav.getsampwidth(), wav.getframerate()) != (1, 2, 16000):
-                raise ValueError("Expected mono 16 kHz PCM")
-            frames = max(0, (path.stat().st_size - source.tell()) // 2)
-            wav.setpos(max(0, frames - int(seconds * 16000)))
-            raw = wav.readframes(int(seconds * 16000))
+    with path.open("rb") as source, wave.open(source, "rb") as wav:
+        if (wav.getnchannels(), wav.getsampwidth(), wav.getframerate()) != (1, 2, 16000):
+            raise ValueError("Expected mono 16 kHz PCM")
+        frames = max(0, (path.stat().st_size - source.tell()) // 2)
+        wav.setpos(max(0, frames - int(seconds * 16000)))
+        raw = wav.readframes(int(seconds * 16000))
     samples = np.frombuffer(raw[: len(raw) // 2 * 2], dtype="<i2").astype(np.float32) / 32768.0
     return samples, frames
 
@@ -377,18 +379,17 @@ def read_audio_from(path: Path, start_frame=0, seconds=None):
     """Read forward from a committed PCM frame, including an unfinished WAV."""
     import numpy as np
 
-    with path.open("rb") as source:
-        with wave.open(source, "rb") as wav:
-            if (wav.getnchannels(), wav.getsampwidth(), wav.getframerate()) != (1, 2, 16000):
-                raise ValueError("Expected mono 16 kHz PCM")
-            frames = min(wav.getnframes(), max(0, (path.stat().st_size - source.tell()) // 2))
-            if start_frame > frames:
-                raise ValueError("Recording shrank after transcription started")
-            wav.setpos(start_frame)
-            count = frames - start_frame
-            if seconds is not None:
-                count = min(count, int(seconds * 16000))
-            raw = wav.readframes(count)
+    with path.open("rb") as source, wave.open(source, "rb") as wav:
+        if (wav.getnchannels(), wav.getsampwidth(), wav.getframerate()) != (1, 2, 16000):
+            raise ValueError("Expected mono 16 kHz PCM")
+        frames = min(wav.getnframes(), max(0, (path.stat().st_size - source.tell()) // 2))
+        if start_frame > frames:
+            raise ValueError("Recording shrank after transcription started")
+        wav.setpos(start_frame)
+        count = frames - start_frame
+        if seconds is not None:
+            count = min(count, int(seconds * 16000))
+        raw = wav.readframes(count)
     return np.frombuffer(raw[: len(raw) // 2 * 2], dtype="<i2").astype(np.float32) / 32768.0
 
 

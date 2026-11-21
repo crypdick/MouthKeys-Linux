@@ -7,34 +7,7 @@ import time
 from dataclasses import replace
 
 from .config import Config
-
-TERMINALS = (
-    "ghostty",
-    "c11",
-    "kitty",
-    "alacritty",
-    "wezterm",
-    "xterm",
-    "urxvt",
-    "gnome-terminal",
-    "org.gnome.terminal",
-    "gnome terminal",
-    "konsole",
-    "tilix",
-    "terminator",
-    "foot",
-    "st-256color",
-    "xfce4-terminal",
-    "qterminal",
-    "lxterminal",
-)
-
-
-def terminal_name(value):
-    return any(
-        re.search(r"(?<![a-z0-9])" + re.escape(name) + r"(?![a-z0-9])", value.lower())
-        for name in TERMINALS
-    )
+from .desktop import terminal_name
 
 
 def session():
@@ -72,7 +45,7 @@ def automatic_delivery_warning(config: Config):
 
 def run(args, **kwargs):
     try:
-        return subprocess.run(args, check=True, timeout=3, capture_output=True, **kwargs)
+        return subprocess.run(args, check=True, timeout=3, capture_output=True, **kwargs)  # noqa: S603
     except FileNotFoundError as exc:
         raise RuntimeError(f"Install {args[0]} (see linux/README.md)") from exc
     except subprocess.CalledProcessError as exc:
@@ -246,13 +219,15 @@ class Delivery:
             deadline = time.monotonic() + 0.8
             for _ in range(3):
                 current = read_snapshot(field)
+                current_text = current.get("text") if current else None
                 if (
                     current
                     and current.get("field_id") == field["field_id"]
                     and current.get("focused")
-                    and current.get("text") == expected
+                    and isinstance(current_text, str)
+                    and current_text == expected
                     and current.get("text_start", 0) == field.get("text_start", 0)
-                    and current.get("character_count", len(current["text"]))
+                    and current.get("character_count", len(current_text))
                     == (
                         field.get("character_count", len(field["text"]))
                         + len(text)
@@ -392,7 +367,7 @@ class Delivery:
             raise RuntimeError("No desktop session; transcript saved in history")
         # The owner outlives the launcher. An inherited pipe can keep run() waiting for EOF.
         try:
-            subprocess.run(
+            subprocess.run(  # noqa: S603
                 args,
                 input=text.encode(),
                 stdout=subprocess.DEVNULL,
@@ -443,15 +418,14 @@ class Delivery:
             and all(char.isprintable() for char in text)
             and self.focus() == target
             and self.terminal(target) is False
-        ):
-            if self.focus() == target:
-                run(
-                    ["xdotool", "type", "--clearmodifiers", "--delay", "0", "--file", "-"],
-                    input=text.encode(),
-                )
-                if getattr(config, "copy_to_clipboard", "on") == "on":
-                    self.copy(text)
-                return "insert_requested"
+        ) and self.focus() == target:
+            run(
+                ["xdotool", "type", "--clearmodifiers", "--delay", "0", "--file", "-"],
+                input=text.encode(),
+            )
+            if getattr(config, "copy_to_clipboard", "on") == "on":
+                self.copy(text)
+            return "insert_requested"
         if (
             config.delivery == "wayland"
             and session() == "wayland"

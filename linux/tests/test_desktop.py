@@ -82,7 +82,7 @@ def test_overlay_history_popup_copies_selected_entry_without_pasting(monkeypatch
     panel = Overlay()
     panel.timer.stop()
     calls = []
-    monkeypatch.setattr(QMenu, "popup", lambda self, point: None)
+    monkeypatch.setattr(QMenu, "popup", lambda self, _point: None)
     monkeypatch.setattr(panel, "send", lambda action, **kw: calls.append((action, kw)))
     panel.show_history({"result": [{"id": "sample", "text": "hello world"}]})
     entry = panel.history_menu.actions()[0].menu()
@@ -235,7 +235,8 @@ def test_five_upstream_sound_presets_and_disabled_sound_preview_are_available(mo
     for index, name in enumerate(expected):
         config = Config(sound_preset=f"fluid_sfx_{index}")
         desktop.play_sound(config)
-        assert calls[-1].name == name and calls[-1].is_file()
+        assert calls[-1].name == name
+        assert calls[-1].is_file()
         before = len(calls)
         desktop.play_sound(config, stop=True)
         assert len(calls) == before + (index == 0)

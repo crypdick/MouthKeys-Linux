@@ -46,7 +46,7 @@ def launch():
     activation = Activation(config.hotkey_mode, request)
     while config.shortcut_backend == "portal":
         entries = configured_entries(config)
-        child = subprocess.Popen(args, stdin=subprocess.PIPE, stdout=subprocess.PIPE, bufsize=0)
+        child = subprocess.Popen(args, stdin=subprocess.PIPE, stdout=subprocess.PIPE, bufsize=0)  # noqa: S603
         changed = False
         checked_at = 0
         buffer = b""
@@ -116,7 +116,7 @@ def helper():
     path = "/org/freedesktop/portal/desktop"
 
     def fail(message):
-        print(json.dumps({"error": message}), flush=True)
+        print(json.dumps({"error": message}), flush=True)  # noqa: T201
         loop.quit()
 
     def request(method, signature, parameters, token, callback):
@@ -137,7 +137,7 @@ def helper():
         if result != expected:
             pending[result] = pending.pop(expected)
 
-    def response(conn, sender, object_path, iface, signal, parameters, user_data):
+    def response(conn, sender, object_path, _iface, signal, parameters, _user_data):
         callback = pending.pop(object_path, None)
         if callback:
             code, results = parameters.unpack()
@@ -146,7 +146,8 @@ def helper():
             else:
                 try:
                     callback(results)
-                except Exception as exc:
+                # The portal client reports errors via its own response protocol.
+                except Exception as exc:  # allow: exception-handling  # noqa: BLE001
                     fail(str(exc))
 
     def bound(results):
@@ -173,10 +174,10 @@ def helper():
             bound,
         )
 
-    def activated(conn, sender, object_path, iface, signal, parameters, user_data):
+    def activated(conn, sender, object_path, _iface, signal, parameters, _user_data):
         session, shortcut, *_ = parameters.unpack()
         if state["ready"] and session == state["session"] and shortcut in by_id:
-            print(
+            print(  # noqa: T201
                 json.dumps(
                     {
                         "action": by_id[shortcut],
@@ -247,7 +248,8 @@ def helper():
                     300,
                     None,
                 )
-            except Exception:
+            # The portal session may already be detached during cleanup.
+            except Exception:  # allow: exception-handling  # noqa: BLE001, S110
                 pass
         if state["session"]:
             connection.call_sync(
@@ -266,6 +268,6 @@ def helper():
 if __name__ == "__main__":
     try:
         helper()
-    except Exception as exc:
-        print(json.dumps({"error": "GlobalShortcuts portal: " + str(exc)}), flush=True)
+    except Exception as exc:  # noqa: BLE001
+        print(json.dumps({"error": "GlobalShortcuts portal: " + str(exc)}), flush=True)  # noqa: T201
         raise SystemExit(1) from None

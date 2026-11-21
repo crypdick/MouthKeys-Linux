@@ -124,7 +124,7 @@ def heartbeat(path):
 
 def input_is_receiver(source):
     def run(args):
-        return subprocess.run(args, capture_output=True, text=True, check=True, timeout=1).stdout
+        return subprocess.run(args, capture_output=True, text=True, check=True, timeout=1).stdout  # noqa: S603
 
     if source == "default":
         source = run(["pactl", "get-default-source"]).strip()
@@ -198,7 +198,7 @@ class BatteryMonitor:
             if not input_is_receiver(source):
                 value = {"result": "not-receiver"}
             else:
-                result = subprocess.run(
+                result = subprocess.run(  # noqa: S603
                     python_command("mouthkeys.lark"),
                     capture_output=True,
                     text=True,
@@ -220,7 +220,7 @@ def main():
         value = {"result": "permission-denied"}
     except (OSError, ValueError) as exc:
         value = {"result": "unavailable", "error": str(exc)}
-    print(json.dumps(value))
+    print(json.dumps(value))  # noqa: T201
 
 
 if __name__ == "__main__":

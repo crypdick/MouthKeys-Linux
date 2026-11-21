@@ -43,9 +43,11 @@ def build_tiny(family, path):
     if path.exists():
         raise ValueError("Tiny artifact destination already exists; choose an unused directory")
     if family == "nemo":
-        return build_tiny_nemo(path)
+        build_tiny_nemo(path)
+        return
     if family == "nemotron":
-        return build_tiny_nemotron(path)
+        build_tiny_nemotron(path)
+        return
     import torch
     from tokenizers import Tokenizer, models, pre_tokenizers
     from transformers import PreTrainedTokenizerFast
@@ -77,15 +79,15 @@ def build_tiny(family, path):
         "<|nodiarize|>",
     ]
     backend = Tokenizer(
-        models.WordLevel({token: i for i, token in enumerate(tokens)}, unk_token="<unk>")
+        models.WordLevel({token: i for i, token in enumerate(tokens)}, unk_token="<unk>")  # noqa: S106
     )
     backend.pre_tokenizer = pre_tokenizers.Whitespace()
     tokenizer = PreTrainedTokenizerFast(
         tokenizer_object=backend,
-        pad_token="<pad>",
-        unk_token="<unk>",
-        eos_token="<eos>",
-        bos_token="<bos>",
+        pad_token="<pad>",  # noqa: S106
+        unk_token="<unk>",  # noqa: S106
+        eos_token="<eos>",  # noqa: S106
+        bos_token="<bos>",  # noqa: S106
         extra_special_tokens={
             "audio_token": "<|audio_pad|>",
             "audio_bos_token": "<|audio_start|>",
@@ -189,15 +191,15 @@ def build_tiny_nemotron(path):
     backend = Tokenizer(
         models.WordLevel(
             {"<pad>": 0, "<unk>": 1, "<blank>": 2, "hello": 3, "world": 4, "##s": 5},
-            unk_token="<unk>",
+            unk_token="<unk>",  # noqa: S106
         )
     )
     backend.pre_tokenizer = pre_tokenizers.Whitespace()
     backend.decoder = decoders.WordPiece(prefix="##", cleanup=False)
     tokenizer = ParakeetTokenizer(
         tokenizer_object=backend,
-        pad_token="<pad>",
-        unk_token="<unk>",
+        pad_token="<pad>",  # noqa: S106
+        unk_token="<unk>",  # noqa: S106
         additional_special_tokens=["<blank>"],
     )
     processor = NemotronAsrStreamingProcessor(

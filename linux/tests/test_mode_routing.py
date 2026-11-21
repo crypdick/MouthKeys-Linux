@@ -5,7 +5,6 @@ from dataclasses import asdict, replace
 from types import SimpleNamespace
 
 import pytest
-from test_pipeline import FakeDelivery, FakeRecorder, FakeTranscriber, finish
 
 from mouthkeys import assistance
 from mouthkeys.config import Config
@@ -14,6 +13,8 @@ from mouthkeys.profiles import PROFILE_FIELDS, save_profiles
 from mouthkeys.routing import save_routes, select_prompt
 from mouthkeys.service import Controller
 from mouthkeys.storage import History
+
+from .test_pipeline import FakeDelivery, FakeRecorder, FakeTranscriber, finish
 
 
 def profiles():
@@ -48,9 +49,11 @@ def test_mode_profiles_providers_prompts_and_override_precedence():
     )
     assert select_prompt(config, mode="edit").ai_model == "model-0"
     app = select_prompt(config, "Editor", mode="edit")
-    assert app.ai_model == "model-1" and app.ai_prompt == "Custom mode prompt 1"
+    assert app.ai_model == "model-1"
+    assert app.ai_prompt == "Custom mode prompt 1"
     shortcut = select_prompt(config, "Editor", override=shortcut_profile, mode="edit")
-    assert shortcut.ai_model == "model-2" and shortcut.ai_prompt == "Custom mode prompt 2"
+    assert shortcut.ai_model == "model-2"
+    assert shortcut.ai_prompt == "Custom mode prompt 2"
     assert select_prompt(config, "Editor").ai_enabled == "off"
     assert select_prompt(replace(config, edit_profile="off"), mode="edit").ai_enabled == "off"
     assert select_prompt(Config(edit_profile=mode_profile), mode="edit").ai_enabled == "on"

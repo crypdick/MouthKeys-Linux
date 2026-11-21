@@ -47,6 +47,8 @@ for key in (
 ):
     os.environ.pop(key, None)
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
+# The host GTK theme can still try to open a display with Qt offscreen.
+os.environ["QT_QPA_PLATFORMTHEME"] = ""
 os.environ["HF_HUB_OFFLINE"] = "1"
 os.environ["TRANSFORMERS_OFFLINE"] = "1"
 isolate_network()
@@ -62,7 +64,7 @@ args = parser.parse_args()
 
 def cli(*args):
     assert args[0] in ("--version", "config"), "No capture/delivery actions allowed"
-    result = subprocess.run(
+    result = subprocess.run(  # noqa: S603
         [str(executable), *args], check=True, capture_output=True, text=True, timeout=20, cwd=root
     )
     return result.stdout
@@ -115,7 +117,8 @@ try:
     started = True
     # Direct requests cannot auto-spawn an unowned replacement daemon on failure.
     status = request("status")
-    assert status["version"] == args.expect_version and status["phase"] == "idle"
+    assert status["version"] == args.expect_version
+    assert status["phase"] == "idle"
     cli("config", "spoken_send", "on")
     from mouthkeys.config import Config
 

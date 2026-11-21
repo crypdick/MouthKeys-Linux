@@ -1,5 +1,6 @@
 import shutil
 import threading
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
@@ -49,13 +50,15 @@ def test_confirmed_insertion_starts_read_only_learning_and_review_commands(monke
     Config(automatic_learning="on", learning_min_occurrences=1).save()
     controller = app()
     confirmed_delivery(controller)
-    monkeypatch.setattr("mouthkeys.service.CorrectionLearner", FastLearner)
-    monkeypatch.setattr("mouthkeys.service.read_snapshot", lambda target: snapshot("world"))
+    monkeypatch.setattr("mouthkeys.recording_learning.CorrectionLearner", FastLearner)
+    monkeypatch.setattr(
+        "mouthkeys.recording_learning.read_snapshot", lambda target: snapshot("world")
+    )
     controller.command("start")
     controller.command("stop")
     finish(controller)
-    controller.learning_worker.join(3)
-    assert not controller.learning_worker.is_alive()
+    controller.learning.worker.join(3)
+    assert not controller.learning.worker.is_alive()
     pending = controller.command("learning_pending")
     assert len(pending) == 1
     assert pending[0]["heard"] == "wurld"
@@ -74,12 +77,13 @@ def test_unconfirmed_clipboard_and_opt_out_never_observe_fields(monkeypatch, res
     controller = app()
     confirmed_delivery(controller, result)
     monkeypatch.setattr(
-        "mouthkeys.service.read_snapshot", lambda *_: pytest.fail("Unexpected field read")
+        "mouthkeys.recording_learning.read_snapshot",
+        lambda *_: pytest.fail("Unexpected field read"),
     )
     controller.command("start")
     controller.command("stop")
     finish(controller)
-    assert controller.learning_worker is None
+    assert controller.learning.worker is None
 
 
 def test_new_recording_invalidates_slow_old_observer_without_blocking_status(monkeypatch):
@@ -93,11 +97,11 @@ def test_new_recording_invalidates_slow_old_observer_without_blocking_status(mon
         assert release.wait(3)
         return snapshot("world")
 
-    monkeypatch.setattr("mouthkeys.service.read_snapshot", read)
+    monkeypatch.setattr("mouthkeys.recording_learning.read_snapshot", read)
     controller.command("start")
     controller.command("stop")
     finish(controller)
-    observer = controller.learning_worker
+    observer = controller.learning.worker
     assert entered.wait(2)
     status_done = threading.Event()
     threading.Thread(target=lambda: (controller.status(), status_done.set()), daemon=True).start()
@@ -211,3 +215,56 @@ def test_edit_replacement_requires_exact_captured_selection():
             start_target={"field": {**field, "protected": True}}, selected_text="Original"
         )
     )
+
+
+def test_slow_automatic_accept_does_not_hold_controller_state_lock(monkeypatch):
+    Config(automatic_learning="on", learning_confirmation="off", learning_min_occurrences=1).save()
+    controller = app()
+    confirmed_delivery(controller)
+    entered, release = threading.Event(), threading.Event()
+
+    class BlockingLearner(FastLearner):
+        def accept(self, proposal_id):
+            entered.set()
+            assert release.wait(3)
+            return super().accept(proposal_id)
+
+    monkeypatch.setattr("mouthkeys.recording_learning.OBSERVATION_POLL_SECONDS", 0.001)
+    monkeypatch.setattr("mouthkeys.recording_learning.CorrectionLearner", BlockingLearner)
+    monkeypatch.setattr("mouthkeys.recording_learning.read_snapshot", lambda _: snapshot("world"))
+    controller.command("start")
+    controller.command("stop")
+    finish(controller)
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        try:
+            assert entered.wait(2)
+            status = pool.submit(controller.command, "status").result(timeout=1)
+            assert status["phase"] == "idle"
+            assert status["learning_pending"] == []
+            cleared = pool.submit(controller.command, "clear").result(timeout=1)
+            assert cleared["learning_pending"] == []
+            assert Dictionary.load()["replacements"] == []
+        finally:
+            release.set()
+            controller.learning.worker.join(3)
+    assert not controller.learning.worker.is_alive()
+    assert Dictionary.apply("wurld") == "world"
+
+
+def test_clearing_history_hides_pending_reviews_without_learning(monkeypatch):
+    Config(automatic_learning="on", learning_min_occurrences=1).save()
+    controller = app()
+    confirmed_delivery(controller)
+    monkeypatch.setattr("mouthkeys.recording_learning.OBSERVATION_POLL_SECONDS", 0.001)
+    monkeypatch.setattr("mouthkeys.recording_learning.CorrectionLearner", FastLearner)
+    monkeypatch.setattr("mouthkeys.recording_learning.read_snapshot", lambda _: snapshot("world"))
+    controller.command("start")
+    controller.command("stop")
+    finish(controller)
+    controller.learning.worker.join(2)
+    assert not controller.learning.worker.is_alive()
+    (proposal,) = controller.command("learning_pending")
+    assert controller.command("clear")["learning_pending"] == []
+    with pytest.raises(ValueError, match="no longer exists"):
+        controller.command("learning_dismiss", id=proposal["id"])
+    assert Dictionary.load()["replacements"] == []

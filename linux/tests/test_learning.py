@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from mouthkeys import data_lock
+from mouthkeys import data_lock, learning
 from mouthkeys.dictionary import Dictionary
 from mouthkeys.learning import CorrectionLearner, correction_candidate
 from mouthkeys.vocabulary import VocabularyStore, context_prompt, whisper_options
@@ -282,3 +282,113 @@ def test_conflicting_aliases_rejected_and_textual_hints_bounded_independently():
     cfg = SimpleNamespace(vocabulary_boosting="on")
     assert len(context_prompt(cfg).encode()) <= 4096
     assert len(whisper_options(cfg)["hotwords"].encode()) <= 4096
+
+
+def test_failed_dismiss_keeps_the_proposal_available_for_retry(monkeypatch):
+    learner = CorrectionLearner(config(), clock=lambda: 0, wall_clock=lambda: 10000)
+    assert learner.begin("wurld", snapshot("wurld"))
+    learner.observe(snapshot("world"), now=1)
+    proposal = learner.observe(snapshot("world"), now=4)
+
+    def fail(_data):
+        raise OSError("Policy write failed")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(learner, "_save", fail)
+        with pytest.raises(OSError, match="Policy write failed"):
+            learner.dismiss(proposal["id"])
+    assert learner.pending() == [proposal]
+    learner.dismiss(proposal["id"])
+    assert learner.pending() == []
+
+
+@pytest.mark.parametrize(
+    ("before", "after", "insertion_start"),
+    [
+        ("same", "same", 0),
+        ("Prefixwurld", "Prefixworld", 6),
+        ("deleted", "", 0),
+        ("w" * 41, "v" * 41, 0),
+    ],
+)
+def test_unchanged_deleted_excessive_and_cross_boundary_words_are_ignored(
+    before, after, insertion_start
+):
+    assert correction_candidate(before, after, insertion_start, len(before)) is None
+
+
+def test_observer_drops_edit_outside_inserted_span_and_can_restart_with_new_config():
+    cfg = config()
+    cfg.automatic_learning = "off"
+    learner = CorrectionLearner(cfg, clock=lambda: 0, wall_clock=lambda: 10000)
+    assert learner.observe(snapshot("Unrelated"), now=1) is None
+    assert learner.begin("wurld", snapshot("Prefix wurld"), config=config())
+    assert learner.observe(snapshot("Unrelated wurld"), now=1) is None
+    assert learner.observation is None
+    assert learner.observe(snapshot("Unrelated world"), now=4) is None
+    assert learner.pending() == []
+    assert not learner.path().exists()
+
+
+@pytest.mark.parametrize(
+    ("contents", "message"),
+    [
+        (b"[]", "Invalid learning policy"),
+        (b'{"pairs": 5}', "Invalid learning policy"),
+        (b"x" * (256 * 1024 + 1), "exceeds 256 KiB"),
+    ],
+)
+def test_invalid_policy_never_suggests_or_writes_dictionary(contents, message):
+    learner = CorrectionLearner(config(), clock=lambda: 0, wall_clock=lambda: 10000)
+    path = learner.path()
+    path.parent.mkdir(parents=True)
+    path.write_bytes(contents)
+    assert learner.begin("wurld", snapshot("wurld"))
+    assert learner.observe(snapshot("world"), now=1) is None
+    with pytest.raises(ValueError, match=message):
+        learner.observe(snapshot("world"), now=4)
+    assert path.read_bytes() == contents
+    assert not Dictionary.path().exists()
+    assert not VocabularyStore.path().exists()
+    assert learner.pending() == []
+
+
+def test_pending_proposals_keep_only_the_most_recent(monkeypatch):
+    monkeypatch.setattr(learning, "MAX_PROPOSALS", 2)
+    now = [10000]
+    learner = CorrectionLearner(config(), clock=lambda: 0, wall_clock=lambda: now[0])
+    proposals = []
+    for index in range(3):
+        heard, corrected = f"wurld{index}", f"world{index}"
+        assert learner.begin(heard, snapshot(heard))
+        learner.observe(snapshot(corrected), now=1)
+        proposals.append(learner.observe(snapshot(corrected), now=4))
+        now[0] += 601
+    assert all(proposals)
+    assert learner.pending() == proposals[-2:]
+
+
+@pytest.mark.parametrize("replacement", ["world", "other interpretation"])
+def test_existing_dictionary_update_is_never_overwritten_on_review(replacement):
+    learner = CorrectionLearner(config(), clock=lambda: 0, wall_clock=lambda: 10000)
+    assert learner.begin("wurld", snapshot("wurld"))
+    learner.observe(snapshot("world"), now=1)
+    proposal = learner.observe(snapshot("world"), now=4)
+    data = Dictionary.defaults()
+    data["replacements"] = [
+        {"triggers": ["separate"], "replacement": "another"},
+        {"triggers": ["WURLD"], "replacement": replacement, "enabled": False},
+    ]
+    Dictionary.save(data)
+    words = [{"text": "World", "weight": 3, "aliases": []}]
+    VocabularyStore.save_entries(words)
+
+    if replacement == "world":
+        assert learner.accept(proposal["id"]) == proposal
+        assert learner.pending() == []
+    else:
+        with pytest.raises(ValueError, match="Existing replacement conflicts"):
+            learner.accept(proposal["id"])
+        assert learner.pending() == [proposal]
+    assert Dictionary.load() == data
+    assert VocabularyStore.entries() == words

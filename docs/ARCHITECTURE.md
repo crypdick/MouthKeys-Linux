@@ -6,7 +6,11 @@ then dispatches local work or uses `control` to contact the private Unix socket 
 `daemon.Server`. The socket host owns lifecycle, not the recording queue.
 
 - **Recording:** `service.Controller` owns capture and a FIFO of `DictationJob`s. `audio.CaptureSession`
-  wraps the process owned by `capture`. `transcribe.Transcriber` serializes inference, with optional
+  wraps the process owned by `capture`. `microphone` owns session source preferences, retry
+  budgets, and device quarantine; the service still commits capture state under its own lock.
+  `recording_destination` samples focus and formatting context before capture stops and looks up
+  metadata afterward, without activating another window.
+  `transcribe.Transcriber` serializes inference, with optional
   engines in `engines` and `native_worker`. `native_asr` owns local artifact checks and common
   audio helpers; `transformers_asr` and `nemo_asr` load and decode inside the isolated worker.
 - **Delivery:** `formatting` and `spoken_send` transform text without desktop effects. `storage.History`

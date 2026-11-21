@@ -29,6 +29,19 @@ class FakeRecorder:
         return self.ended
 
 
+class SwitchRecorder(FakeRecorder):
+    def __init__(self, config, path):
+        super().__init__(config, path)
+        self.sources = [config.audio_source]
+        self.reject = set()
+
+    def switch_source(self, source, *, timeout):
+        assert 0 < timeout <= 5
+        self.sources.append(source)
+        if source in self.reject:
+            raise RuntimeError(f"{source} unavailable")
+
+
 class FakeTranscriber:
     def __init__(self, text="Hello, world! café 日本語"):
         self.text = text

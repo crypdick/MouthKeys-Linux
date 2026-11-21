@@ -6,7 +6,7 @@ import pytest
 from mouthkeys.audio import CaptureSession
 from mouthkeys.config import Config
 
-from .pipeline_support import FakeRecorder, finish, make_controller
+from .pipeline_support import FakeRecorder, SwitchRecorder, finish, make_controller
 
 
 def test_capture_failure_tries_alternate_and_quarantines_failed_source(monkeypatch):
@@ -20,7 +20,7 @@ def test_capture_failure_tries_alternate_and_quarantines_failed_source(monkeypat
         return FakeRecorder(config, path)
 
     monkeypatch.setattr(
-        "mouthkeys.service.source_candidates",
+        "mouthkeys.microphone.source_candidates",
         lambda config, excluded: [name for name in ("usb", "backup") if name not in excluded],
     )
     app = make_controller(record)
@@ -75,7 +75,7 @@ def test_failed_sources_have_total_time_budget(monkeypatch):
 
     monkeypatch.setattr("mouthkeys.service.time.monotonic", lambda: elapsed[0])
     monkeypatch.setattr(
-        "mouthkeys.service.source_candidates",
+        "mouthkeys.microphone.source_candidates",
         lambda config, excluded: [name for name in ("one", "two", "three") if name not in excluded],
     )
     app = make_controller(record)
@@ -83,19 +83,6 @@ def test_failed_sources_have_total_time_budget(monkeypatch):
         app.command("start")
     assert calls == ["one", "two"]
     assert app.phase == "idle"
-
-
-class SwitchRecorder(FakeRecorder):
-    def __init__(self, config, path):
-        super().__init__(config, path)
-        self.sources = [config.audio_source]
-        self.reject = set()
-
-    def switch_source(self, source, *, timeout):
-        assert 0 < timeout <= 5
-        self.sources.append(source)
-        if source in self.reject:
-            raise RuntimeError(f"{source} unavailable")
 
 
 def test_temporary_microphone_pick_switches_now_without_changing_saved_order():
@@ -127,7 +114,7 @@ def test_persistent_pick_preserves_other_settings_and_never_list():
     app = make_controller(SwitchRecorder)
     app.command("select_microphone", source="usb", persist=True)
     assert Config.load().audio_source == "usb"
-    assert app.session_source is None
+    assert app.status()["session_microphone"] is None
     assert Config.load().ai_model == "original"
     with pytest.raises(ValueError, match="Never"):
         app.command("select_microphone", source="bad", persist=True)
@@ -141,14 +128,14 @@ def test_switch_failure_recovers_previous_source_and_keeps_audio(monkeypatch):
     capture = app.recorder
     capture.reject.add("bad")
     monkeypatch.setattr(
-        "mouthkeys.service.source_candidates",
+        "mouthkeys.microphone.source_candidates",
         lambda config, excluded: [name for name in ("original",) if name not in excluded],
     )
     app.command("select_microphone", source="bad")
     assert capture.sources == ["original", "bad", "original"]
     assert app.phase == "recording"
     assert app.config.audio_source == "original"
-    assert app.session_source is None
+    assert app.status()["session_microphone"] is None
     assert "Selected microphone failed" in app.notice["message"]
     assert app.job.audio_path.exists()
     app.command("cancel")
@@ -198,9 +185,12 @@ def test_cancel_during_microphone_switch_suppresses_late_delivery():
             assert released.wait(2)
             super().switch_source(source, timeout=timeout)
 
+    Config(audio_source="original").save()
     app = make_controller(DelayedSwitch)
     app.command("start")
-    worker = threading.Thread(target=lambda: app.command("select_microphone", source="usb"))
+    worker = threading.Thread(
+        target=lambda: app.command("select_microphone", source="usb", persist=True)
+    )
     worker.start()
     try:
         assert entered.wait(1)
@@ -212,15 +202,16 @@ def test_cancel_during_microphone_switch_suppresses_late_delivery():
     assert not worker.is_alive()
     finish(app)
     assert not app.delivery.calls
-    assert app.session_source is None
+    assert app.status()["session_microphone"] is None
     assert app.history.rows()[0]["status"] == "cancelled"
+    assert Config.load().audio_source == "original"
 
 
 def test_all_switch_candidates_fail_recovers_prior_audio_without_target(monkeypatch):
     app = make_controller(SwitchRecorder)
     app.command("start")
     app.recorder.reject.add("bad")
-    monkeypatch.setattr("mouthkeys.service.source_candidates", lambda config, excluded: [])
+    monkeypatch.setattr("mouthkeys.microphone.source_candidates", lambda config, excluded: [])
     app.command("select_microphone", source="bad")
     finish(app)
     assert app.history.rows()[0]["status"] == "copied"
@@ -375,8 +366,8 @@ def test_unplugged_old_microphone_does_not_quarantine_untried_replacement():
     assert opened == ["old", "healthy"]
     assert app.config.audio_source == "healthy"
     assert app.phase == "recording"
-    assert "old" in app.source_quarantine
-    assert "healthy" not in app.source_quarantine
+    assert "old" in app.microphone.quarantine
+    assert "healthy" not in app.microphone.quarantine
     assert "Old microphone unplugged" in app.notice["message"]
 
     def transcribe(path, config):

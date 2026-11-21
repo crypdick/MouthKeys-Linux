@@ -313,54 +313,8 @@
 1	src/mouthkeys/clipboard.py	TRY300	Consider moving this statement to an `else` block
 3	src/mouthkeys/config.py	PLC0415	`import` should be at the top-level of a file
 1	src/mouthkeys/config.py	TRY004	Prefer `TypeError` exception for invalid type
-1	src/mouthkeys/delivery.py	ANN001	Missing type annotation for function argument `allow_without_insert`
-1	src/mouthkeys/delivery.py	ANN001	Missing type annotation for function argument `args`
-3	src/mouthkeys/delivery.py	ANN001	Missing type annotation for function argument `before_send`
-3	src/mouthkeys/delivery.py	ANN001	Missing type annotation for function argument `cancel_event`
-7	src/mouthkeys/delivery.py	ANN001	Missing type annotation for function argument `config`
-8	src/mouthkeys/delivery.py	ANN001	Missing type annotation for function argument `target`
-2	src/mouthkeys/delivery.py	ANN001	Missing type annotation for function argument `terminal`
-3	src/mouthkeys/delivery.py	ANN001	Missing type annotation for function argument `text`
-1	src/mouthkeys/delivery.py	ANN001	Missing type annotation for function argument `unchanged`
-1	src/mouthkeys/delivery.py	ANN001	Missing type annotation for function argument `window`
-1	src/mouthkeys/delivery.py	ANN003	Missing type annotation for `**kwargs`
-1	src/mouthkeys/delivery.py	ANN201	Missing return type annotation for public function `automatic_delivery_warning`
-1	src/mouthkeys/delivery.py	ANN201	Missing return type annotation for public function `capture_target`
-1	src/mouthkeys/delivery.py	ANN201	Missing return type annotation for public function `copy`
-1	src/mouthkeys/delivery.py	ANN201	Missing return type annotation for public function `deliver`
-1	src/mouthkeys/delivery.py	ANN201	Missing return type annotation for public function `doctor`
-1	src/mouthkeys/delivery.py	ANN201	Missing return type annotation for public function `focus`
-1	src/mouthkeys/delivery.py	ANN201	Missing return type annotation for public function `paste_key`
-1	src/mouthkeys/delivery.py	ANN201	Missing return type annotation for public function `prepare_target`
-1	src/mouthkeys/delivery.py	ANN201	Missing return type annotation for public function `replace_selection`
-1	src/mouthkeys/delivery.py	ANN201	Missing return type annotation for public function `run`
-1	src/mouthkeys/delivery.py	ANN201	Missing return type annotation for public function `send_key`
-1	src/mouthkeys/delivery.py	ANN201	Missing return type annotation for public function `session`
-1	src/mouthkeys/delivery.py	ANN201	Missing return type annotation for public function `target_metadata`
-1	src/mouthkeys/delivery.py	ANN201	Missing return type annotation for public function `terminal`
-1	src/mouthkeys/delivery.py	ANN201	Missing return type annotation for public function `window_class`
-1	src/mouthkeys/delivery.py	ANN202	Missing return type annotation for private function `_activate_window`
-1	src/mouthkeys/delivery.py	ANN202	Missing return type annotation for private function `_deliver_field`
-1	src/mouthkeys/delivery.py	ANN202	Missing return type annotation for private function `_field_current`
-1	src/mouthkeys/delivery.py	ANN202	Missing return type annotation for private function `_native_insert`
-1	src/mouthkeys/delivery.py	ANN202	Missing return type annotation for private function `_wayland_send`
-1	src/mouthkeys/delivery.py	ANN202	Missing return type annotation for private function `_x11_send`
-1	src/mouthkeys/delivery.py	ARG002	Unused method argument: `config`
-1	src/mouthkeys/delivery.py	C901	`_deliver_field` is too complex (21 > 15)
-1	src/mouthkeys/delivery.py	C901	`deliver` is too complex (27 > 15)
-1	src/mouthkeys/delivery.py	FBT002	Boolean default positional argument in function definition
-11	src/mouthkeys/delivery.py	FBT003	Boolean positional value in function call
-10	src/mouthkeys/delivery.py	PLC0415	`import` should be at the top-level of a file
-1	src/mouthkeys/delivery.py	PLR0911	Too many return statements (10 > 6)
-1	src/mouthkeys/delivery.py	PLR0911	Too many return statements (12 > 6)
-3	src/mouthkeys/delivery.py	PLR0911	Too many return statements (7 > 6)
+1	src/mouthkeys/delivery.py	PLR0911	Too many return statements (7 > 6)
 1	src/mouthkeys/delivery.py	PLR0911	Too many return statements (9 > 6)
-1	src/mouthkeys/delivery.py	PLR0912	Too many branches (20 > 12)
-1	src/mouthkeys/delivery.py	PLR0912	Too many branches (26 > 12)
-1	src/mouthkeys/delivery.py	PLR0915	Too many statements (58 > 50)
-1	src/mouthkeys/delivery.py	RUF005	Consider `[*args, "-m", "ctrl"]` instead of concatenation
-3	src/mouthkeys/delivery.py	SIM105	Use `contextlib.suppress(OSError, RuntimeError, subprocess.SubprocessError)` instead of `try`-`except`-`pass`
-1	src/mouthkeys/delivery.py	TRY300	Consider moving this statement to an `else` block
 1	src/mouthkeys/desktop.py	ANN001	Missing type annotation for function argument `args`
 5	src/mouthkeys/desktop.py	ANN001	Missing type annotation for function argument `config`
 1	src/mouthkeys/desktop.py	ANN001	Missing type annotation for function argument `excluded`
@@ -623,7 +577,7 @@
 2	src/mouthkeys/gui.py	FBT002	Boolean default positional argument in function definition
 8	src/mouthkeys/gui.py	FBT003	Boolean positional value in function call
 1	src/mouthkeys/gui.py	ISC004	Unparenthesized implicit string concatenation in collection
-58	src/mouthkeys/gui.py	PLC0415	`import` should be at the top-level of a file
+57	src/mouthkeys/gui.py	PLC0415	`import` should be at the top-level of a file
 1	src/mouthkeys/gui.py	PLR0911	Too many return statements (16 > 6)
 1	src/mouthkeys/gui.py	PLR0912	Too many branches (15 > 12)
 1	src/mouthkeys/gui.py	PLR0912	Too many branches (18 > 12)

@@ -22,8 +22,8 @@ from PySide6.QtWidgets import (
 )
 
 from .config import Config
-from .delivery import session
 from .desktop import source_list
+from .desktop_input import session
 
 GROUPS = {
     "microphone_preferred": "Preferred",

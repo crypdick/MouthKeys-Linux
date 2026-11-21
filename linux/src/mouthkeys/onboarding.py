@@ -101,7 +101,7 @@ class SetupPage(QWidget):
     def check_setup(self):
         import json
 
-        from .delivery import doctor
+        from .desktop_input import doctor
 
         self.result.setPlainText(json.dumps(doctor(Config.load()), indent=2))
 

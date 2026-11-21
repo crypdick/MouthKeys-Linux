@@ -8,12 +8,12 @@ import wave
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 
-from . import __version__
+from . import __version__, desktop_input
 from .accessibility import read_snapshot
 from .audio import CaptureSession, CaptureTeardownError, check_audio, live_meter
 from .config import Config, private_dir, runtime_dir
 from .control import MAX_MESSAGE
-from .delivery import Delivery, automatic_delivery_warning
+from .delivery import Delivery
 from .desktop import MediaSession, choose_source, play_sound, source_candidates
 from .formatting import enabled, format_text, parse_send
 from .learning import CorrectionLearner
@@ -1387,7 +1387,7 @@ class Controller:
             result = self.delivery.deliver(text, config, target) if text else "transcribed"
             paste_warning = None
             if result == "copied" and auto_paste_expected:
-                paste_warning = automatic_delivery_warning(config)
+                paste_warning = desktop_input.automatic_delivery_warning(config)
                 if not paste_warning:
                     if not target:
                         paste_warning = "No destination was captured."

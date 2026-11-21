@@ -160,29 +160,9 @@
 2	src/mouthkeys/clipboard.py	union-attr	Item "None" of "IO[bytes] | None" has no attribute "write"
 1	src/mouthkeys/config.py	no-untyped-call	Call to untyped function "models_endpoint" in typed context
 1	src/mouthkeys/config.py	no-untyped-call	Call to untyped function "validate_reasoning" in typed context
-1	src/mouthkeys/delivery.py	arg-type	Argument 1 to "get" of "dict" has incompatible type "str | None"; expected "str"
-2	src/mouthkeys/delivery.py	call-overload	No overload variant of "get" of "dict" matches argument type "str"
-3	src/mouthkeys/delivery.py	no-untyped-call	Call to untyped function "ClipboardPaste" in typed context
-1	src/mouthkeys/delivery.py	no-untyped-call	Call to untyped function "_activate_window" in typed context
-2	src/mouthkeys/delivery.py	no-untyped-call	Call to untyped function "_deliver_field" in typed context
-4	src/mouthkeys/delivery.py	no-untyped-call	Call to untyped function "_field_current" in typed context
-1	src/mouthkeys/delivery.py	no-untyped-call	Call to untyped function "_native_insert" in typed context
-2	src/mouthkeys/delivery.py	no-untyped-call	Call to untyped function "_wayland_send" in typed context
-2	src/mouthkeys/delivery.py	no-untyped-call	Call to untyped function "_x11_send" in typed context
+1	src/mouthkeys/delivery.py	no-untyped-call	Call to untyped function "ClipboardPaste" in typed context
 1	src/mouthkeys/delivery.py	no-untyped-call	Call to untyped function "expected_text" in typed context
-12	src/mouthkeys/delivery.py	no-untyped-call	Call to untyped function "finish" in typed context
-17	src/mouthkeys/delivery.py	no-untyped-call	Call to untyped function "focus" in typed context
-2	src/mouthkeys/delivery.py	no-untyped-call	Call to untyped function "prepare_target" in typed context
-17	src/mouthkeys/delivery.py	no-untyped-call	Call to untyped function "run" in typed context
-23	src/mouthkeys/delivery.py	no-untyped-call	Call to untyped function "session" in typed context
-2	src/mouthkeys/delivery.py	no-untyped-call	Call to untyped function "target_metadata" in typed context
-6	src/mouthkeys/delivery.py	no-untyped-call	Call to untyped function "terminal" in typed context
 1	src/mouthkeys/delivery.py	no-untyped-call	Call to untyped function "unchanged" in typed context
-1	src/mouthkeys/delivery.py	no-untyped-call	Call to untyped function "window_class" in typed context
-8	src/mouthkeys/delivery.py	no-untyped-def	Function is missing a return type annotation
-13	src/mouthkeys/delivery.py	no-untyped-def	Function is missing a type annotation
-1	src/mouthkeys/delivery.py	no-untyped-def	Function is missing a type annotation for one or more parameters
-2	src/mouthkeys/delivery.py	type-arg	Missing type arguments for generic type "dict"
 1	src/mouthkeys/desktop.py	arg-type	Argument 3 to "getattr" has incompatible type "str"; expected "Path"
 1	src/mouthkeys/desktop.py	assignment	Incompatible types in assignment (expression has type "Path | None", variable has type "Path")
 1	src/mouthkeys/desktop.py	no-untyped-call	Call to untyped function "choose_source" in typed context
@@ -347,7 +327,6 @@
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "selected_action" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "selected_id" in typed context
 17	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "send" in typed context
-3	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "session" in typed context
 3	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "setting_group" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "stats_page" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "update_history" in typed context
@@ -455,7 +434,6 @@
 1	src/mouthkeys/microphone_ui.py	no-untyped-call	Call to untyped function "refresh" in typed context
 2	src/mouthkeys/microphone_ui.py	no-untyped-call	Call to untyped function "reorder" in typed context
 1	src/mouthkeys/microphone_ui.py	no-untyped-call	Call to untyped function "select_group" in typed context
-1	src/mouthkeys/microphone_ui.py	no-untyped-call	Call to untyped function "session" in typed context
 1	src/mouthkeys/microphone_ui.py	no-untyped-call	Call to untyped function "source_list" in typed context
 1	src/mouthkeys/microphone_ui.py	no-untyped-call	Call to untyped function "sync_field" in typed context
 3	src/mouthkeys/microphone_ui.py	no-untyped-def	Function is missing a return type annotation

@@ -300,9 +300,9 @@ def test_model_dropdown_preserves_local_directory_named_like_alias(monkeypatch, 
 def test_microphone_choices_use_discovery_without_capture(monkeypatch):
     import subprocess
 
-    from mouthkeys import delivery, gui
+    from mouthkeys import desktop_input, gui
 
-    monkeypatch.setattr(delivery, "session", lambda: "x11")
+    monkeypatch.setattr(desktop_input, "session", lambda: "x11")
 
     def run(args, **kwargs):
         assert args == ["pactl", "list", "short", "sources"]
@@ -316,9 +316,9 @@ def test_microphone_choices_use_discovery_without_capture(monkeypatch):
 def test_missing_pactl_keeps_manual_microphone_selection(monkeypatch):
     import subprocess
 
-    from mouthkeys import delivery, gui
+    from mouthkeys import desktop_input, gui
 
-    monkeypatch.setattr(delivery, "session", lambda: "x11")
+    monkeypatch.setattr(desktop_input, "session", lambda: "x11")
 
     def run(*args, **kwargs):
         raise FileNotFoundError("pactl")

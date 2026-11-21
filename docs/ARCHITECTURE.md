@@ -11,6 +11,8 @@ then dispatches local work or uses `control` to contact the private Unix socket 
 - **Delivery:** `formatting` and `spoken_send` transform text without desktop effects. `storage.History`
   persists text before `delivery.Delivery` attempts insertion. `accessibility` calls the isolated
   `atspi_helper`; `clipboard` can own a temporary paste selection in a separate Qt process.
+  `desktop_input` probes compositor window identity and runs clipboard and keyboard commands.
+  `delivery` decides whether to use those commands and rechecks the destination before sending.
   Cancellation before delivery wins; unverified destination identity falls back to copy.
 - **UI and optional integrations:** `gui`, `overlay`, `tray`, and `hotkeys` call the service.
   `overlay_process` owns the passive panel's lifetime and wake socket; `overlay_rendering` draws

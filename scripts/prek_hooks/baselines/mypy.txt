@@ -612,17 +612,16 @@
 1	src/mouthkeys/overlay.py	no-untyped-call	Call to untyped function "Request" in typed context
 1	src/mouthkeys/overlay.py	no-untyped-call	Call to untyped function "action" in typed context
 2	src/mouthkeys/overlay.py	no-untyped-call	Call to untyped function "active_phase" in typed context
-2	src/mouthkeys/overlay.py	no-untyped-call	Call to untyped function "apply_settings" in typed context
+1	src/mouthkeys/overlay.py	no-untyped-call	Call to untyped function "apply_settings" in typed context
 2	src/mouthkeys/overlay.py	no-untyped-call	Call to untyped function "apply_theme" in typed context
 1	src/mouthkeys/overlay.py	no-untyped-call	Call to untyped function "button_icon" in typed context
 1	src/mouthkeys/overlay.py	no-untyped-call	Call to untyped function "display_text" in typed context
 1	src/mouthkeys/overlay.py	no-untyped-call	Call to untyped function "live_counters" in typed context
-4	src/mouthkeys/overlay.py	no-untyped-call	Call to untyped function "place" in typed context
 3	src/mouthkeys/overlay.py	no-untyped-call	Call to untyped function "poll" in typed context
 6	src/mouthkeys/overlay.py	no-untyped-call	Call to untyped function "send" in typed context
 1	src/mouthkeys/overlay.py	no-untyped-call	Call to untyped function "set_status" in typed context
 1	src/mouthkeys/overlay.py	no-untyped-call	Call to untyped function "source_names" in typed context
-8	src/mouthkeys/overlay.py	no-untyped-def	Function is missing a return type annotation
+7	src/mouthkeys/overlay.py	no-untyped-def	Function is missing a return type annotation
 17	src/mouthkeys/overlay.py	no-untyped-def	Function is missing a type annotation
 1	src/mouthkeys/overlay_assistant.py	no-untyped-call	Call to untyped function "AssistantPage" in typed context
 1	src/mouthkeys/overlay_assistant.py	no-untyped-call	Call to untyped function "Request" in typed context

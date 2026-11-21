@@ -13,7 +13,7 @@ from pathlib import Path
 from .config import Config
 
 
-def write_private(path, data):
+def write_private(path: str | Path, data: bytes) -> str:
     path = Path(path)
     with tempfile.NamedTemporaryFile(dir=path.parent, delete=False) as stream:
         temporary = Path(stream.name)

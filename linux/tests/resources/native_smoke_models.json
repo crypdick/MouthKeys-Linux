@@ -1,0 +1,120 @@
+{
+  "qwen_cohere_tokens": [
+    "<pad>",
+    "<unk>",
+    "<eos>",
+    "<bos>",
+    "<|audio_pad|>",
+    "<|audio_start|>",
+    "<|audio_end|>",
+    "<timestamp>",
+    "<asr_text>",
+    "language",
+    "English",
+    "hello",
+    "world",
+    "▁",
+    "<|startofcontext|>",
+    "<|startoftranscript|>",
+    "<|emo:undefined|>",
+    "<|en|>",
+    "<|pnc|>",
+    "<|nopnc|>",
+    "<|noitn|>",
+    "<|notimestamp|>",
+    "<|nodiarize|>"
+  ],
+  "qwen_chat_template": "{% for message in messages %}{% for item in message['content'] %}{% if item['type'] == 'audio' %}<|audio_start|><|audio_pad|><|audio_end|>{% else %}{{ item['text'] }}{% endif %}{% endfor %}{% endfor %}",
+  "nemotron_encoder": {
+    "hidden_size": 16,
+    "num_hidden_layers": 1,
+    "num_attention_heads": 2,
+    "intermediate_size": 32,
+    "subsampling_conv_channels": 8,
+    "conv_kernel_size": 5,
+    "sliding_window": 9,
+    "default_num_lookahead_tokens": 1
+  },
+  "nemo": {
+    "sample_rate": 16000,
+    "model_defaults": {
+      "enc_hidden": 16,
+      "pred_hidden": 16,
+      "joint_hidden": 16
+    },
+    "tokenizer": {
+      "dir": "",
+      "type": "bpe"
+    },
+    "preprocessor": {
+      "_target_": "nemo.collections.asr.modules.AudioToMelSpectrogramPreprocessor",
+      "normalize": "per_feature",
+      "window_size": 0.025,
+      "window_stride": 0.01,
+      "features": 80,
+      "n_fft": 512,
+      "dither": 0.0,
+      "pad_to": 0
+    },
+    "encoder": {
+      "_target_": "nemo.collections.asr.modules.ConformerEncoder",
+      "feat_in": 80,
+      "feat_out": -1,
+      "n_layers": 1,
+      "d_model": 16,
+      "subsampling": "dw_striding",
+      "subsampling_factor": 8,
+      "subsampling_conv_channels": 8,
+      "ff_expansion_factor": 2,
+      "self_attention_model": "rel_pos",
+      "n_heads": 2,
+      "att_context_size": [
+        8,
+        1
+      ],
+      "att_context_style": "chunked_limited",
+      "conv_kernel_size": 5,
+      "conv_context_size": "causal",
+      "dropout": 0.0,
+      "dropout_pre_encoder": 0.0,
+      "dropout_emb": 0.0,
+      "dropout_att": 0.0
+    },
+    "decoder": {
+      "_target_": "nemo.collections.asr.modules.RNNTDecoder",
+      "normalization_mode": null,
+      "random_state_sampling": false,
+      "blank_as_pad": true,
+      "prednet": {
+        "pred_hidden": 16,
+        "pred_rnn_layers": 1,
+        "t_max": null,
+        "dropout": 0.0
+      }
+    },
+    "joint": {
+      "_target_": "nemo.collections.asr.modules.RNNTJoint",
+      "log_softmax": null,
+      "preserve_memory": false,
+      "fuse_loss_wer": false,
+      "jointnet": {
+        "encoder_hidden": 16,
+        "pred_hidden": 16,
+        "joint_hidden": 16,
+        "activation": "relu",
+        "dropout": 0.0
+      }
+    },
+    "decoding": {
+      "strategy": "greedy_batch",
+      "greedy": {
+        "max_symbols": 1
+      },
+      "preserve_alignments": false,
+      "compute_timestamps": false
+    },
+    "loss": {
+      "loss_name": "default"
+    }
+  }
+}

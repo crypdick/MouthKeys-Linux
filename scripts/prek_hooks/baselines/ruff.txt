@@ -935,17 +935,16 @@
 1	src/mouthkeys/operations.py	ANN001	Missing type annotation for function argument `allow_mutation`
 3	src/mouthkeys/operations.py	ANN001	Missing type annotation for function argument `app_map`
 1	src/mouthkeys/operations.py	ANN001	Missing type annotation for function argument `config`
-3	src/mouthkeys/operations.py	ANN001	Missing type annotation for function argument `data`
+2	src/mouthkeys/operations.py	ANN001	Missing type annotation for function argument `data`
 2	src/mouthkeys/operations.py	ANN001	Missing type annotation for function argument `expected_sha256`
 4	src/mouthkeys/operations.py	ANN001	Missing type annotation for function argument `history`
-5	src/mouthkeys/operations.py	ANN001	Missing type annotation for function argument `path`
+4	src/mouthkeys/operations.py	ANN001	Missing type annotation for function argument `path`
 1	src/mouthkeys/operations.py	ANN001	Missing type annotation for function argument `today`
 1	src/mouthkeys/operations.py	ANN201	Missing return type annotation for public function `backup_export`
 1	src/mouthkeys/operations.py	ANN201	Missing return type annotation for public function `backup_import`
 1	src/mouthkeys/operations.py	ANN201	Missing return type annotation for public function `backup_preview`
 1	src/mouthkeys/operations.py	ANN201	Missing return type annotation for public function `handle_action`
 1	src/mouthkeys/operations.py	ANN201	Missing return type annotation for public function `statistics`
-1	src/mouthkeys/operations.py	ANN201	Missing return type annotation for public function `write_private`
 1	src/mouthkeys/operations.py	ANN202	Missing return type annotation for private function `_prepare_backup`
 1	src/mouthkeys/operations.py	ANN202	Missing return type annotation for private function `_read_import`
 1	src/mouthkeys/operations.py	C901	`_prepare_backup` is too complex (19 > 15)
@@ -1302,37 +1301,12 @@
 2	src/mouthkeys/tray.py	PLC0415	`import` should be at the top-level of a file
 2	src/mouthkeys/upstream_backup.py	PLR0913	Too many arguments in function definition (6 > 5)
 2	src/mouthkeys/upstream_backup.py	TRY004	Prefer `TypeError` exception for invalid type
-3	src/mouthkeys/vocabulary.py	ANN001	Missing type annotation for function argument `config`
-2	src/mouthkeys/vocabulary.py	ANN001	Missing type annotation for function argument `entries`
-1	src/mouthkeys/vocabulary.py	ANN001	Missing type annotation for function argument `text`
-1	src/mouthkeys/vocabulary.py	ANN001	Missing type annotation for function argument `value`
-2	src/mouthkeys/vocabulary.py	ANN001	Missing type annotation for function argument `word`
-2	src/mouthkeys/vocabulary.py	ANN001	Missing type annotation for function argument `words`
-1	src/mouthkeys/vocabulary.py	ANN201	Missing return type annotation for public function `context_prompt`
-1	src/mouthkeys/vocabulary.py	ANN201	Missing return type annotation for public function `whisper_options`
-1	src/mouthkeys/vocabulary.py	ANN202	Missing return type annotation for private function `_phrase`
-1	src/mouthkeys/vocabulary.py	ANN202	Missing return type annotation for private function `_prompt_words`
-1	src/mouthkeys/vocabulary.py	ANN205	Missing return type annotation for staticmethod `path`
-1	src/mouthkeys/vocabulary.py	ANN205	Missing return type annotation for staticmethod `validate_entries`
-1	src/mouthkeys/vocabulary.py	ANN205	Missing return type annotation for staticmethod `validate`
-1	src/mouthkeys/vocabulary.py	ANN206	Missing return type annotation for classmethod `add`
-1	src/mouthkeys/vocabulary.py	ANN206	Missing return type annotation for classmethod `apply_aliases`
-1	src/mouthkeys/vocabulary.py	ANN206	Missing return type annotation for classmethod `effective_entries`
-1	src/mouthkeys/vocabulary.py	ANN206	Missing return type annotation for classmethod `entries`
-1	src/mouthkeys/vocabulary.py	ANN206	Missing return type annotation for classmethod `load`
-1	src/mouthkeys/vocabulary.py	ANN206	Missing return type annotation for classmethod `remove`
-1	src/mouthkeys/vocabulary.py	ANN206	Missing return type annotation for classmethod `save_entries`
-1	src/mouthkeys/vocabulary.py	ANN206	Missing return type annotation for classmethod `save`
-1	src/mouthkeys/vocabulary.py	PLC0415	`import` should be at the top-level of a file
-1	src/mouthkeys/vocabulary.py	PLW2901	`for` loop variable `alias` overwritten by assignment target
 1	src/mouthkeys/vocabulary.py	TRY004	Prefer `TypeError` exception for invalid type
 5	tests/conftest.py	PLC0415	`import` should be at the top-level of a file
 1	tests/conftest.py	PTH119	`os.path.basename()` should be replaced by `Path.name`
 2	tests/smoke_distribution.py	PLC0415	`import` should be at the top-level of a file
 1	tests/smoke_distribution.py	PT018	Assertion should be broken down into multiple parts
 19	tests/smoke_native.py	PLC0415	`import` should be at the top-level of a file
-1	tests/smoke_native.py	PT018	Assertion should be broken down into multiple parts
-1	tests/smoke_native.py	SIM105	Use `contextlib.suppress(importlib.metadata.PackageNotFoundError)` instead of `try`-`except`-`pass`
 5	tests/smoke_transcription.py	PLC0415	`import` should be at the top-level of a file
 4	tests/test_ai_providers.py	PLC0415	`import` should be at the top-level of a file
 4	tests/test_ai_providers.py	PT006	Wrong type passed to first argument of `pytest.mark.parametrize`; expected `tuple`

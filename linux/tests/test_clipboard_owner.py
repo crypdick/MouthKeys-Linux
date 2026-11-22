@@ -8,7 +8,7 @@ from types import SimpleNamespace
 import pytest
 from PySide6 import QtCore, QtGui
 
-from mouthkeys import clipboard
+from mouthkeys import clipboard_owner
 
 
 class FakeClipboard:
@@ -37,7 +37,7 @@ class FakeClipboard:
         self.owned = False
 
     def user_copy(self, text):
-        self.current = clipboard.temporary_mime(text, False)
+        self.current = clipboard_owner.temporary_mime(text, exclude_history=False)
         self.owned = False
         self.on_change()
 
@@ -118,14 +118,14 @@ def test_owner_restores_all_formats_then_leaves_when_user_copies(monkeypatch, ca
 
     def after_restore():
         assert not owner.quit_requested
-        assert clipboard.capture_formats(owner.selection.current) == {
+        assert clipboard_owner.capture_formats(owner.selection.current) == {
             "text/plain": b"old text",
             "application/x-test": b"\x00\x01",
         }
         owner.selection.user_copy("user text")
 
     owner.after_delay = after_restore
-    assert clipboard.main() == 0
+    assert clipboard_owner.main() == 0
     assert capsys.readouterr().out.splitlines() == ["ready", "restored"]
     assert owner.selection.current.text() == "user text"
 
@@ -137,14 +137,14 @@ def test_owner_never_overwrites_a_newer_copy(monkeypatch, capsys, loss):
         owner.before_read = lambda: owner.selection.user_copy("user text")
     else:
         owner.after_read = lambda: owner.selection.user_copy("user text")
-    assert clipboard.main() == 0
+    assert clipboard_owner.main() == 0
     assert capsys.readouterr().out.splitlines() == ["ready", "skipped"]
     assert owner.selection.current.text() == "user text"
 
 
 def test_owner_clears_temporary_text_when_original_selection_was_empty(monkeypatch, capsys):
     owner = FakeOwner(monkeypatch)
-    assert clipboard.main() == 0
+    assert clipboard_owner.main() == 0
     assert capsys.readouterr().out.splitlines() == ["ready", "skipped"]
     assert owner.selection.current is None
 
@@ -158,7 +158,7 @@ def test_keep_preserves_temporary_text_until_newer_copy(monkeypatch, capsys):
         owner.selection.user_copy("user text")
 
     owner.after_read = after_keep
-    assert clipboard.main() == 0
+    assert clipboard_owner.main() == 0
     assert capsys.readouterr().out.splitlines() == ["ready"]
     assert owner.selection.current.text() == "user text"
 
@@ -167,40 +167,44 @@ def test_keep_preserves_temporary_text_until_newer_copy(monkeypatch, capsys):
     ("line", "limit"),
     [
         (b"too many bytes\n", 10),
+        (b"not json\n", None),
+        (b"[]\n", None),
+        (b'{"text":1}\n', None),
+        (b'{"text":"new transcript","exclude_history":"true"}\n', None),
         (b'{"text":"new transcript","delay_ms":true}\n', None),
         (b'{"text":"new transcript","delay_ms":5001}\n', None),
     ],
 )
 def test_owner_rejects_invalid_requests_before_reading_clipboard(monkeypatch, line, limit):
     if limit is not None:
-        monkeypatch.setattr(clipboard, "MAX_BYTES", limit)
+        monkeypatch.setattr(clipboard_owner, "MAX_BYTES", limit)
     monkeypatch.setattr(sys, "stdin", FakeStdin(line))
     monkeypatch.setattr(
         QtGui, "QGuiApplication", lambda args: pytest.fail("Unexpected desktop access")
     )
-    assert clipboard.main() == 1
+    assert clipboard_owner.main() == 1
 
 
 def test_owner_exits_if_it_cannot_claim_selection(monkeypatch, capsys):
     owner = FakeOwner(monkeypatch)
     owner.selection.claim_allowed = False
-    assert clipboard.main() == 1
+    assert clipboard_owner.main() == 1
     assert capsys.readouterr().out == ""
 
 
 def test_owner_preserves_original_if_snapshot_cannot_fit(monkeypatch, capsys):
     owner = FakeOwner(monkeypatch)
-    original = clipboard.temporary_mime("x" * 300, False)
+    original = clipboard_owner.temporary_mime("x" * 300, exclude_history=False)
     owner.selection.current = original
-    monkeypatch.setattr(clipboard, "MAX_BYTES", 200)
-    assert clipboard.main() == 1
+    monkeypatch.setattr(clipboard_owner, "MAX_BYTES", 200)
+    assert clipboard_owner.main() == 1
     assert capsys.readouterr().out == ""
     assert owner.selection.current is original
 
 
 def test_failed_acknowledgement_does_not_discard_restored_ownership(monkeypatch, capsys):
     owner = FakeOwner(monkeypatch)
-    owner.selection.current = clipboard.temporary_mime("original", False)
+    owner.selection.current = clipboard_owner.temporary_mime("original", exclude_history=False)
     real_print = builtins.print
 
     def close_ack_pipe(message, **kwargs):
@@ -215,7 +219,7 @@ def test_failed_acknowledgement_does_not_discard_restored_ownership(monkeypatch,
 
     monkeypatch.setattr(builtins, "print", close_ack_pipe)
     owner.after_delay = after_delay
-    assert clipboard.main() == 0
+    assert clipboard_owner.main() == 0
     assert capsys.readouterr().out.splitlines() == ["ready"]
     assert owner.selection.current.text() == "new user copy"
 
@@ -223,14 +227,14 @@ def test_failed_acknowledgement_does_not_discard_restored_ownership(monkeypatch,
 def test_keep_exits_immediately_if_clipboard_changed_before_command(monkeypatch, capsys):
     owner = FakeOwner(monkeypatch, action=b"keep\n")
     owner.before_read = lambda: owner.selection.user_copy("new user copy")
-    assert clipboard.main() == 0
+    assert clipboard_owner.main() == 0
     assert capsys.readouterr().out.splitlines() == ["ready"]
     assert owner.selection.current.text() == "new user copy"
 
 
 def test_module_entry_point_exits_with_helper_status(monkeypatch):
     monkeypatch.setattr(sys, "stdin", FakeStdin(b'{"delay_ms":99}\n'))
-    monkeypatch.delitem(sys.modules, "mouthkeys.clipboard")
+    monkeypatch.delitem(sys.modules, "mouthkeys.clipboard_owner")
     with pytest.raises(SystemExit) as status:
-        runpy.run_module("mouthkeys.clipboard", run_name="__main__")
+        runpy.run_module("mouthkeys.clipboard_owner", run_name="__main__")
     assert status.value.code == 1

@@ -11,7 +11,7 @@ def process(monkeypatch):
     process = FakeProcess()
 
     def start(args, **options):
-        assert args[1:] == ["-P", "-m", "mouthkeys.clipboard"]
+        assert args[1:] == ["-P", "-m", "mouthkeys.clipboard_owner"]
         assert options["stdin"] == clipboard.subprocess.PIPE
         assert options["stdout"] == clipboard.subprocess.PIPE
         assert options["stderr"] == clipboard.subprocess.DEVNULL
@@ -51,6 +51,8 @@ def test_unready_owner_is_killed_and_reaped_before_fallback(process, response):
     assert process.killed
     assert process.waits == [2]
     assert process.timeouts == [3]
+    assert process.stdin.closed
+    assert process.stdout.closed
 
 
 def test_keep_writes_protocol_command_without_waiting_for_restore(process):
@@ -85,3 +87,15 @@ def test_dead_owner_cannot_report_success_for_a_failed_write(process):
     process.stdin.close()
     assert not paste.finish(True)
     assert process.stdout.closed
+
+
+@pytest.mark.parametrize("missing", ["stdin", "stdout"])
+def test_missing_protocol_pipe_reaps_owner_and_closes_the_other_end(process, missing):
+    removed = getattr(process, missing)
+    removed.close()
+    setattr(process, missing, None)
+    with pytest.raises(RuntimeError, match="both protocol pipes"):
+        clipboard.ClipboardPaste("temporary")
+    assert process.killed
+    assert process.waits == [2]
+    assert (process.stdout if missing == "stdin" else process.stdin).closed

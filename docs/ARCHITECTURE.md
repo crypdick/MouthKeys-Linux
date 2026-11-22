@@ -30,8 +30,8 @@ reply before stopping the server.
 - **Delivery:** `formatting` and `spoken_send` transform text without desktop effects. `storage.History`
   persists text before `delivery.Delivery` attempts insertion. `accessibility` calls the isolated
   `atspi_helper`, which checks the field role before reading text and revalidates text, selection,
-  and focus before returning a snapshot. `clipboard` can own a temporary paste selection in a
-  separate Qt process.
+  and focus before returning a snapshot. `clipboard` starts `clipboard_owner` to manage a
+  temporary paste selection in a separate process without importing Qt into the daemon.
   `desktop_input` probes compositor window identity and runs clipboard and keyboard commands.
   `delivery` decides whether to use those commands and rechecks the destination before sending.
   Cancellation before delivery wins; unverified destination identity falls back to copy.

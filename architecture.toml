@@ -121,6 +121,12 @@ role = "desktop"
 public_modules = ["mouthkeys.clipboard"]
 
 [[packages]]
+name = "clipboard_owner"
+root = "mouthkeys.clipboard_owner"
+role = "desktop"
+public_modules = ["mouthkeys.clipboard_owner"]
+
+[[packages]]
 name = "tests"
 root = "tests"
 role = "tests"

@@ -7,30 +7,6 @@
 7	src/mouthkeys/benchmark.py	PLC0415	`import` should be at the top-level of a file
 1	src/mouthkeys/benchmark.py	PLR0913	Too many arguments in function definition (6 > 5)
 13	src/mouthkeys/cli.py	PLC0415	`import` should be at the top-level of a file
-1	src/mouthkeys/clipboard.py	ANN001	Missing type annotation for function argument `clipboard`
-1	src/mouthkeys/clipboard.py	ANN001	Missing type annotation for function argument `delay_ms`
-2	src/mouthkeys/clipboard.py	ANN001	Missing type annotation for function argument `exclude_history`
-1	src/mouthkeys/clipboard.py	ANN001	Missing type annotation for function argument `mime`
-1	src/mouthkeys/clipboard.py	ANN001	Missing type annotation for function argument `restore`
-1	src/mouthkeys/clipboard.py	ANN001	Missing type annotation for function argument `result`
-1	src/mouthkeys/clipboard.py	ANN001	Missing type annotation for function argument `saved`
-2	src/mouthkeys/clipboard.py	ANN001	Missing type annotation for function argument `text`
-1	src/mouthkeys/clipboard.py	ANN002	Missing type annotation for `*_`
-1	src/mouthkeys/clipboard.py	ANN201	Missing return type annotation for public function `capture_formats`
-1	src/mouthkeys/clipboard.py	ANN201	Missing return type annotation for public function `finish`
-1	src/mouthkeys/clipboard.py	ANN201	Missing return type annotation for public function `main`
-1	src/mouthkeys/clipboard.py	ANN201	Missing return type annotation for public function `restore_formats`
-1	src/mouthkeys/clipboard.py	ANN201	Missing return type annotation for public function `temporary_mime`
-1	src/mouthkeys/clipboard.py	ANN202	Missing return type annotation for private function `acknowledge`
-1	src/mouthkeys/clipboard.py	ANN202	Missing return type annotation for private function `changed`
-1	src/mouthkeys/clipboard.py	ANN202	Missing return type annotation for private function `receive`
-1	src/mouthkeys/clipboard.py	ANN202	Missing return type annotation for private function `restore`
-1	src/mouthkeys/clipboard.py	ANN204	Missing return type annotation for special method `__init__`
-1	src/mouthkeys/clipboard.py	C901	`main` is too complex (16 > 15)
-1	src/mouthkeys/clipboard.py	FBT002	Boolean default positional argument in function definition
-4	src/mouthkeys/clipboard.py	PLC0415	`import` should be at the top-level of a file
-1	src/mouthkeys/clipboard.py	PLR0915	Too many statements (56 > 50)
-1	src/mouthkeys/clipboard.py	SIM105	Use `contextlib.suppress(BrokenPipeError)` instead of `try`-`except`-`pass`
 1	src/mouthkeys/clipboard.py	TRY300	Consider moving this statement to an `else` block
 1	src/mouthkeys/config.py	TRY004	Prefer `TypeError` exception for invalid type
 1	src/mouthkeys/delivery.py	PLR0911	Too many return statements (7 > 6)

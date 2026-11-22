@@ -100,23 +100,25 @@ def test_clipboard_snapshot_restores_every_format_but_not_new_user_copy(monkeypa
     import pytest
     from PySide6.QtCore import QByteArray, QMimeData
 
-    from mouthkeys import clipboard
+    from mouthkeys import clipboard_owner
 
     mime = QMimeData()
     mime.setData("text/plain", QByteArray(b"hello"))
     mime.setData("image/png", QByteArray(b"\x89PNG\r\n"))
-    saved = clipboard.capture_formats(mime)
+    saved = clipboard_owner.capture_formats(mime)
     assert saved == {"text/plain": b"hello", "image/png": b"\x89PNG\r\n"}
     restored = []
-    fake = SimpleNamespace(ownsClipboard=lambda: True, setMimeData=restored.append)
-    assert clipboard.restore_formats(fake, saved)
-    assert clipboard.capture_formats(restored[0]) == saved
+    fake = SimpleNamespace(
+        ownsClipboard=lambda: True, setMimeData=restored.append, clear=restored.clear
+    )
+    assert clipboard_owner.restore_formats(fake, saved)
+    assert clipboard_owner.capture_formats(restored[0]) == saved
     fake.ownsClipboard = lambda: False
-    assert not clipboard.restore_formats(fake, saved)
+    assert not clipboard_owner.restore_formats(fake, saved)
     assert len(restored) == 1
-    monkeypatch.setattr(clipboard, "MAX_BYTES", 2)
+    monkeypatch.setattr(clipboard_owner, "MAX_BYTES", 2)
     with pytest.raises(ValueError, match="32 MiB"):
-        clipboard.capture_formats(mime)
+        clipboard_owner.capture_formats(mime)
 
 
 def test_context_uses_only_foreground_snapshot_and_skips_unknown_focus(monkeypatch):
@@ -277,10 +279,12 @@ def test_preset_start_stop_cues_use_bundled_pcm_files_without_playback(monkeypat
 
 
 def test_temporary_clipboard_history_hint_does_not_modify_normal_copy_formats():
-    from mouthkeys.clipboard import capture_formats, temporary_mime
+    from mouthkeys.clipboard_owner import capture_formats, temporary_mime
 
-    assert capture_formats(temporary_mime("hello", False)) == {"text/plain": b"hello"}
-    hidden = capture_formats(temporary_mime("hello", True))
+    assert capture_formats(temporary_mime("hello", exclude_history=False)) == {
+        "text/plain": b"hello"
+    }
+    hidden = capture_formats(temporary_mime("hello", exclude_history=True))
     assert hidden["x-kde-passwordManagerHint"] == b"secret"
     assert hidden["text/plain"] == b"hello"
 
@@ -306,6 +310,9 @@ def test_queued_clipboard_transactions_wait_for_restoration_ack_before_next_snap
 
         def flush(self):
             pass
+
+        def fileno(self):
+            raise OSError("Fake selector must not use a real file descriptor")
 
         def readline(self, size):
             if not self.ready:

@@ -1,18 +1,5 @@
 1	src/mouthkeys/benchmark.py	no-untyped-call	Call to untyped function "transcribe_file" in typed context
 1	src/mouthkeys/cli.py	no-untyped-call	Call to untyped function "transcribe_file" in typed context
-3	src/mouthkeys/clipboard.py	no-untyped-call	Call to untyped function "acknowledge" in typed context
-1	src/mouthkeys/clipboard.py	no-untyped-call	Call to untyped function "capture_formats" in typed context
-1	src/mouthkeys/clipboard.py	no-untyped-call	Call to untyped function "main" in typed context
-1	src/mouthkeys/clipboard.py	no-untyped-call	Call to untyped function "restore_formats" in typed context
-1	src/mouthkeys/clipboard.py	no-untyped-call	Call to untyped function "temporary_mime" in typed context
-3	src/mouthkeys/clipboard.py	no-untyped-def	Function is missing a return type annotation
-7	src/mouthkeys/clipboard.py	no-untyped-def	Function is missing a type annotation
-2	src/mouthkeys/clipboard.py	type-var	Value of type variable "_R" of "select" cannot be "IO[bytes] | None"
-2	src/mouthkeys/clipboard.py	union-attr	Item "None" of "IO[bytes] | None" has no attribute "close"
-2	src/mouthkeys/clipboard.py	union-attr	Item "None" of "IO[bytes] | None" has no attribute "flush"
-2	src/mouthkeys/clipboard.py	union-attr	Item "None" of "IO[bytes] | None" has no attribute "readline"
-2	src/mouthkeys/clipboard.py	union-attr	Item "None" of "IO[bytes] | None" has no attribute "write"
-1	src/mouthkeys/delivery.py	no-untyped-call	Call to untyped function "ClipboardPaste" in typed context
 1	src/mouthkeys/dictionary_transfer.py	no-untyped-call	Call to untyped function "_merge_rules" in typed context
 2	src/mouthkeys/dictionary_transfer.py	no-untyped-call	Call to untyped function "custom_word_entries" in typed context
 1	src/mouthkeys/dictionary_transfer.py	no-untyped-call	Call to untyped function "decode_document" in typed context

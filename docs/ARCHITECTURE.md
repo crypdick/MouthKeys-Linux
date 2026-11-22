@@ -9,7 +9,9 @@ then dispatches local work or uses `control` to contact the private Unix socket 
   wraps the process owned by `capture`. `microphone` owns session source preferences, retry
   budgets, and device quarantine; the service still commits capture state under its own lock.
   `recording_destination` samples focus and formatting context before capture stops and looks up
-  metadata afterward, without activating another window.
+  metadata afterward, without activating another window. Automatic stop does not wait on focus
+  in the daemon loop; an expired focus snapshot falls back to copy. `recording_preview` meters
+  live audio and tracks pauses; stale decodes cannot publish after a microphone switch.
   `transcribe.Transcriber` serializes inference, with optional
   engines in `engines` and `native_worker`. `native_asr` owns local artifact checks and common
   audio helpers; `transformers_asr` and `nemo_asr` load and decode inside the isolated worker.

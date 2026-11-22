@@ -81,9 +81,9 @@
 2	src/mouthkeys/audio.py	no-untyped-call	Call to untyped function "_open" in typed context
 1	src/mouthkeys/audio.py	no-untyped-call	Call to untyped function "bluetooth_capture_ready" in typed context
 2	src/mouthkeys/audio.py	no-untyped-call	Call to untyped function "error" in typed context
-14	src/mouthkeys/audio.py	no-untyped-def	Function is missing a return type annotation
+12	src/mouthkeys/audio.py	no-untyped-def	Function is missing a return type annotation
 6	src/mouthkeys/audio.py	no-untyped-def	Function is missing a type annotation
-4	src/mouthkeys/audio.py	no-untyped-def	Function is missing a type annotation for one or more parameters
+3	src/mouthkeys/audio.py	no-untyped-def	Function is missing a type annotation for one or more parameters
 1	src/mouthkeys/audio.py	union-attr	Item "None" of "BufferedWriter[_BufferedWriterStream] | None" has no attribute "flush"
 1	src/mouthkeys/audio.py	union-attr	Item "None" of "IO[bytes] | Any | None" has no attribute "close"
 1	src/mouthkeys/audio.py	union-attr	Item "None" of "IO[bytes] | None" has no attribute "close"
@@ -182,9 +182,8 @@
 1	src/mouthkeys/formatting.py	no-untyped-call	Call to untyped function "_punctuation_spacing" in typed context
 1	src/mouthkeys/formatting.py	no-untyped-call	Call to untyped function "apply_question_mark_shortcut" in typed context
 1	src/mouthkeys/formatting.py	no-untyped-call	Call to untyped function "apply_spoken_punctuation" in typed context
-10	src/mouthkeys/formatting.py	no-untyped-call	Call to untyped function "enabled" in typed context
 1	src/mouthkeys/formatting.py	no-untyped-call	Call to untyped function "neighbor" in typed context
-8	src/mouthkeys/formatting.py	no-untyped-def	Function is missing a type annotation
+7	src/mouthkeys/formatting.py	no-untyped-def	Function is missing a type annotation
 1	src/mouthkeys/gui.py	assignment	Incompatible types in assignment (expression has type "QComboBox", variable has type "QSpinBox")
 1	src/mouthkeys/gui.py	assignment	Incompatible types in assignment (expression has type "QLineEdit", variable has type "QSpinBox")
 4	src/mouthkeys/gui.py	attr-defined	"QSpinBox" has no attribute "addItem"
@@ -391,7 +390,6 @@
 1	src/mouthkeys/routing.py	no-untyped-def	Function is missing a type annotation
 1	src/mouthkeys/service.py	arg-type	Argument 1 to "DictationJob" has incompatible type "Any | None"; expected "str"
 1	src/mouthkeys/service.py	assignment	Incompatible types in assignment (expression has type "bool", target has type "str")
-5	src/mouthkeys/service.py	assignment	Incompatible types in assignment (expression has type "float", variable has type "int")
 2	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "AssistantHistory" in typed context
 1	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "CaptureSession" in typed context
 1	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "Transcriber" in typed context
@@ -404,18 +402,15 @@
 1	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "_new_job" in typed context
 8	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "_pending_jobs" in typed context
 1	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "_propose_assistant" in typed context
-2	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "_reset_stream_if_owned" in typed context
 1	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "_short_silence" in typed context
 20	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "_update" in typed context
 1	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "_wait_for_predecessors" in typed context
 1	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "append" in typed context
 1	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "append_private_messages" in typed context
-2	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "command" in typed context
 2	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "context_messages" in typed context
 1	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "correct" of "PronunciationStore" in typed context
 1	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "correct_spans" of "PronunciationStore" in typed context
 1	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "current" in typed context
-8	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "enabled" in typed context
 1	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "enroll" of "PronunciationStore" in typed context
 1	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "execute_command" in typed context
 1	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "format_text" in typed context
@@ -432,22 +427,18 @@
 1	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "stream" in typed context
 1	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "validate_executions" in typed context
 1	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "validate_history" in typed context
-6	src/mouthkeys/service.py	no-untyped-def	Function is missing a return type annotation
-18	src/mouthkeys/service.py	no-untyped-def	Function is missing a type annotation
+5	src/mouthkeys/service.py	no-untyped-def	Function is missing a return type annotation
+16	src/mouthkeys/service.py	no-untyped-def	Function is missing a type annotation
 1	src/mouthkeys/service.py	operator	Unsupported operand types for - ("float" and "None")
 2	src/mouthkeys/service.py	type-arg	Missing type arguments for generic type "dict"
 2	src/mouthkeys/service.py	type-arg	Missing type arguments for generic type "list"
-1	src/mouthkeys/service.py	type-arg	Missing type arguments for generic type "tuple"
-2	src/mouthkeys/service.py	union-attr	Item "None" of "Any | None" has no attribute "audio_path"
 3	src/mouthkeys/service.py	union-attr	Item "None" of "Any | None" has no attribute "cancel_event"
-3	src/mouthkeys/service.py	union-attr	Item "None" of "Any | None" has no attribute "cancelled"
+2	src/mouthkeys/service.py	union-attr	Item "None" of "Any | None" has no attribute "cancelled"
 2	src/mouthkeys/service.py	union-attr	Item "None" of "Any | None" has no attribute "duration"
 1	src/mouthkeys/service.py	union-attr	Item "None" of "Any | None" has no attribute "finished"
-1	src/mouthkeys/service.py	union-attr	Item "None" of "Any | None" has no attribute "held_activation"
 2	src/mouthkeys/service.py	union-attr	Item "None" of "Any | None" has no attribute "item_id"
 3	src/mouthkeys/service.py	union-attr	Item "None" of "Any | None" has no attribute "mode"
 1	src/mouthkeys/service.py	union-attr	Item "None" of "Any | None" has no attribute "phase"
-1	src/mouthkeys/service.py	union-attr	Item "None" of "Any | None" has no attribute "predecessors"
 1	src/mouthkeys/service.py	union-attr	Item "None" of "Any | None" has no attribute "start_target"
 9	src/mouthkeys/setup_languages.py	no-untyped-call	Call to untyped function "add" in typed context
 1	src/mouthkeys/setup_languages.py	no-untyped-call	Call to untyped function "languages" in typed context

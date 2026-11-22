@@ -188,10 +188,10 @@ def test_private_files(controller):
 def test_preview_is_live_but_never_persisted_or_delivered(controller):
     controller.transcriber.preview = lambda path, config: "provisional words"
     controller.command("start")
-    controller.preview_at = 0
+    controller.live_preview.preview_at = 0
     controller.tick()
-    controller.preview_worker.join(3)
-    assert not controller.preview_worker.is_alive()
+    controller.live_preview.worker.join(3)
+    assert not controller.live_preview.worker.is_alive()
     assert controller.status()["preview"] == "provisional words"
     assert controller.history.rows()[0]["text"] == ""
     assert not controller.delivery.calls
@@ -211,15 +211,15 @@ def test_cancelled_preview_cannot_leak_into_next_recording(controller):
 
     controller.transcriber.preview = preview
     controller.command("start")
-    controller.preview_at = 0
+    controller.live_preview.preview_at = 0
     controller.tick()
     assert entered.wait(2)
     controller.command("cancel")
     finish(controller)
     controller.command("start")
     release.set()
-    controller.preview_worker.join(3)
-    assert not controller.preview_worker.is_alive()
+    controller.live_preview.worker.join(3)
+    assert not controller.live_preview.worker.is_alive()
     assert controller.status()["preview"] == ""
     assert not controller.delivery.calls
     controller.command("cancel")
@@ -235,7 +235,7 @@ def test_final_inference_waits_for_preview_and_cancel_suppresses_delivery(contro
 
     controller.transcriber.preview = preview
     controller.command("start")
-    controller.preview_at = 0
+    controller.live_preview.preview_at = 0
     controller.tick()
     assert entered.wait(2)
     controller.command("stop")
@@ -243,7 +243,7 @@ def test_final_inference_waits_for_preview_and_cancel_suppresses_delivery(contro
     controller.command("cancel")
     release.set()
     finish(controller)
-    controller.preview_worker.join(3)
+    controller.live_preview.worker.join(3)
     assert controller.status()["preview"] == ""
     assert not controller.transcriber.entered.is_set()
     assert not controller.delivery.calls
@@ -255,9 +255,9 @@ def test_preview_failure_does_not_prevent_final_transcription(controller):
 
     controller.transcriber.preview = preview
     controller.command("start")
-    controller.preview_at = 0
+    controller.live_preview.preview_at = 0
     controller.tick()
-    controller.preview_worker.join(3)
+    controller.live_preview.worker.join(3)
     controller.command("stop")
     finish(controller)
     assert controller.delivery.calls
@@ -267,9 +267,9 @@ def test_preview_failure_does_not_prevent_final_transcription(controller):
 def test_failed_final_never_exposes_provisional_text_as_copyable(controller, empty):
     controller.transcriber.preview = lambda path, config: "unfinished words"
     controller.command("start")
-    controller.preview_at = 0
+    controller.live_preview.preview_at = 0
     controller.tick()
-    controller.preview_worker.join(3)
+    controller.live_preview.worker.join(3)
     assert controller.status()["preview"] == "unfinished words"
     if empty:
         controller.transcriber.text = ""

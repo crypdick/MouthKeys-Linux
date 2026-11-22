@@ -197,7 +197,7 @@
 1	src/mouthkeys/audio.py	ANN001	Missing type annotation for function argument `error`
 1	src/mouthkeys/audio.py	ANN001	Missing type annotation for function argument `path`
 1	src/mouthkeys/audio.py	ANN001	Missing type annotation for function argument `recorder`
-3	src/mouthkeys/audio.py	ANN001	Missing type annotation for function argument `seconds`
+2	src/mouthkeys/audio.py	ANN001	Missing type annotation for function argument `seconds`
 3	src/mouthkeys/audio.py	ANN001	Missing type annotation for function argument `source`
 1	src/mouthkeys/audio.py	ANN001	Missing type annotation for function argument `start_frame`
 4	src/mouthkeys/audio.py	ANN001	Missing type annotation for function argument `timeout`
@@ -206,7 +206,6 @@
 1	src/mouthkeys/audio.py	ANN201	Missing return type annotation for public function `check_audio`
 1	src/mouthkeys/audio.py	ANN201	Missing return type annotation for public function `error`
 2	src/mouthkeys/audio.py	ANN201	Missing return type annotation for public function `finished`
-1	src/mouthkeys/audio.py	ANN201	Missing return type annotation for public function `live_meter`
 1	src/mouthkeys/audio.py	ANN201	Missing return type annotation for public function `read_audio_from`
 1	src/mouthkeys/audio.py	ANN201	Missing return type annotation for public function `read_live_audio`
 2	src/mouthkeys/audio.py	ANN201	Missing return type annotation for public function `stop`
@@ -216,10 +215,8 @@
 1	src/mouthkeys/audio.py	ANN202	Missing return type annotation for private function `_drain`
 1	src/mouthkeys/audio.py	ANN202	Missing return type annotation for private function `_end_segment`
 1	src/mouthkeys/audio.py	ANN202	Missing return type annotation for private function `_open`
-1	src/mouthkeys/audio.py	ANN202	Missing return type annotation for private function `_read_live_audio`
 1	src/mouthkeys/audio.py	ANN202	Missing return type annotation for private function `_relay`
 3	src/mouthkeys/audio.py	ANN204	Missing return type annotation for special method `__init__`
-4	src/mouthkeys/audio.py	PLC0415	`import` should be at the top-level of a file
 1	src/mouthkeys/audio.py	PLR0911	Too many return statements (7 > 6)
 2	src/mouthkeys/audio.py	SIM115	Use a context manager for opening files
 1	src/mouthkeys/benchmark.py	ANN001	Missing type annotation for function argument `cancel_event`
@@ -375,12 +372,11 @@
 1	src/mouthkeys/formatting.py	ANN001	Missing type annotation for function argument `app_id`
 1	src/mouthkeys/formatting.py	ANN001	Missing type annotation for function argument `app_name`
 1	src/mouthkeys/formatting.py	ANN001	Missing type annotation for function argument `at`
-2	src/mouthkeys/formatting.py	ANN001	Missing type annotation for function argument `config`
+1	src/mouthkeys/formatting.py	ANN001	Missing type annotation for function argument `config`
 1	src/mouthkeys/formatting.py	ANN001	Missing type annotation for function argument `context`
 1	src/mouthkeys/formatting.py	ANN001	Missing type annotation for function argument `data`
 1	src/mouthkeys/formatting.py	ANN001	Missing type annotation for function argument `dictionary`
 1	src/mouthkeys/formatting.py	ANN001	Missing type annotation for function argument `direction`
-1	src/mouthkeys/formatting.py	ANN001	Missing type annotation for function argument `key`
 1	src/mouthkeys/formatting.py	ANN001	Missing type annotation for function argument `literal_prefix`
 1	src/mouthkeys/formatting.py	ANN001	Missing type annotation for function argument `prefix`
 1	src/mouthkeys/formatting.py	ANN001	Missing type annotation for function argument `rule`
@@ -389,7 +385,6 @@
 1	src/mouthkeys/formatting.py	ANN001	Missing type annotation for function argument `window_title`
 1	src/mouthkeys/formatting.py	ANN201	Missing return type annotation for public function `apply_question_mark_shortcut`
 1	src/mouthkeys/formatting.py	ANN201	Missing return type annotation for public function `apply_spoken_punctuation`
-1	src/mouthkeys/formatting.py	ANN201	Missing return type annotation for public function `enabled`
 1	src/mouthkeys/formatting.py	ANN201	Missing return type annotation for public function `format_text`
 1	src/mouthkeys/formatting.py	ANN202	Missing return type annotation for private function `_ending_question`
 1	src/mouthkeys/formatting.py	ANN202	Missing return type annotation for private function `_first_letter_case`
@@ -747,13 +742,12 @@
 1	src/mouthkeys/service.py	ANN001	Missing type annotation for function argument `assistant_context`
 1	src/mouthkeys/service.py	ANN001	Missing type annotation for function argument `assistant_executions`
 1	src/mouthkeys/service.py	ANN001	Missing type annotation for function argument `auto_paste_expected`
-2	src/mouthkeys/service.py	ANN001	Missing type annotation for function argument `config`
+1	src/mouthkeys/service.py	ANN001	Missing type annotation for function argument `config`
 2	src/mouthkeys/service.py	ANN001	Missing type annotation for function argument `data`
 1	src/mouthkeys/service.py	ANN001	Missing type annotation for function argument `delivery`
 1	src/mouthkeys/service.py	ANN001	Missing type annotation for function argument `error`
 1	src/mouthkeys/service.py	ANN001	Missing type annotation for function argument `history`
-1	src/mouthkeys/service.py	ANN001	Missing type annotation for function argument `item_id`
-7	src/mouthkeys/service.py	ANN001	Missing type annotation for function argument `job`
+6	src/mouthkeys/service.py	ANN001	Missing type annotation for function argument `job`
 1	src/mouthkeys/service.py	ANN001	Missing type annotation for function argument `message`
 1	src/mouthkeys/service.py	ANN001	Missing type annotation for function argument `mode`
 1	src/mouthkeys/service.py	ANN001	Missing type annotation for function argument `name`
@@ -773,7 +767,6 @@
 1	src/mouthkeys/service.py	ANN003	Missing type annotation for `**metadata`
 1	src/mouthkeys/service.py	ANN201	Missing return type annotation for public function `command`
 1	src/mouthkeys/service.py	ANN201	Missing return type annotation for public function `interrupt`
-1	src/mouthkeys/service.py	ANN201	Missing return type annotation for public function `tick`
 1	src/mouthkeys/service.py	ANN202	Missing return type annotation for private function `_accept_edit`
 1	src/mouthkeys/service.py	ANN202	Missing return type annotation for private function `_command`
 1	src/mouthkeys/service.py	ANN202	Missing return type annotation for private function `_finish`
@@ -781,9 +774,7 @@
 1	src/mouthkeys/service.py	ANN202	Missing return type annotation for private function `_manual_delivery`
 1	src/mouthkeys/service.py	ANN202	Missing return type annotation for private function `_new_job`
 1	src/mouthkeys/service.py	ANN202	Missing return type annotation for private function `_pending_jobs`
-1	src/mouthkeys/service.py	ANN202	Missing return type annotation for private function `_preview`
 1	src/mouthkeys/service.py	ANN202	Missing return type annotation for private function `_propose_assistant`
-1	src/mouthkeys/service.py	ANN202	Missing return type annotation for private function `_reset_stream_if_owned`
 1	src/mouthkeys/service.py	ANN202	Missing return type annotation for private function `_short_silence`
 1	src/mouthkeys/service.py	ANN202	Missing return type annotation for private function `_update`
 1	src/mouthkeys/service.py	ANN202	Missing return type annotation for private function `_wait_for_predecessors`
@@ -804,9 +795,8 @@
 1	src/mouthkeys/service.py	PLR0913	Too many arguments in function definition (6 > 5)
 1	src/mouthkeys/service.py	PLR0915	Too many statements (221 > 50)
 1	src/mouthkeys/service.py	PLR0915	Too many statements (89 > 50)
-2	src/mouthkeys/service.py	PLR1702	Too many nested blocks (6 > 5)
-1	src/mouthkeys/service.py	SIM102	Use a single `if` statement instead of nested `if` statements
-2	src/mouthkeys/service.py	SIM105	Use `contextlib.suppress(Exception)` instead of `try`-`except`-`pass`
+1	src/mouthkeys/service.py	PLR1702	Too many nested blocks (6 > 5)
+1	src/mouthkeys/service.py	SIM105	Use `contextlib.suppress(Exception)` instead of `try`-`except`-`pass`
 1	src/mouthkeys/setup_languages.py	ANN001	Missing type annotation for function argument `engine`
 1	src/mouthkeys/setup_languages.py	ANN001	Missing type annotation for function argument `label`
 1	src/mouthkeys/setup_languages.py	ANN001	Missing type annotation for function argument `language_code`

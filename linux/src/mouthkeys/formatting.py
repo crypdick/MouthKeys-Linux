@@ -16,7 +16,7 @@ from .spoken_send import SendPlan as SendPlan
 from .spoken_send import parse_send as parse_send
 
 
-def enabled(config, key):
+def enabled(config: object, key: str) -> bool:
     return getattr(config, key, "off") == "on"
 
 

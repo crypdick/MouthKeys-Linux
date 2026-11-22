@@ -231,8 +231,8 @@ def test_spoken_pause_stops_but_duration_limit_does_not_send():
     sends = []
     app.delivery.send_key = lambda *_: sends.append(True)
     app.command("start")
-    app.send_armed_at = time.monotonic() - 1
-    app.last_voice_at = time.monotonic() - 1
+    app.live_preview.armed_at = time.monotonic() - 1
+    app.live_preview.last_voice_at = time.monotonic() - 1
     app.tick()
     finish(app)
     assert sends == [True]
@@ -312,9 +312,9 @@ def test_old_preview_cannot_arm_a_new_recording(monkeypatch):
     app.transcriber.preview = preview
     app.delivery.deliver = lambda *_: "copied"
     app.command("start")
-    app.preview_at = 0
+    app.live_preview.preview_at = 0
     app.tick()
-    preview_worker = app.preview_worker
+    preview_worker = app.live_preview.worker
     assert entered.wait(2)
     app.command("stop")
     old_worker = app.worker
@@ -322,12 +322,12 @@ def test_old_preview_cannot_arm_a_new_recording(monkeypatch):
     while app.phase == "stopping" and time.monotonic() < deadline:
         time.sleep(0.005)
     app.command("start")
-    app.preview_at = -123
+    app.live_preview.preview_at = -123
     release.set()
     preview_worker.join(2)
     assert not preview_worker.is_alive()
-    assert app.send_armed_at is None
-    assert app.preview_at == -123
+    assert app.live_preview.armed_at is None
+    assert app.live_preview.preview_at == -123
     assert app.preview_text == ""
     app.command("cancel")
     finish(app)
@@ -404,10 +404,16 @@ def test_queued_recording_preview_preserves_predecessor_native_cache():
     app.job.predecessors = (previous,)
     calls = []
     app.transcriber.preview = lambda *_: calls.append(True) or "Preview"
-    app._preview(app.item_id, Config())
+    app.live_preview.preview_at = 0
+    app.tick()
+    app.live_preview.worker.join(2)
+    assert not app.live_preview.worker.is_alive()
     assert calls == []
     previous.set()
-    app._preview(app.item_id, Config())
+    app.live_preview.preview_at = 0
+    app.tick()
+    app.live_preview.worker.join(2)
+    assert not app.live_preview.worker.is_alive()
     assert calls == [True]
     assert app.preview_text == "Preview"
     app.command("cancel")

@@ -7,13 +7,15 @@ import signal
 import subprocess
 import time
 from collections.abc import Callable
+from contextlib import suppress
 from pathlib import Path
 from threading import Event
-from typing import Any, BinaryIO
+from typing import IO, BinaryIO, Literal, Protocol, runtime_checkable
 
 from .ai_providers import request_completion
 from .command_preview import FENCE_END, FENCE_START, MAX_RESULT_BYTES, CommandExplanationPreview
 from .config import Config
+from .routing import select_prompt
 
 MAX_OUTPUT = 64 * 1024
 COMMAND_PROMPT = (
@@ -105,7 +107,7 @@ def _command_fields(output: str) -> dict[str, str]:
         raise ValueError(_INVALID_COMMAND)  # noqa: TRY004 - protocol validation
     command, explanation = parsed.get("command"), parsed.get("explanation")
     if not isinstance(command, str) or not isinstance(explanation, str):
-        raise ValueError(_INVALID_COMMAND)
+        raise ValueError(_INVALID_COMMAND)  # noqa: TRY004 - protocol validation
     if len(command) > 16384 or "\0" in command:
         raise ValueError("AI returned an invalid shell command; nothing was executed")
     directory = parsed.get("working_directory", "")
@@ -122,7 +124,7 @@ def _command_fields(output: str) -> dict[str, str]:
     }
 
 
-def propose(
+def propose(  # noqa: PLR0913 - provider stream callbacks and optional request context
     instruction: object,
     config: Config,
     mode: str,
@@ -138,8 +140,6 @@ def propose(
     if mode not in ("command", "edit"):
         raise ValueError("Assistant mode must be command or edit")
     if not resolved_config:
-        from .routing import select_prompt
-
         config = select_prompt(config, mode=mode, routes=[])
     if config.ai_enabled != "on":
         raise ValueError("Enable and configure an AI provider before using Command or Edit mode")
@@ -150,18 +150,17 @@ def propose(
     payload = json.dumps(
         {"instruction": instruction, "selected_text": selected_text}, ensure_ascii=False
     )
-    options: dict[str, Any] = {"opener": opener}
-    if on_delta is not None:
-        options["on_delta"] = (
-            CommandExplanationPreview(on_delta).feed if mode == "command" else on_delta
-        )
-    if cancel_event is not None:
-        options["cancel_event"] = cancel_event
-    if history:
-        options["history"] = history
-    if on_thinking is not None:
-        options["on_thinking"] = on_thinking
-    output = request_completion(payload, config, **options)
+    if mode == "command" and on_delta is not None:
+        on_delta = CommandExplanationPreview(on_delta).feed
+    output = request_completion(
+        payload,
+        config,
+        opener=opener,
+        on_delta=on_delta,
+        cancel_event=cancel_event,
+        history=history,
+        on_thinking=on_thinking,
+    )
     if _utf8_size(output) > MAX_RESULT_BYTES:
         raise ValueError("Assistant result exceeds 128 KiB; narrow the request")
     proposal = {
@@ -176,20 +175,65 @@ def propose(
     return proposal
 
 
-def _kill_group(process):
-    try:
-        os.killpg(process.pid, signal.SIGKILL)
-    except ProcessLookupError:
-        pass
+@runtime_checkable
+class _CommandProcess(Protocol):
+    @property
+    def pid(self) -> int: ...
+    @property
+    def stdout(self) -> IO[bytes] | None: ...
+    def poll(self) -> int | None: ...
+    def wait(self, timeout: float) -> int: ...
 
 
-def execute_command(
+def _kill_group(pid: int) -> None:
+    with suppress(ProcessLookupError):
+        os.killpg(pid, signal.SIGKILL)
+
+
+_Exit = Literal["complete", "cancelled", "timed_out", "truncated"]
+
+
+def _collect_output(
+    process: _CommandProcess,
+    stdout: IO[bytes],
+    deadline: float,
+    max_output: int,
+    cancel_event: Event | None,
+) -> tuple[bytearray, _Exit]:
+    output = bytearray()
+    with selectors.DefaultSelector() as selector:
+        selector.register(stdout, selectors.EVENT_READ)
+        while selector.get_map() or process.poll() is None:
+            if cancel_event is not None and cancel_event.is_set():
+                return output, "cancelled"
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return output, "timed_out"
+            wait = min(remaining, 0.1)
+            if not selector.get_map():
+                # A child may close its output before exiting; the deadline still applies.
+                with suppress(subprocess.TimeoutExpired):
+                    process.wait(timeout=wait)
+                continue
+            if not selector.select(wait):
+                continue
+            chunk = os.read(stdout.fileno(), min(4096, max_output + 1 - len(output)))
+            if not chunk:
+                selector.unregister(stdout)
+                continue
+            output.extend(chunk)
+            if len(output) > max_output:
+                return output, "truncated"
+    return output, "complete"
+
+
+def execute_command(  # noqa: PLR0913 - launch injection and independent execution limits
     command: object,
     *,
     working_directory: object = "",
     timeout: float = 30,
     max_output: int = MAX_OUTPUT,
-    popen: Callable[..., Any] | None = None,
+    popen: Callable[..., _CommandProcess] | None = None,
     cancel_event: Event | None = None,
 ) -> dict[str, int | str | bool]:
     """Run a command authorized by concrete review or configured automatic policy."""
@@ -204,14 +248,16 @@ def execute_command(
         raise ValueError("Invalid command execution limits")
     if cancel_event is not None and cancel_event.is_set():
         raise ValueError("Command cancelled before execution")
-    if working_directory and (
-        not isinstance(working_directory, str)
-        or "\0" in working_directory
-        or not Path(working_directory).is_absolute()
-        or not Path(working_directory).is_dir()
+    if not isinstance(working_directory, str) or (
+        working_directory
+        and (
+            "\0" in working_directory
+            or not Path(working_directory).is_absolute()
+            or not Path(working_directory).is_dir()
+        )
     ):
         raise ValueError("Working directory must be an existing absolute directory")
-    launch: Callable[..., Any] = popen or subprocess.Popen
+    launch: Callable[..., _CommandProcess] = popen or subprocess.Popen
     options = {"cwd": working_directory} if working_directory else {}
     process = launch(
         ["/bin/sh", "-c", command],
@@ -221,56 +267,27 @@ def execute_command(
         start_new_session=True,
         **options,
     )
-    output = bytearray()
-    timed_out = truncated = False
-    deadline = time.monotonic() + timeout
+    stdout = process.stdout
     try:
-        with selectors.DefaultSelector() as selector:
-            selector.register(process.stdout, selectors.EVENT_READ)
-            while selector.get_map():
-                if cancel_event is not None and cancel_event.is_set():
-                    _kill_group(process)
-                    break
-                remaining = deadline - time.monotonic()
-                if remaining <= 0:
-                    timed_out = True
-                    _kill_group(process)
-                    break
-                for key, _ in selector.select(min(remaining, 0.1)):
-                    chunk = os.read(key.fd, min(4096, max_output + 1 - len(output)))
-                    if not chunk:
-                        selector.unregister(key.fileobj)
-                        continue
-                    output.extend(chunk)
-                    if len(output) > max_output:
-                        truncated = True
-                        _kill_group(process)
-                        break
-                if truncated:
-                    break
-        while process.poll() is None:
-            if cancel_event is not None and cancel_event.is_set():
-                _kill_group(process)
-                break
-            if time.monotonic() >= deadline:
-                timed_out = True
-                _kill_group(process)
-                break
-            try:
-                process.wait(timeout=min(0.1, max(0.01, deadline - time.monotonic())))
-            except subprocess.TimeoutExpired:
-                continue
+        if stdout is None:
+            raise RuntimeError("Command did not open its output pipe")
+        output, outcome = _collect_output(
+            process, stdout, time.monotonic() + timeout, max_output, cancel_event
+        )
+        if outcome != "complete":
+            _kill_group(process.pid)
         code = process.wait(timeout=3)
     finally:
+        if stdout is not None:
+            stdout.close()
         if process.poll() is None:
-            _kill_group(process)
+            _kill_group(process.pid)
             process.wait(timeout=3)
-        process.stdout.close()
-    result = {
+    result: dict[str, int | str | bool] = {
         "returncode": code,
         "output": bytes(output[:max_output]).decode(errors="replace"),
-        "truncated": truncated,
-        "timed_out": timed_out,
+        "truncated": outcome == "truncated",
+        "timed_out": outcome == "timed_out",
     }
     if cancel_event is not None and cancel_event.is_set():
         result["cancelled"] = True

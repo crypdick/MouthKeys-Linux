@@ -1,6 +1,5 @@
 6	src/mouthkeys/assistance.py	no-untyped-call	Call to untyped function "_kill_group" in typed context
 1	src/mouthkeys/assistance.py	no-untyped-def	Function is missing a type annotation
-1	src/mouthkeys/assistant_history.py	var-annotated	Need type annotation for "result" (hint: "result: list[<type>] = ...")
 2	src/mouthkeys/assistant_ui.py	attr-defined	"Callable[[], QWidget]" has no attribute "jobs"
 3	src/mouthkeys/assistant_ui.py	attr-defined	"Callable[[], QWidget]" has no attribute "send"
 1	src/mouthkeys/assistant_ui.py	method-assign	Cannot assign to a method

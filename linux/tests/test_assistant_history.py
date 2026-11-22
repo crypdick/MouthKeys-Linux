@@ -3,8 +3,18 @@ from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
-from mouthkeys.assistant_history import AssistantHistory, context_messages
+from mouthkeys import assistant_history, assistant_session
+from mouthkeys.assistant_history import (
+    AssistantHistory,
+    append_private_messages,
+    context_messages,
+    pending_executions,
+    record_private_execution,
+)
+from mouthkeys.cli import main
 from mouthkeys.config import Config
+from mouthkeys.operations import backup_export, backup_import
+from mouthkeys.storage import History
 
 
 def turn(text):
@@ -50,9 +60,6 @@ def test_session_and_provider_context_remain_bounded_and_complete():
 
 
 def test_backup_roundtrip_includes_sessions_and_rejects_invalid_before_mutation(tmp_path):
-    from mouthkeys.operations import backup_export, backup_import
-    from mouthkeys.storage import History
-
     store = AssistantHistory()
     current = store.new("command")
     store.append(current["id"], turn("Original"))
@@ -62,7 +69,7 @@ def test_backup_roundtrip_includes_sessions_and_rejects_invalid_before_mutation(
     assert data["assistant_history"][0]["messages"] == turn("Original")
     data["assistant_history"][0]["messages"][1]["role"] = "system"
     path.write_text(json.dumps(data))
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="Invalid assistant message"):
         backup_import(History(), path)
     assert store.get(current["id"])["messages"] == turn("Original")
     del data["assistant_history"]
@@ -72,8 +79,6 @@ def test_backup_roundtrip_includes_sessions_and_rejects_invalid_before_mutation(
 
 
 def test_cli_saved_chat_management(capsys):
-    from mouthkeys.cli import main
-
     assert main(["assistant-history", "--new", "--mode", "edit"]) in (None, 0)
     created = json.loads(capsys.readouterr().out)
     assert main(["assistant-history", "--id", created["id"], "--rename", "Draft"]) in (None, 0)
@@ -95,8 +100,6 @@ def receipt(command="pwd", output="directory"):
 
 
 def test_execution_receipt_survives_restart_failure_backup_and_is_not_a_fake_turn():
-    from mouthkeys.assistant_history import pending_executions
-
     store = AssistantHistory()
     session = store.new("command")
     store.append(session["id"], turn("Proposal"))
@@ -115,9 +118,7 @@ def test_execution_receipt_survives_restart_failure_backup_and_is_not_a_fake_tur
 
 
 def test_execution_receipts_have_bounded_retention_and_cascade_delete(monkeypatch):
-    import mouthkeys.assistant_history as module
-
-    monkeypatch.setattr(module, "MAX_EXECUTIONS", 3)
+    monkeypatch.setattr(assistant_session, "MAX_EXECUTIONS", 3)
     store = AssistantHistory()
     session = store.new("command")
     for index in range(5):
@@ -133,12 +134,6 @@ def test_execution_receipts_have_bounded_retention_and_cascade_delete(monkeypatc
 
 
 def test_message_window_rebases_execution_consumption_in_disk_and_private_memory():
-    from mouthkeys.assistant_history import (
-        append_private_messages,
-        pending_executions,
-        record_private_execution,
-    )
-
     store = AssistantHistory()
     session = store.new("command")
     messages = turn("old") * 100
@@ -170,7 +165,7 @@ def test_message_window_rebases_execution_consumption_in_disk_and_private_memory
 def test_invalid_receipts_never_mutate_persistent_history(bad):
     store = AssistantHistory()
     session = store.new("command")
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="Invalid command execution receipt"):
         store.record_execution(session["id"], {**receipt(), **bad})
     assert store.get(session["id"])["executions"] == []
 
@@ -184,10 +179,8 @@ def test_legacy_sessions_restore_without_execution_field():
 
 
 def test_receipts_prune_to_serialized_byte_bound_and_chat_retention(monkeypatch):
-    import mouthkeys.assistant_history as module
-
-    monkeypatch.setattr(module, "MAX_EXECUTION_BYTES", 1024)
-    monkeypatch.setattr(module, "MAX_SESSIONS", 2)
+    monkeypatch.setattr(assistant_session, "MAX_EXECUTION_BYTES", 1024)
+    monkeypatch.setattr(assistant_history, "MAX_SESSIONS", 2)
     store = AssistantHistory()
     old = store.new("command")
     store.record_execution(old["id"], receipt("first", "x" * 512))
@@ -206,6 +199,6 @@ def test_invalid_imported_execution_position_rejected_before_restore():
     store = AssistantHistory()
     session = store.new("command")
     invalid = {**session, "executions": [{"message_count": 2, "result": receipt()}]}
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="Invalid command execution event position"):
         store.restore([invalid])
     assert store.get(session["id"])["executions"] == []

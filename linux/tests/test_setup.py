@@ -1,12 +1,17 @@
 """Language routes and regional offers stay local and non-delivering."""
 
+import json
 import locale
 from dataclasses import replace
 from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
+from PySide6.QtWidgets import QApplication, QComboBox, QLineEdit, QPushButton, QWidget
 
+from mouthkeys import onboarding
 from mouthkeys.config import Config
+from mouthkeys.gui import Window
 from mouthkeys.regional import CANADIAN_ZONES, CENTRAL_ZONES, REGIONS, region_offer
 from mouthkeys.regional_ui import RegionalFillerBanner
 from mouthkeys.setup_languages import COHERE, PARAKEET_V3, languages, routes
@@ -81,8 +86,6 @@ def test_all_locked_whisper_languages_have_explicit_routes_and_no_guessed_native
 
 
 def setup_window():
-    from PySide6.QtWidgets import QComboBox, QLineEdit, QWidget
-
     window = QWidget()
     config = Config.load()
     window.fields = {}
@@ -106,10 +109,18 @@ def setup_window():
     return window
 
 
+def setup_page(window):
+    return onboarding.SetupPage(
+        window.fields,
+        Mock(),
+        open_speech=Mock(),
+        open_microphone=Mock(),
+        refresh_other_banner=Mock(),
+    )
+
+
 @pytest.mark.parametrize("keep", [True, False])
 def test_regional_banner_is_inline_once_and_syncs_settings_without_other_writes(monkeypatch, keep):
-    from PySide6.QtWidgets import QApplication
-
     Config(remove_filler_words="on", filler_words="um,EH,eh", audio_source="saved-source").save()
     monkeypatch.setenv("TZ", "America/Toronto")
     window = setup_window()
@@ -150,24 +161,18 @@ def test_stale_regional_banner_cannot_overwrite_answer_from_another_surface(monk
     assert Config.load().filler_words == "um,eh"
 
 
-def test_setup_language_route_is_explicit_local_and_invalidates_stale_tryouts(monkeypatch):
-    from PySide6.QtWidgets import QComboBox
-
-    from mouthkeys.onboarding import SetupPage
-
+def test_setup_language_route_is_explicit_local_and_invalidates_stale_tryouts():
     Config(model="base.en", compute_type="float16", audio_source="keep-me").save()
     window = setup_window()
-    sent = []
-    window.send = lambda *args, **kwargs: sent.append((args, kwargs))
-    setup = SetupPage(window)
+    setup = setup_page(window)
     before = Config.load()
     setup.language_search.setText("Deutsch")
     assert setup.language.currentData() == "de"
     assert Config.load() == before
-    assert not sent
+    setup.send.assert_not_called()
     setup.record()
-    callback = sent[-1][1]["callback"]
-    assert sent[-1][0] == ("start", {"mode": "training"})
+    action, payload, callback = setup.send.call_args.args
+    assert (action, payload) == ("start", {"mode": "training"})
     index = next(
         index
         for index in range(setup.route.count())
@@ -191,17 +196,15 @@ def test_setup_language_route_is_explicit_local_and_invalidates_stale_tryouts(mo
     for key in ("engine", "compute_type"):
         assert isinstance(window.fields[key], QComboBox)
         assert window.fields[key].currentData() == getattr(saved, key)
-    assert len(sent) == 1  # No load/download, navigation, or desktop effects.
+    assert setup.send.call_count == 1  # No load/download, navigation, or desktop effects.
     assert not window.isVisible()
 
 
 def test_setup_tryout_refreshes_regional_offer_using_only_its_current_result(monkeypatch):
-    from mouthkeys.onboarding import SetupPage
-
     Config(remove_filler_words="on", filler_words="eh,um").save()
     monkeypatch.setenv("TZ", "America/Chicago")
     window = setup_window()
-    setup = SetupPage(window)
+    setup = setup_page(window)
     assert "by any chance" in setup.regional_banner.message.text()
     setup.tryout_id = "current"
     setup.update_status({"id": "stale", "assistant_proposal": {"mode": "training", "text": "Ope"}})
@@ -213,6 +216,126 @@ def test_setup_tryout_refreshes_regional_offer_using_only_its_current_result(mon
     assert setup.result.toPlainText() == "Ope, you betcha"
     assert setup.tryout_id is None
     assert not window.isVisible()
+
+
+def test_setup_does_not_report_listening_if_microphone_open_returns_idle():
+    setup = setup_page(setup_window())
+    setup.send.side_effect = lambda action, data, callback: callback(
+        {"result": {"id": "failed-job", "phase": "idle", "message": "Microphone unavailable"}}
+    )
+    setup.record()
+    assert setup.tryout_id is None
+    assert setup.result.toPlainText() == "Microphone unavailable"
+
+
+def test_setup_ignores_malformed_tryout_proposal_and_keeps_waiting():
+    setup = setup_page(setup_window())
+    setup.tryout_id = "current"
+    setup.update_status(
+        {"id": "current", "phase": "transcribing", "assistant_proposal": {"mode": "training"}}
+    )
+    assert setup.tryout_id == "current"
+    setup.update_status({"id": "current", "phase": "idle"})
+    assert setup.tryout_id is None
+    assert setup.result.toPlainText() == "Tryout finished"
+
+
+@pytest.mark.parametrize(
+    ("response", "message"),
+    [
+        ({"error": "Service unavailable"}, "Service unavailable"),
+        ({"result": {"id": ""}}, "Could not start tryout"),
+        ({"result": {"id": 4}}, "Could not start tryout"),
+        ({"result": {"id": "current", "phase": "recording"}}, "Listening"),
+    ],
+)
+def test_setup_reports_only_valid_active_recordings_as_listening(response, message):
+    setup = setup_page(setup_window())
+    setup.send.side_effect = lambda action, data, callback: callback(response)
+    setup.record()
+    assert setup.result.toPlainText().startswith(message)
+    if setup.tryout_id:
+        setup.update_status(
+            {
+                "id": "current",
+                "phase": "idle",
+                "assistant_proposal": {"mode": "assist"},
+                "message": "Tryout cancelled",
+            }
+        )
+        assert setup.result.toPlainText() == "Tryout cancelled"
+        assert setup.tryout_id is None
+
+
+def test_setup_uses_locale_route_and_handles_search_without_matches():
+    Config(language="nb-NO", engine="nemo", model="nvidia/nemotron-3.5-asr-streaming-0.6b").save()
+    setup = setup_page(setup_window())
+    assert setup.language.currentData() == "no"
+    assert setup.route.currentData()["language"] == "nb-NO"
+    assert setup.route.currentData()["engine"] == "nemo"
+    setup.language_search.setText("none matches xyzzy")
+    assert setup.language.currentData() == "no"
+    setup.language_search.clear()
+    before = Config.load()
+    setup.language.setCurrentIndex(-1)
+    assert setup.route.count() == 0
+    setup.apply_route()
+    assert Config.load() == before
+    setup.send.assert_not_called()
+
+
+def test_setup_check_and_finish_do_not_start_recording(monkeypatch):
+    Config(audio_source="saved-settings").save()
+    window = setup_window()
+    setup = setup_page(window)
+    monkeypatch.setattr(onboarding, "doctor", lambda config: {"input": config.audio_source})
+    buttons = {button.text(): button for button in setup.findChildren(QPushButton)}
+    buttons["Check setup"].click()
+    assert json.loads(setup.result.toPlainText()) == {"input": "saved-settings"}
+    buttons["Finish setup"].click()
+    assert Config.load().onboarding_complete == "on"
+    assert window.fields["onboarding_complete"].currentData() == "on"
+    assert "validate" in setup.result.toPlainText()
+    setup.send.assert_not_called()
+    buttons["Stop tryout"].click()
+    setup.send.assert_called_once_with("stop", None, None)
+    buttons["Cancel tryout"].click()
+    setup.send.assert_called_with("cancel", None, None)
+    assert not setup.isVisible()
+
+
+def test_setup_links_open_settings_inside_same_window(monkeypatch):
+    monkeypatch.setattr(Window, "poll", lambda self: None)
+    window = Window()
+    window.timer.stop()
+    window.settings_category.setCurrentText("Appearance")
+    buttons = {button.text(): button for button in window.setup_page.findChildren(QPushButton)}
+    buttons["Choose speech model"].click()
+    assert window.nav.currentItem().text() == "App Settings"
+    assert window.settings_category.currentText() == "Speech"
+    buttons["Choose microphone and priorities"].click()
+    assert window.nav.currentItem().text() == "Microphone"
+    assert not window.isVisible()
+
+
+def test_setup_failed_save_leaves_tryout_and_settings_fields_unchanged(monkeypatch):
+    before = Config(model="base.en")
+    before.save()
+    window = setup_window()
+    setup = setup_page(window)
+    setup.tryout_id = "active"
+
+    def unavailable(config):
+        raise OSError("Config directory unavailable")
+
+    monkeypatch.setattr(Config, "save", unavailable)
+    for save in (setup.apply_route, setup.finish):
+        save()
+        assert setup.result.toPlainText() == "Config directory unavailable"
+        assert setup.tryout_id == "active"
+        assert Config.load() == before
+    assert window.fields["model"].currentText() == "base.en"
+    assert window.fields["onboarding_complete"].currentData() == "off"
 
 
 def test_regional_offer_resolves_localtime_zone_when_tz_is_unset(monkeypatch):

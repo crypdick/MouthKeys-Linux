@@ -36,10 +36,8 @@
 1	src/mouthkeys/file_transcription.py	no-untyped-def	Function is missing a type annotation
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "AssistantPage" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "ModelBrowser" in typed context
-1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "SetupPage" in typed context
 2	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "preview_sound" in typed context
 2	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "save" in typed context
-1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "update_status" in typed context
 4	src/mouthkeys/gui.py	no-untyped-def	Function is missing a return type annotation
 2	src/mouthkeys/gui.py	no-untyped-def	Function is missing a type annotation
 1	src/mouthkeys/local_api.py	no-untyped-call	Call to untyped function "transcribe_file" in typed context
@@ -59,26 +57,10 @@
 4	src/mouthkeys/models_ui.py	no-untyped-def	Function is missing a type annotation
 4	src/mouthkeys/models_ui.py	union-attr	Item "None" of "QTableWidgetItem | None" has no attribute "data"
 1	src/mouthkeys/models_ui.py	union-attr	Item "None" of "QTableWidgetItem | None" has no attribute "setText"
-2	src/mouthkeys/onboarding.py	attr-defined	"Callable[[], QWidget]" has no attribute "fields"
-1	src/mouthkeys/onboarding.py	attr-defined	"Callable[[], QWidget]" has no attribute "nav"
-1	src/mouthkeys/onboarding.py	attr-defined	"Callable[[], QWidget]" has no attribute "send"
-1	src/mouthkeys/onboarding.py	attr-defined	"Callable[[], QWidget]" has no attribute "settings_category"
-3	src/mouthkeys/onboarding.py	attr-defined	"QAbstractItemModel" has no attribute "item"
-1	src/mouthkeys/onboarding.py	method-assign	Cannot assign to a method
-2	src/mouthkeys/onboarding.py	no-untyped-call	Call to untyped function "invalidate_tryout" in typed context
-1	src/mouthkeys/onboarding.py	no-untyped-call	Call to untyped function "languages" in typed context
-1	src/mouthkeys/onboarding.py	no-untyped-call	Call to untyped function "refresh_routes" in typed context
-1	src/mouthkeys/onboarding.py	no-untyped-call	Call to untyped function "routes" in typed context
-6	src/mouthkeys/onboarding.py	no-untyped-def	Function is missing a return type annotation
-6	src/mouthkeys/onboarding.py	no-untyped-def	Function is missing a type annotation
 1	src/mouthkeys/overlay.py	no-untyped-call	Call to untyped function "set_status" in typed context
 3	src/mouthkeys/overlay.py	no-untyped-def	Function is missing a type annotation
 1	src/mouthkeys/overlay_assistant.py	no-untyped-call	Call to untyped function "AssistantPage" in typed context
 1	src/mouthkeys/postprocess.py	no-untyped-call	Call to untyped function "dictation_prompt" in typed context
 1	src/mouthkeys/postprocess.py	no-untyped-call	Call to untyped function "render_dictation_user_message" in typed context
 2	src/mouthkeys/postprocess.py	no-untyped-def	Function is missing a type annotation
-9	src/mouthkeys/setup_languages.py	no-untyped-call	Call to untyped function "add" in typed context
-1	src/mouthkeys/setup_languages.py	no-untyped-call	Call to untyped function "languages" in typed context
-1	src/mouthkeys/setup_languages.py	no-untyped-def	Function is missing a return type annotation
-2	src/mouthkeys/setup_languages.py	no-untyped-def	Function is missing a type annotation
 2	src/mouthkeys/upstream_backup.py	no-untyped-call	Call to untyped function "_merge_rules" in typed context

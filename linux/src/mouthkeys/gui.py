@@ -40,6 +40,13 @@ from .stats_view import StatsPage
 from .window_theme import window_stylesheet
 
 
+def _scroll_page(content: QWidget) -> QScrollArea:
+    scroll = QScrollArea()
+    scroll.setWidgetResizable(True)
+    scroll.setWidget(content)
+    return scroll
+
+
 class Window(QWidget):
     def __init__(self) -> None:
         super().__init__()
@@ -154,10 +161,7 @@ class Window(QWidget):
         )
         options.add_grouped_row(self.model_downloads, "Speech")
         self.settings_category.setCurrentText("Speech")
-        settings_scroll = QScrollArea()
-        settings_scroll.setWidgetResizable(True)
-        settings_scroll.setWidget(settings)
-        return settings_scroll
+        return _scroll_page(settings)
 
     def _add_auxiliary_pages(self, tabs: QStackedWidget) -> None:
         self.dictionary_page = DictionaryPage(self.send, self.status.setText)
@@ -176,30 +180,34 @@ class Window(QWidget):
             self.settings_options.refresh_profiles,
             self._profile_keyring,
         )
-        profiles_scroll = QScrollArea()
-        profiles_scroll.setWidgetResizable(True)
-        profiles_scroll.setWidget(self.prompt_profiles)
-        tabs.addWidget(profiles_scroll)
+        tabs.addWidget(_scroll_page(self.prompt_profiles))
         from .assistant_ui import AssistantPage
 
         self.assistant_page = AssistantPage(self)
         tabs.addWidget(self.assistant_page)
         from .onboarding import SetupPage
 
-        self.setup_page = SetupPage(self)
+        self.setup_page = SetupPage(
+            self.fields,
+            self.send,
+            open_speech=self._open_speech_settings,
+            open_microphone=lambda: self.nav.setCurrentRow(11),
+            refresh_other_banner=self.regional_banner.refresh,
+        )
         tabs.addWidget(self.setup_page)
         from .learning_ui import LearningPage
 
         self.learning_page = LearningPage(self.send)
         self.dictionary_page.vocabulary_changed.connect(self.learning_page.refresh_words)
-        learning_scroll = QScrollArea()
-        learning_scroll.setWidgetResizable(True)
-        learning_scroll.setWidget(self.learning_page)
-        tabs.addWidget(learning_scroll)
+        tabs.addWidget(_scroll_page(self.learning_page))
         from .microphone_ui import MicrophonePage
 
         self.microphone_page = MicrophonePage(self)
         tabs.addWidget(self.microphone_page)
+
+    def _open_speech_settings(self) -> None:
+        self.nav.setCurrentRow(1)
+        self.settings_category.setCurrentText("Speech")
 
     def _make_navigation(self, icon_path: str) -> QWidget:
         sidebar = QWidget()
@@ -288,7 +296,9 @@ class Window(QWidget):
         self.model_downloads.delete_model()
 
     def run_task(self, function: Callable[[], object], callback: ResponseHandler) -> None:
-        task = Task(function, self)
+        self._start_task(Task(function, self), callback)
+
+    def _start_task(self, task: Task, callback: ResponseHandler) -> None:
         self.jobs.add(task)
         task.done.connect(callback)
         task.finished.connect(lambda: self.jobs.discard(task))
@@ -309,19 +319,13 @@ class Window(QWidget):
         data: Mapping[str, object] | None = None,
         callback: ResponseHandler | None = None,
     ) -> None:
-        job = Request(action, data, self)
-        self.jobs.add(job)
-
         def done(response: Response) -> None:
             if "error" in response:
                 self.status.setText(str(response["error"]))
             if callback:
                 callback(response)
 
-        job.done.connect(done)
-        job.finished.connect(lambda: self.jobs.discard(job))
-        job.finished.connect(job.deleteLater)
-        job.start()
+        self._start_task(Request(action, data, self), done)
 
     def poll(self) -> None:
         if self.polling:

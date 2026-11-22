@@ -5,6 +5,8 @@ language inventory (including Hebrew's Linux code `he`); Apple routes are replac
 by local Linux engines. Routes never load a model or contact its provider.
 """
 
+from typing import TypedDict
+
 LANGUAGE_NAMES = {
     "af": "Afrikaans",
     "am": "Amharic",
@@ -191,19 +193,29 @@ NEMOTRON = {
 }
 
 
-def languages():
-    from faster_whisper.tokenizer import _LANGUAGE_CODES
+class ModelRoute(TypedDict):
+    label: str
+    engine: str
+    model: str
+    language: str
+    model_revision: str
+
+
+def languages() -> list[tuple[str, str]]:
+    from faster_whisper.tokenizer import _LANGUAGE_CODES  # noqa: PLC0415 - optional engine import
 
     return [(code, LANGUAGE_NAMES[code]) for code in _LANGUAGE_CODES]
 
 
-def routes(language):
+def routes(language: str) -> list[ModelRoute]:
     """Return explicit engine/model/language/revision bindings, not quality ratings."""
     if language not in dict(languages()):
         return []
-    choices = []
+    choices: list[ModelRoute] = []
 
-    def add(label, engine, model, language_code=language, revision="main"):
+    def add(
+        label: str, engine: str, model: str, language_code: str = language, revision: str = "main"
+    ) -> None:
         choices.append(
             {
                 "label": label,

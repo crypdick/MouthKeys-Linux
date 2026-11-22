@@ -381,10 +381,10 @@ def test_literal_commands_and_explicit_mentions_match_upstream(text, expected):
 )
 def test_relaxed_mentions_need_real_chat_context(metadata):
     config = Config(literal_formatting="on")
-    assert format_text("Ping at Paul Smith", config, **metadata) == "Ping @Paul Smith"
+    assert format_text("Ping at Paul Smith", config, app=metadata) == "Ping @Paul Smith"
     prose = "I am at the store. Meet me at lunch. I am at Paul. Look at Paul's message."
-    assert format_text(prose, config, **metadata) == prose
-    assert format_text("at paul", config, **metadata) == "at paul"
+    assert format_text(prose, config, app=metadata) == prose
+    assert format_text("at paul", config, app=metadata) == "at paul"
     assert format_text("at Paul", config) == "at Paul"
 
 
@@ -407,7 +407,7 @@ def test_continuous_formatting_and_autocomplete_contract(text, context, metadata
     config = Config(
         literal_formatting="on", space_between_dictations="on", smart_capitalization="on"
     )
-    assert format_text(text, config, context=context, **metadata) == expected
+    assert format_text(text, config, context=context, app=metadata) == expected
 
 
 def test_disabled_formatting_preserves_whitespace_and_explicit_gaav_matches_upstream():

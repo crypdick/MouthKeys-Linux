@@ -110,30 +110,6 @@
 1	src/mouthkeys/forced_alignment.py	ANN202	Missing return type annotation for private function `_words`
 1	src/mouthkeys/forced_alignment.py	ANN204	Missing return type annotation for special method `__init__`
 4	src/mouthkeys/forced_alignment.py	PLC0415	`import` should be at the top-level of a file
-1	src/mouthkeys/formatting.py	ANN001	Missing type annotation for function argument `at`
-1	src/mouthkeys/formatting.py	ANN001	Missing type annotation for function argument `data`
-1	src/mouthkeys/formatting.py	ANN001	Missing type annotation for function argument `direction`
-1	src/mouthkeys/formatting.py	ANN001	Missing type annotation for function argument `literal_prefix`
-1	src/mouthkeys/formatting.py	ANN001	Missing type annotation for function argument `prefix`
-1	src/mouthkeys/formatting.py	ANN001	Missing type annotation for function argument `rule`
-4	src/mouthkeys/formatting.py	ANN001	Missing type annotation for function argument `text`
-1	src/mouthkeys/formatting.py	ANN001	Missing type annotation for function argument `upper`
-1	src/mouthkeys/formatting.py	ANN201	Missing return type annotation for public function `apply_question_mark_shortcut`
-1	src/mouthkeys/formatting.py	ANN201	Missing return type annotation for public function `apply_spoken_punctuation`
-1	src/mouthkeys/formatting.py	ANN202	Missing return type annotation for private function `_ending_question`
-1	src/mouthkeys/formatting.py	ANN202	Missing return type annotation for private function `_first_letter_case`
-1	src/mouthkeys/formatting.py	ANN202	Missing return type annotation for private function `_punctuation_spacing`
-1	src/mouthkeys/formatting.py	ANN202	Missing return type annotation for private function `neighbor`
-1	src/mouthkeys/formatting.py	C408	Unnecessary `dict()` call (rewrite as a literal)
-1	src/mouthkeys/formatting.py	C901	`apply_spoken_punctuation` is too complex (35 > 15)
-1	src/mouthkeys/formatting.py	C901	`format_text` is too complex (17 > 15)
-4	src/mouthkeys/formatting.py	PLC0414	Import alias does not rename original package
-1	src/mouthkeys/formatting.py	PLC0415	`import` should be at the top-level of a file
-1	src/mouthkeys/formatting.py	PLR0911	Too many return statements (10 > 6)
-1	src/mouthkeys/formatting.py	PLR0912	Too many branches (16 > 12)
-1	src/mouthkeys/formatting.py	PLR0912	Too many branches (33 > 12)
-1	src/mouthkeys/formatting.py	PLR0913	Too many arguments in function definition (7 > 5)
-1	src/mouthkeys/formatting.py	PLR0915	Too many statements (90 > 50)
 1	src/mouthkeys/gui.py	ANN001	Missing type annotation for function argument `response`
 1	src/mouthkeys/gui.py	ANN001	Missing type annotation for function argument `stop`
 1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `capture_shortcut`

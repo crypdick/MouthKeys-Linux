@@ -53,7 +53,8 @@ then dispatches local work or uses `control` to contact the private Unix socket 
   pending request. `assistant_editor` displays proposals and forwards explicit review actions.
   `recording_assistant` binds voice jobs to their starting conversation, retains execution
   receipts, and publishes bounded status snapshots. Only the active request round can publish
-  incremental output.
+  incremental output. `command_preview` decodes only the root explanation for display;
+  `assistance` validates the final proposal separately before it can be acted on.
   Transcript history (`history_ui`), activity (`stats_view`), backup review (`backup_ui`), and
   diagnostics (`help_ui`) own their Settings pages. `dictionary_ui` owns editing and voice training
   drafts; saving compares the editor's snapshot under the same lock used to write the dictionary.

@@ -56,26 +56,13 @@
 1	src/mouthkeys/ai_stream.py	PLR1702	Too many nested blocks (6 > 5)
 1	src/mouthkeys/ai_stream.py	SIM105	Use `contextlib.suppress(OSError)` instead of `try`-`except`-`pass`
 1	src/mouthkeys/ai_stream.py	TRY004	Prefer `TypeError` exception for invalid type
-1	src/mouthkeys/assistance.py	ANN001	Missing type annotation for function argument `emit`
-1	src/mouthkeys/assistance.py	ANN001	Missing type annotation for function argument `piece`
 1	src/mouthkeys/assistance.py	ANN001	Missing type annotation for function argument `process`
 1	src/mouthkeys/assistance.py	ANN202	Missing return type annotation for private function `_kill_group`
-1	src/mouthkeys/assistance.py	ANN202	Missing return type annotation for private function `_text`
-1	src/mouthkeys/assistance.py	ANN202	Missing return type annotation for private function `feed`
-1	src/mouthkeys/assistance.py	ANN204	Missing return type annotation for special method `__init__`
-1	src/mouthkeys/assistance.py	C901	`_text` is too complex (18 > 15)
 1	src/mouthkeys/assistance.py	C901	`execute_command` is too complex (18 > 15)
-1	src/mouthkeys/assistance.py	C901	`feed` is too complex (25 > 15)
-1	src/mouthkeys/assistance.py	C901	`propose` is too complex (18 > 15)
 1	src/mouthkeys/assistance.py	PLC0415	`import` should be at the top-level of a file
-1	src/mouthkeys/assistance.py	PLR0911	Too many return statements (13 > 6)
-2	src/mouthkeys/assistance.py	PLR0912	Too many branches (17 > 12)
 1	src/mouthkeys/assistance.py	PLR0912	Too many branches (18 > 12)
-1	src/mouthkeys/assistance.py	PLR0912	Too many branches (26 > 12)
 1	src/mouthkeys/assistance.py	PLR0913	Too many arguments in function definition (10 > 5)
 1	src/mouthkeys/assistance.py	PLR0913	Too many arguments in function definition (6 > 5)
-1	src/mouthkeys/assistance.py	PLR0915	Too many statements (55 > 50)
-1	src/mouthkeys/assistance.py	PLR0915	Too many statements (58 > 50)
 1	src/mouthkeys/assistance.py	PLR0915	Too many statements (60 > 50)
 1	src/mouthkeys/assistance.py	SIM105	Use `contextlib.suppress(ProcessLookupError)` instead of `try`-`except`-`pass`
 1	src/mouthkeys/assistance.py	TRY004	Prefer `TypeError` exception for invalid type

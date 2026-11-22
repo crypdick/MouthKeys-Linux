@@ -16,12 +16,9 @@
 1	src/mouthkeys/ai_stream.py	no-untyped-def	Function is missing a return type annotation
 4	src/mouthkeys/ai_stream.py	no-untyped-def	Function is missing a type annotation
 1	src/mouthkeys/ai_stream.py	var-annotated	Need type annotation for "lines" (hint: "lines: list[<type>] = ...")
-1	src/mouthkeys/assistance.py	no-untyped-call	Call to untyped function "_CommandExplanationStream" in typed context
 6	src/mouthkeys/assistance.py	no-untyped-call	Call to untyped function "_kill_group" in typed context
-1	src/mouthkeys/assistance.py	no-untyped-call	Call to untyped function "_text" in typed context
 1	src/mouthkeys/assistance.py	no-untyped-call	Call to untyped function "request_completion" in typed context
-1	src/mouthkeys/assistance.py	no-untyped-def	Function is missing a return type annotation
-3	src/mouthkeys/assistance.py	no-untyped-def	Function is missing a type annotation
+1	src/mouthkeys/assistance.py	no-untyped-def	Function is missing a type annotation
 1	src/mouthkeys/assistant_history.py	no-untyped-call	Call to untyped function "validate_entries" of "AssistantHistory" in typed context
 2	src/mouthkeys/assistant_history.py	no-untyped-def	Function is missing a return type annotation
 2	src/mouthkeys/assistant_history.py	no-untyped-def	Function is missing a type annotation

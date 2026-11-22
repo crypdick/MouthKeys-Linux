@@ -208,8 +208,7 @@ def test_custom_native_model_capability_checks_actual_encoder_context():
 def test_custom_full_context_worker_does_not_route_to_stream(monkeypatch):
     transcriber = Transcriber()
     model = SimpleNamespace(native_streaming=False)
-    monkeypatch.setattr(transcriber, "load", lambda config: setattr(transcriber, "model", model))
+    monkeypatch.setattr("mouthkeys.native_worker.NativeWorkerBackend", lambda config: model)
     config = replace(Config(), engine="nemo", model="/custom/full-context.nemo")
     assert not transcriber._uses_native_streaming(config)
-    transcriber._loaded(config)
     assert transcriber.loaded_model["native_streaming"] is False

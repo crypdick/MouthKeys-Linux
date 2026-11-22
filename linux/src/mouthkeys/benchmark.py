@@ -17,11 +17,16 @@ from dataclasses import asdict, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from threading import Event
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from .benchmark_context import decode_settings, hardware_context, model_identity, software_context
 from .benchmark_reports import save_measurement
 from .config import Config, private_dir
+
+if TYPE_CHECKING:
+    WorkerProcess = subprocess.Popen[bytes]
+else:
+    WorkerProcess = object
 
 MAX_REFERENCE = 16000
 MAX_FIXTURE_BYTES = 128 * 1024 * 1024
@@ -116,7 +121,7 @@ def _tree_rss(pid: int, proc: Path = Path("/proc")) -> int | None:
     return total if observed else None
 
 
-def _stop(process: subprocess.Popen[bytes]) -> None:
+def _stop(process: WorkerProcess) -> None:
     if process.poll() is None:
         with suppress(ProcessLookupError):
             os.killpg(process.pid, signal.SIGKILL)
@@ -129,7 +134,7 @@ def _check_cancellation(cancel_event: Event | None) -> None:
 
 
 def _sample_worker(
-    process: subprocess.Popen[bytes], deadline: float, cancel_event: Event | None
+    process: WorkerProcess, deadline: float, cancel_event: Event | None
 ) -> tuple[int | None, int]:
     peak: int | None = None
     samples = 0

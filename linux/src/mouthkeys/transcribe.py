@@ -1,23 +1,36 @@
-import math
+from collections.abc import Callable
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 
+import numpy as np
+from numpy.typing import NDArray
+
+from .audio import read_audio_from
 from .config import Config, cache_dir
-from .native_asr import uses_native_streaming
+from .model_progress import DownloadProgress, progress_tqdm
+from .native_asr import download_native, effective_revision, uses_native_streaming
+from .transcript_window import Segment, TimedWord, TranscriptWindow, decode_transcript, timed_words
+
+StreamKey = tuple[Path | str | int, ...]
 
 
 def download(
-    model: str, engine="whisper", compute_type="default", *, revision="main", progress=None
-):
+    model: str,
+    engine: str = "whisper",
+    compute_type: str = "default",
+    *,
+    revision: str = "main",
+    progress: Callable[[DownloadProgress], None] | None = None,
+) -> str:
     if progress:
         progress({"phase": "preparing", "completed": 0, "total": None, "unit": "file"})
     if engine == "onnx":
         from .engines import download_onnx
 
-        return download_onnx(model, compute_type, progress=progress, revision=revision)
+        path: str = download_onnx(model, compute_type, progress=progress, revision=revision)
+        return path
     if engine in ("transformers", "nemo"):
-        from .native_asr import download_native
-
         return download_native(model, engine, revision, progress)
     if engine != "whisper":
         raise ValueError("Unknown engine")
@@ -26,8 +39,6 @@ def download(
     if progress:
         from faster_whisper.utils import _MODELS
         from huggingface_hub import snapshot_download
-
-        from .model_progress import progress_tqdm
 
         repository = model if "/" in model else _MODELS.get(model)
         if not repository:
@@ -45,28 +56,60 @@ def download(
             ],
             tqdm_class=progress_tqdm(progress),
         )
-    return download_model(model, cache_dir=str(cache_dir() / "models"), revision=revision)
+    downloaded: str = download_model(
+        model, cache_dir=str(cache_dir() / "models"), revision=revision
+    )
+    return downloaded
+
+
+def _model_for_config(config: Config) -> object:
+    # Keep heavyweight engines unloaded until the first request.
+    if config.engine == "onnx":
+        from .engines import load_onnx
+
+        return load_onnx(config)
+    if config.engine in ("transformers", "nemo"):
+        from .native_worker import NativeWorkerBackend
+
+        return NativeWorkerBackend(config)
+    if config.engine != "whisper":
+        raise ValueError("Unknown speech engine")
+    from faster_whisper import WhisperModel
+
+    from .engines import resolve_whisper
+
+    return WhisperModel(
+        resolve_whisper(config),
+        device=config.device,
+        compute_type=config.compute_type,
+        download_root=str(cache_dir() / "models"),
+        local_files_only=True,
+        revision=config.model_revision,
+    )
+
+
+def _model_alive(model: object) -> bool:
+    try:
+        probe = getattr(model, "alive", None)
+        return not callable(probe) or bool(probe())
+    except (OSError, RuntimeError):
+        return False
 
 
 class Transcriber:
-    def __init__(self):
-        self.key = None
-        self.model = None
-        self._loaded_model = None
-        self.stream_key = None
-        self.cursor = 0
-        self.committed = []
-        self.pending = ""
-        self.covered = 0
-        self.words = []
-        self.last_alignment = None
-        self.committed_words = []
-        self.pending_words = []
-        self.decoded_words = []
-        self.aligner = None
+    def __init__(self) -> None:
+        self.key: tuple[str, ...] | None = None
+        self.model: Any = None
+        self._loaded_model: dict[str, str | bool] | None = None
+        self.stream_key: StreamKey | None = None
+        self._stream_epoch = 0
+        self._preview: TranscriptWindow | None = None
+        self.words: list[TimedWord] = []
+        self.last_alignment: dict[str, object] | None = None
+        self.aligner: Any = None
         self.alignment_warning = ""
 
-    def load(self, config: Config):
+    def load(self, config: Config) -> None:
         if self.aligner is not None and (
             config.pronunciation_matching != "on" or not config.pronunciation_aligner_model
         ):
@@ -75,54 +118,23 @@ class Transcriber:
             config.model,
             config.device,
             config.compute_type,
-            getattr(config, "engine", "whisper"),
-            getattr(config, "model_revision", "main"),
-            getattr(config, "native_streaming", "on"),
-            getattr(config, "streaming_latency", "model"),
+            config.engine,
+            config.model_revision,
+            config.native_streaming,
+            config.streaming_latency,
         )
-        alive = not hasattr(self.model, "alive") or self.model.alive()
-        if key != self.key or not alive:
-            if hasattr(self.model, "close"):
-                self.model.close()
-            self.model = None
-            self.key = None
-            self._loaded_model = None
-            if getattr(config, "engine", "whisper") == "onnx":
-                from .engines import load_onnx
-
-                self.model = load_onnx(config)
-                self.key = key
-                self._loaded(config)
-                return
-            if getattr(config, "engine", "whisper") in ("transformers", "nemo"):
-                from .native_worker import NativeWorkerBackend
-
-                self.model = NativeWorkerBackend(config)
-                self.key = key
-                self._loaded(config)
-                return
-            if getattr(config, "engine", "whisper") != "whisper":
-                raise ValueError("Unknown speech engine")
-            from faster_whisper import WhisperModel
-
-            from .engines import resolve_whisper
-
-            self.model = WhisperModel(
-                resolve_whisper(config),
-                device=config.device,
-                compute_type=config.compute_type,
-                download_root=str(cache_dir() / "models"),
-                local_files_only=True,
-                revision=getattr(config, "model_revision", "main"),
-            )
-            self.key = key
-            self._loaded(config)
-
-    def _loaded(self, config):
-        revision = getattr(config, "model_revision", "main")
+        if key == self.key and _model_alive(self.model):
+            return
+        close = getattr(self.model, "close", None)
+        if callable(close):
+            close()
+        self.model = None
+        self.key = None
+        self._loaded_model = None
+        self.model = _model_for_config(config)
+        self.key = key
+        revision = config.model_revision
         if config.engine in ("nemo", "transformers"):
-            from .native_asr import effective_revision
-
             revision = effective_revision(config.model, revision, config.engine)
         self._loaded_model = {
             "engine": config.engine,
@@ -136,50 +148,45 @@ class Transcriber:
         }
 
     @property
-    def loaded_model(self):
+    def loaded_model(self) -> dict[str, str | bool] | None:
         """Nonblocking resident identity; a dead isolated worker has no loaded model."""
-        model = self.model
-        if model is None:
+        model, details = self.model, self._loaded_model
+        if model is None or details is None or not _model_alive(model):
             return None
-        try:
-            if hasattr(model, "alive") and not model.alive():
-                return None
-        except (OSError, RuntimeError):
+        if model is not self.model or details is not self._loaded_model:
             return None
-        return dict(self._loaded_model) if self._loaded_model is not None else None
+        return dict(details)
 
-    def _session(self, path, config):
-        key = self._stream_key(path, config)
-        if key != self.stream_key:
-            self.stream_key = key
-            self.cursor = 0
-            self.committed = []
-            self.pending = ""
-            self.covered = 0
-            self.words = []
-            self.last_alignment = None
-            self.committed_words = []
-            self.pending_words = []
-            self.alignment_warning = ""
+    def _forget_preview(self) -> None:
+        self.stream_key = None
+        self._preview = None
 
-    @staticmethod
-    def _stream_key(path, config):
+    @property
+    def committed_segments(self) -> int:
+        return self._preview.committed_segments if self._preview is not None else 0
+
+    def _stream_key(self, path: Path | str, config: Config) -> StreamKey:
         return (
             path,
             config.model,
             config.device,
             config.compute_type,
             config.language,
-            getattr(config, "engine", "whisper"),
-            getattr(config, "model_revision", "main"),
-            getattr(config, "pronunciation_matching", "off"),
-            getattr(config, "pronunciation_aligner_model", ""),
+            config.engine,
+            config.model_revision,
+            config.vocabulary_boosting,
+            config.asr_max_tokens,
+            config.native_streaming,
+            config.streaming_latency,
+            config.pronunciation_matching,
+            config.pronunciation_aligner_model,
+            self._stream_epoch,
         )
 
-    def _align_segments(self, audio, config, segments):
+    def _align_segments(
+        self, audio: NDArray[np.generic], config: Config, segments: list[Segment]
+    ) -> list[Segment]:
         if config.pronunciation_matching != "on" or not config.pronunciation_aligner_model:
-            if self.aligner is not None:
-                self.aligner.clear()
             return segments
         if self.aligner is None:
             from .forced_alignment import WhisperForcedAligner
@@ -188,61 +195,40 @@ class Transcriber:
         aligned, warning = self.aligner.align(audio, segments, config)
         if warning and warning not in self.alignment_warning:
             self.alignment_warning = "; ".join(filter(None, [self.alignment_warning, warning]))
-        return aligned
+        result: list[Segment] = aligned
+        return result
 
-    def _record_alignment(self, path, text, words):
+    def _record_alignment(self, path: Path, text: str, words: list[TimedWord]) -> None:
         self.words = words
         self.last_alignment = {"text": text, "words": words, "source": str(path)}
         if self.alignment_warning:
             self.last_alignment["warning"] = self.alignment_warning
 
-    def _uses_native_streaming(self, config):
+    def _uses_native_streaming(self, config: Config) -> bool:
         if not uses_native_streaming(config):
             return False
         self.load(config)
-        return getattr(self.model, "native_streaming", True)
+        return bool(getattr(self.model, "native_streaming", True))
 
-    def preview(self, path: Path, config: Config):
+    def preview(self, path: Path, config: Config) -> str:
         """Keep completed segments; revise only the uncommitted audio prefix."""
-        from .audio import read_audio_from
-
+        key = self._stream_key(path, config)
+        if key != self.stream_key:
+            self._forget_preview()
+            self.alignment_warning = ""
+        self.stream_key = key
         if self._uses_native_streaming(config):
-            if self.stream_key != self._stream_key(path, config):
-                self.alignment_warning = ""
-            self.stream_key = self._stream_key(path, config)
-            return self.model.stream(read_audio_from(path), config, self.stream_key)
-        self._session(path, config)
-        # Grow an unresolved window rather than freezing at its original end.
-        unresolved = (self.covered - self.cursor) / 16000
-        seconds = unresolved + 30 if unresolved >= 30 else 30
-        audio = read_audio_from(path, self.cursor, seconds=seconds)
-        end = self.cursor + len(audio)
-        if end == self.covered or len(audio) < 8000:
-            return " ".join([*self.committed, self.pending]).strip()
-        segments = self._segments(audio, config)
-        # NOTE: segment boundaries with 2 s lookahead trade accuracy for latency.
-        # Word agreement could refine boundaries if real dictation exposes clipping.
-        cutoff = len(audio) / 16000 - 2
-        count = 0
-        cursor = self.cursor
-        for segment in segments:
-            boundary = round(segment.end * 16000)
-            if not 0 < boundary <= round(cutoff * 16000):
-                break
-            self.committed.append(segment.text.strip())
-            self.committed_words.extend(self._word_metadata([segment], self.cursor / 16000))
-            cursor = self.cursor + boundary
-            count += 1
-        self.pending_words = self._word_metadata(segments[count:], self.cursor / 16000)
-        self.cursor = cursor
-        self.pending = " ".join(s.text.strip() for s in segments[count:]).strip()
-        self.covered = end
-        return " ".join([*self.committed, self.pending]).strip()
+            self._preview = None
+            text: str = self.model.stream(read_audio_from(path), config, key)
+            return text
+        if self._preview is None:
+            self.words = []
+            self.last_alignment = None
+            self._preview = TranscriptWindow()
+        return self._preview.preview(path, lambda audio: self._segments(audio, config))
 
-    def transcribe(self, path: str | Path, config: Config):
+    def transcribe(self, path: str | Path, config: Config) -> str:
         """Finalize a live session, or decode a standalone file from its beginning."""
-        from .audio import read_audio_from
-
         path = Path(path)
         key = self._stream_key(path, config)
         self.words = []
@@ -251,109 +237,70 @@ class Transcriber:
             self.alignment_warning = ""
         try:
             if self._uses_native_streaming(config):
-                audio = read_audio_from(path)
-                text = self.model.stream(audio, config, key, final=True)
-                if config.pronunciation_matching == "on":
-                    words = getattr(self.model, "words", [])
-                    if not words:
-                        segments = self._align_segments(
-                            audio,
-                            config,
-                            [SimpleNamespace(start=0, end=len(audio) / 16000, text=text)],
-                        )
-                        words = self._word_metadata(segments)
-                    self._record_alignment(path, text, words)
-                return text
-            if key != self.stream_key:
-                text = self._decode(str(path), config)
-                words = self.decoded_words
+                return self._finish_native(path, config, key)
+            if self._preview is None or key != self.stream_key:
+                result = decode_transcript(self._segments(str(path), config))
             else:
-                audio = read_audio_from(path, self.cursor)
-                if self.cursor + len(audio) == self.covered:
-                    tail, tail_words = self.pending, self.pending_words
-                elif len(audio):
-                    tail = self._decode(audio, config, offset=self.cursor / 16000)
-                    tail_words = self.decoded_words
-                else:
-                    tail, tail_words = "", []
-                text = " ".join([*self.committed, tail]).strip()
-                words = [*self.committed_words, *tail_words]
+                result = self._preview.finish(path, lambda audio: self._segments(audio, config))
             if config.pronunciation_matching == "on":
-                self._record_alignment(path, text, words)
-            return text
+                self._record_alignment(path, result.text, result.words)
+            return result.text
         finally:
-            self.stream_key = None
-            self.committed = []
-            self.pending = ""
-            self.committed_words = []
-            self.pending_words = []
+            self._forget_preview()
 
-    def reset_stream(self):
+    def _finish_native(self, path: Path, config: Config, key: StreamKey) -> str:
+        audio = read_audio_from(path)
+        text: str = self.model.stream(audio, config, key, final=True)
+        if config.pronunciation_matching == "on":
+            words = getattr(self.model, "words", [])
+            if not words:
+                segments = self._align_segments(
+                    audio, config, [SimpleNamespace(start=0, end=len(audio) / 16000, text=text)]
+                )
+                words = timed_words(segments)
+            self._record_alignment(path, text, words)
+        return text
+
+    def reset_stream(self) -> None:
         """Release recording caches on cancel under the controller's model lock."""
-        if hasattr(self.model, "reset_stream"):
-            self.model.reset_stream()
-        self.stream_key = None
-        self.committed = []
-        self.pending = ""
+        self._forget_preview()
+        self._stream_epoch += 1
         self.words = []
         self.last_alignment = None
         self.alignment_warning = ""
-        self.committed_words = []
-        self.pending_words = []
+        reset = getattr(self.model, "reset_stream", None)
+        if callable(reset):
+            reset()
 
-    def _segments(self, audio, config):
+    def _segments(self, audio: str | NDArray[np.generic], config: Config) -> list[Segment]:
         self.load(config)
-        if getattr(config, "engine", "whisper") in ("transformers", "nemo"):
-            if isinstance(audio, str):
-                from faster_whisper.audio import decode_audio
+        if config.engine == "whisper":
+            from .vocabulary import whisper_options
 
-                audio = decode_audio(audio, sampling_rate=16000)
-            return self._align_segments(audio, config, list(self.model.segments(audio, config)))
-        if getattr(config, "engine", "whisper") == "onnx":
-            if isinstance(audio, str):
-                from faster_whisper.audio import decode_audio
-
-                audio = decode_audio(audio, sampling_rate=16000)
-            segments = list(
-                self.model.recognize(
-                    audio,
-                    sample_rate=16000,
-                    language=None if config.language == "auto" else config.language,
-                )
+            segments, _ = self.model.transcribe(
+                audio,
+                language=None if config.language == "auto" else config.language,
+                beam_size=1,
+                vad_filter=True,
+                condition_on_previous_text=False,
+                word_timestamps=config.pronunciation_matching == "on",
+                **whisper_options(config),
             )
-            return self._align_segments(audio, config, segments)
-        from .vocabulary import whisper_options
+            return list(segments)
 
-        segments, _ = self.model.transcribe(
-            audio,
-            language=None if config.language == "auto" else config.language,
-            beam_size=1,
-            vad_filter=True,
-            condition_on_previous_text=False,
-            word_timestamps=config.pronunciation_matching == "on",
-            **whisper_options(config),
-        )
-        return list(segments)
+        samples: NDArray[np.generic]
+        if isinstance(audio, str):
+            from faster_whisper.audio import decode_audio
 
-    @staticmethod
-    def _word_metadata(segments, offset=0):
-        words = []
-        for segment in segments:
-            for word in getattr(segment, "words", None) or []:
-                start, end = float(word.start), float(word.end)
-                if not math.isfinite(start) or not math.isfinite(end) or not 0 <= start <= end:
-                    continue
-                entry = {"word": word.word, "start": start + offset, "end": end + offset}
-                probability = getattr(word, "probability", None)
-                if probability is not None and math.isfinite(float(probability)):
-                    entry["probability"] = float(probability)
-                if getattr(word, "alignment_source", None):
-                    entry["alignment_source"] = word.alignment_source
-                words.append(entry)
-        return words
-
-    def _decode(self, audio, config, *, offset=0):
-        self.decoded_words = []
-        segments = self._segments(audio, config)
-        self.decoded_words = self._word_metadata(segments, offset)
-        return " ".join(segment.text.strip() for segment in segments).strip()
+            samples = decode_audio(audio, sampling_rate=16000)
+        else:
+            samples = audio
+        if config.engine == "onnx":
+            segments = self.model.recognize(
+                samples,
+                sample_rate=16000,
+                language=None if config.language == "auto" else config.language,
+            )
+        else:
+            segments = self.model.segments(samples, config)
+        return self._align_segments(samples, config, list(segments))

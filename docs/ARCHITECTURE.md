@@ -17,7 +17,9 @@ reply before stopping the server.
   live audio and tracks pauses; stale decodes cannot publish after a microphone switch.
   `recording_inference` validates capture and serializes final decoding; the controller
   commits results only if cancellation or logout has not won. `transcribe.Transcriber`
-  uses engines in `engines` and `native_worker`. `native_asr` owns local artifact checks and common
+  uses engines in `engines` and `native_worker`. `transcript_window` commits stable preview
+  segments only after the whole decode succeeds and leaves the unresolved tail for finalization.
+  `native_asr` owns local artifact checks and common
   audio helpers; `transformers_asr` and `nemo_asr` load and decode inside the isolated worker.
 - **Benchmarks:** `benchmark` measures explicit WAV fixtures in an offline worker.
   `benchmark_reports` validates and retains bounded local reports for the model catalog.

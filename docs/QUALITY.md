@@ -4,7 +4,8 @@
 command. The package manager locks development tools, and applies a three-day cooldown when
 resolving new dependencies. `new-feature create NAME --no-agent` syncs a private worktree venv
 from the lockfile. Tests use per-test XDG paths, offscreen Qt, and bounded waits; setup does not
-start a daemon. If manually running the app from a feature worktree, point all XDG homes and
+start a daemon. CI installs FFmpeg for the capture tests that read synthetic PCM files without
+opening a microphone. If manually running the app from a feature worktree, point all XDG homes and
 `XDG_RUNTIME_DIR` at private directories to avoid sharing the installed app's daemon and state.
 
 Run `prek install` from the control checkout to enable commit checks. Use a prek executable

@@ -117,33 +117,6 @@
 2	src/mouthkeys/learning.py	TRY004	Prefer `TypeError` exception for invalid type
 1	src/mouthkeys/literal_formatting.py	FBT001	Boolean-typed positional argument in function definition
 3	src/mouthkeys/local_api.py	PLC0415	`import` should be at the top-level of a file
-1	src/mouthkeys/microphone_ui.py	ANN001	Missing type annotation for function argument `combo`
-1	src/mouthkeys/microphone_ui.py	ANN001	Missing type annotation for function argument `direction`
-1	src/mouthkeys/microphone_ui.py	ANN001	Missing type annotation for function argument `field`
-2	src/mouthkeys/microphone_ui.py	ANN001	Missing type annotation for function argument `group`
-2	src/mouthkeys/microphone_ui.py	ANN001	Missing type annotation for function argument `key`
-1	src/mouthkeys/microphone_ui.py	ANN001	Missing type annotation for function argument `kind`
-1	src/mouthkeys/microphone_ui.py	ANN001	Missing type annotation for function argument `name`
-1	src/mouthkeys/microphone_ui.py	ANN001	Missing type annotation for function argument `status`
-1	src/mouthkeys/microphone_ui.py	ANN001	Missing type annotation for function argument `value`
-1	src/mouthkeys/microphone_ui.py	ANN001	Missing type annotation for function argument `window`
-1	src/mouthkeys/microphone_ui.py	ANN201	Missing return type annotation for public function `add_item`
-1	src/mouthkeys/microphone_ui.py	ANN201	Missing return type annotation for public function `add_source`
-1	src/mouthkeys/microphone_ui.py	ANN201	Missing return type annotation for public function `discover`
-1	src/mouthkeys/microphone_ui.py	ANN201	Missing return type annotation for public function `move_selected`
-1	src/mouthkeys/microphone_ui.py	ANN201	Missing return type annotation for public function `refresh`
-1	src/mouthkeys/microphone_ui.py	ANN201	Missing return type annotation for public function `remove_selected`
-1	src/mouthkeys/microphone_ui.py	ANN201	Missing return type annotation for public function `reorder`
-1	src/mouthkeys/microphone_ui.py	ANN201	Missing return type annotation for public function `save`
-1	src/mouthkeys/microphone_ui.py	ANN201	Missing return type annotation for public function `select_group`
-1	src/mouthkeys/microphone_ui.py	ANN201	Missing return type annotation for public function `sync_field`
-1	src/mouthkeys/microphone_ui.py	ANN201	Missing return type annotation for public function `update_status`
-1	src/mouthkeys/microphone_ui.py	ANN204	Missing return type annotation for special method `__init__`
-1	src/mouthkeys/microphone_ui.py	ANN205	Missing return type annotation for staticmethod `combo_value`
-1	src/mouthkeys/microphone_ui.py	PLR0915	Too many statements (98 > 50)
-1	src/mouthkeys/microphone_ui.py	RUF100	Unused `noqa` directive (unused: `S607`)
-1	src/mouthkeys/microphone_ui.py	S607	Starting a process with a partial executable path
-1	src/mouthkeys/microphone_ui.py	TRY300	Consider moving this statement to an `else` block
 1	src/mouthkeys/models_ui.py	ANN001	Missing type annotation for function argument `event`
 1	src/mouthkeys/models_ui.py	ANN001	Missing type annotation for function argument `response`
 1	src/mouthkeys/models_ui.py	ANN001	Missing type annotation for function argument `window`
@@ -282,7 +255,6 @@
 1	tests/test_learning.py	PT006	Wrong type passed to first argument of `pytest.mark.parametrize`; expected `tuple`
 2	tests/test_learning.py	PT011	`pytest.raises(ValueError)` is too broad, set the `match` parameter or use a more specific exception
 3	tests/test_microphone_capture.py	PLC0415	`import` should be at the top-level of a file
-2	tests/test_microphone_ui.py	RUF059	Unpacked variable `fields` is never used
 2	tests/test_mode_routing.py	PLC0415	`import` should be at the top-level of a file
 1	tests/test_mode_routing.py	PT011	`pytest.raises(ValueError)` is too broad, set the `match` parameter or use a more specific exception
 5	tests/test_native_asr.py	PLC0415	`import` should be at the top-level of a file

@@ -51,8 +51,10 @@ def format_dictation(
         plan.text,
         config,
         context=job.context,
-        app_name=job.metadata.get("app", ""),
-        app_id=job.metadata.get("app_id", job.metadata.get("app", "")),
-        window_title=job.metadata.get("window", ""),
+        app={
+            "app_name": job.metadata.get("app", ""),
+            "app_id": job.metadata.get("app_id", job.metadata.get("app", "")),
+            "window_title": job.metadata.get("window", ""),
+        },
     )
     return FormattedDictation(formatted, plan.should_send, warning)

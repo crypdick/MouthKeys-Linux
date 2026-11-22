@@ -39,14 +39,6 @@
 2	src/mouthkeys/forced_alignment.py	no-untyped-call	Call to untyped function "clear" in typed context
 2	src/mouthkeys/forced_alignment.py	no-untyped-def	Function is missing a return type annotation
 3	src/mouthkeys/forced_alignment.py	no-untyped-def	Function is missing a type annotation
-2	src/mouthkeys/formatting.py	index	Value of type "Match[str] | None" is not indexable
-2	src/mouthkeys/formatting.py	no-untyped-call	Call to untyped function "_ending_question" in typed context
-1	src/mouthkeys/formatting.py	no-untyped-call	Call to untyped function "_first_letter_case" in typed context
-1	src/mouthkeys/formatting.py	no-untyped-call	Call to untyped function "_punctuation_spacing" in typed context
-1	src/mouthkeys/formatting.py	no-untyped-call	Call to untyped function "apply_question_mark_shortcut" in typed context
-1	src/mouthkeys/formatting.py	no-untyped-call	Call to untyped function "apply_spoken_punctuation" in typed context
-1	src/mouthkeys/formatting.py	no-untyped-call	Call to untyped function "neighbor" in typed context
-6	src/mouthkeys/formatting.py	no-untyped-def	Function is missing a type annotation
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "AssistantPage" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "MicrophonePage" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "ModelBrowser" in typed context

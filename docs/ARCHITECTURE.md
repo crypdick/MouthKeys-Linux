@@ -36,7 +36,9 @@ reply before stopping the server.
   `delivery` decides whether to use those commands and rechecks the destination before sending.
   Cancellation before delivery wins; unverified destination identity falls back to copy.
   `recording_transcript` prepares dictated text for delivery: pronunciation, Spoken Send parsing,
-  and local formatting. `pronunciation_spans` bounds acoustic search and applies only completed,
+  and local formatting. `spoken_punctuation` matches prefixed dictionary phrases and renders
+  generated symbols without rewriting unrelated ASR punctuation. `pronunciation_spans` bounds
+  acoustic search and applies only completed,
   disjoint matches to observed word timings. `recording_cleanup` runs configured AI cleanup with
   the recording's cancellation event.
   `recording_finalizer` runs stopped jobs through recognition, review or dictation, and retirement.

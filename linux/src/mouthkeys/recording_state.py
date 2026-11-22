@@ -2,7 +2,7 @@
 
 import time
 import uuid
-from threading import RLock
+from threading import RLock, Thread
 from typing import Any
 
 from .recording_job import DictationJob
@@ -25,6 +25,7 @@ class RecordingState:
         self.last_text: str = ""
         self.job: DictationJob | None = None
         self.jobs: list[DictationJob] = []
+        self.worker: Thread | None = None
         self.assistant_proposal: dict[str, Any] | None = None
 
     def report_error(self, message: str, kind: str = "error") -> None:

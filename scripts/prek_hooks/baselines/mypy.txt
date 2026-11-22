@@ -127,7 +127,6 @@
 3	src/mouthkeys/provider_tools.py	no-untyped-call	Call to untyped function "models_endpoint" in typed context
 2	src/mouthkeys/provider_tools.py	no-untyped-call	Call to untyped function "request_json" in typed context
 2	src/mouthkeys/provider_tools.py	no-untyped-def	Function is missing a type annotation
-1	src/mouthkeys/service.py	no-untyped-def	Function is missing a type annotation
 9	src/mouthkeys/setup_languages.py	no-untyped-call	Call to untyped function "add" in typed context
 1	src/mouthkeys/setup_languages.py	no-untyped-call	Call to untyped function "languages" in typed context
 1	src/mouthkeys/setup_languages.py	no-untyped-def	Function is missing a return type annotation

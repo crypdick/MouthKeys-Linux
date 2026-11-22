@@ -1,25 +1,23 @@
 import copy
 import threading
-import time
 from collections.abc import Mapping
-from contextlib import suppress
 from dataclasses import replace
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, Protocol, cast
 
 from . import __version__
-from .audio import CaptureSession, CaptureTeardownError, Recording
-from .config import Config, runtime_dir
+from .audio import CaptureSession, Recording
+from .config import Config
 from .delivery import Delivery, Target
-from .desktop import MediaSession, choose_source, play_sound
-from .microphone import MicrophoneSelection, SwitchOutcome, selection
 from .operations import handle_action
 from .recording_assistant import RecordingAssistant
+from .recording_capture import CaptureFactory, RecordingCapture
 from .recording_delivery import (
     RecordingDelivery,
+    TranscriptDelivery,
     replay_text,
     replay_transcript,
 )
-from .recording_destination import FocusGate, snapshot_for_stop
+from .recording_destination import FocusGate
 from .recording_edit import (
     claim_edit,
     reviewed_return_target,
@@ -27,31 +25,40 @@ from .recording_edit import (
 from .recording_finalizer import RecordingFinalizer
 from .recording_job import DictationJob
 from .recording_learning import LearningCommand, RecordingLearning
-from .recording_preview import PreviewWork, RecordingPreview
+from .recording_preview import RecordingPreview
 from .recording_setup import prepare_recording
 from .recording_state import RecordingState
 from .storage import History
 from .transcribe import Transcriber
 
+if TYPE_CHECKING:
+    from .recording_inference import SpeechModel
+
+    class _WarmupModel(Protocol):
+        def load(self, config: Config) -> None: ...
+
+    class _ReplayAdapter(Protocol):
+        def copy(self, text: str) -> None: ...
+
+        def paste_key(self, config: Config) -> None: ...
+
 
 class Controller:
-    def __init__(self, history=None, transcriber=None, delivery=None, recorder=CaptureSession):
+    def __init__(
+        self,
+        history: History | None = None,
+        transcriber: object | None = None,
+        delivery: TranscriptDelivery | None = None,
+        recorder: CaptureFactory = CaptureSession,
+    ) -> None:
         self.history = history or History()
         self.history.recover()
         self.transcriber = transcriber or Transcriber()
         self.delivery = delivery or Delivery()
-        self.recorder_factory = recorder
         self.state = RecordingState(self.history)
         self.lock = self.state.lock
-        self.microphone = MicrophoneSelection(self.lock)
-        self.recorder: Recording | None = None
-        self.started: float | None = None
-        self.worker = None
         self.model_lock = threading.Lock()
         self.live_preview = RecordingPreview(self.lock, self.model_lock)
-        self.stop_done = threading.Event()
-        self.stop_done.set()
-        self.media = MediaSession()
         self.recording_assistant = RecordingAssistant(
             self.lock,
             lambda job: self.state.job is job,
@@ -67,6 +74,29 @@ class Controller:
         self.finalizer = RecordingFinalizer(
             self.state, self.recording_assistant, self.recording_delivery, self.model_lock
         )
+        self.capture = RecordingCapture(
+            self.state,
+            self.delivery,
+            recorder,
+            self.live_preview,
+            lambda job, target, automatic: self._finish(job, target, auto_paste_expected=automatic),
+        )
+
+    @property
+    def worker(self) -> threading.Thread | None:
+        return self.state.worker
+
+    @property
+    def recorder(self) -> Recording | None:
+        return self.capture.recorder
+
+    @property
+    def config(self) -> Config:
+        return self.capture.config
+
+    @config.setter
+    def config(self, config: Config) -> None:
+        self.capture.config = config
 
     @property
     def phase(self) -> str:
@@ -118,12 +148,12 @@ class Controller:
                 "notice": self.state.notice,
                 "preview": self.state.preview_text,
                 "meter": self.live_preview.meter if self.state.phase == "recording" else {},
-                "microphone": self.config.audio_source if hasattr(self, "config") else "default",
-                "session_microphone": self.microphone.session_source,
+                "microphone": self.config.audio_source,
+                "session_microphone": self.capture.microphone.session_source,
                 "phase": self.state.phase,
                 "message": self.state.message,
                 "id": self.state.item_id,
-                "seconds": round(time.monotonic() - self.started, 1) if self.started else 0,
+                "seconds": self.capture.seconds(),
             }
 
     def command(self, action: str, **data: object) -> object:
@@ -151,7 +181,7 @@ class Controller:
         if action == "start":
             return self._start_recording(data)
         if action == "select_microphone":
-            return self._select_microphone(data)
+            return self.capture.select(data, self.status)
         if action == "accept_edit":
             return self._accept_edit(data)
         if action in ("copy", "paste"):
@@ -190,7 +220,8 @@ class Controller:
                 return self.status()
             if action == "cancel":
                 return self._cancel_command()
-            return self._stop_command(data, focus_gate)
+            self.capture.stop_command(data, focus_gate)
+            return self.status()
         return self._idle_command(action)
 
     def _cancel_command(self) -> dict[str, object]:
@@ -211,36 +242,10 @@ class Controller:
             self.state.job.cancelled = True
             self.state.job.cancel_event.set()
         if self.state.phase in ("recording", "switching", "capture_failed"):
-            self._stop(None)
+            self.capture.stop(None)
         elif self.state.phase in ("starting", "stopping", "transcribing", "queued", "loading"):
             self.state.message = "Cancelling; waiting for capture/model to finish"
         return self.status()
-
-    def _stop_command(self, data: Mapping[str, object], focus_gate: FocusGate) -> dict[str, object]:
-        if self.state.phase == "starting":
-            job = cast("DictationJob", self.state.job)  # Starting always has a job.
-            job.cancelled = True
-            job.cancel_event.set()
-            self.state.message = "Cancelling microphone start"
-            return self.status()
-        if self.state.phase not in ("recording", "switching", "capture_failed"):
-            raise ValueError("Not recording")
-        self._request_capture_stop(
-            focus_gate, automatic=bool(data.get("automatic")), spoken=bool(data.get("spoken"))
-        )
-        return self.status()
-
-    def _request_capture_stop(
-        self, focus_gate: FocusGate, *, automatic: bool, spoken: bool
-    ) -> None:
-        target = (
-            "capture-focus"
-            if self.config.delivery in ("x11", "wayland")
-            and self.state.phase != "capture_failed"
-            and (not automatic or spoken)
-            else None
-        )
-        self._stop(target, focus_gate)
 
     def _idle_command(self, action: str) -> dict[str, object]:
         if self.state.phase != "idle":
@@ -251,8 +256,9 @@ class Controller:
             self.config = Config.load()
             self.state.cancelled = False
             self.state.phase, self.state.message = "loading", "Loading local model"
-            self.worker = threading.Thread(target=self._warmup, daemon=True)
-            self.worker.start()
+            worker = threading.Thread(target=self._warmup, daemon=True)
+            self.state.worker = worker
+            worker.start()
             return self.status()
         if action == "clear":
             self.learning.clear()
@@ -265,83 +271,6 @@ class Controller:
             return self.status()
         raise ValueError(f"Unknown command: {action}")
 
-    def _select_microphone(self, data: Mapping[str, object]) -> dict[str, object]:
-        source, persist = selection(data)
-        with self.lock:
-            if self.state.interrupted:
-                raise ValueError("Service is shutting down")
-            if self.state.phase in ("starting", "switching", "stopping"):
-                raise ValueError(f"Busy ({self.state.phase}); wait before choosing microphone")
-            saved = Config.load()
-            requested = choose_source(replace(saved, audio_source=source))
-            recorder, job = self.recorder, self.state.job
-            active = self.state.phase == "recording"
-            if not active or requested == self.config.audio_source:
-                self.microphone.remember(source, saved, persist=persist)
-                if not active:
-                    self.state.message = "Microphone selected for next recording"
-                return self.status()
-            switch_source = getattr(recorder, "switch_source", None)
-            if not callable(switch_source):
-                raise ValueError("Capture adapter does not support microphone switching")  # noqa: TRY004 - command error
-            # The recording phase can be reached only after creating its job.
-            job = cast("DictationJob", job)
-            fallback = replace(saved, audio_source=self.config.audio_source)
-            self.state.phase, self.state.message = (
-                "switching",
-                "Switching microphone; capture briefly pauses",
-            )
-            job.phase = "switching"
-            self.live_preview.suspend(self.state.preview_text)
-
-        def switching_current() -> bool:
-            with self.lock:
-                return (
-                    self.recorder is recorder
-                    and not job.cancel_event.is_set()
-                    and not self.state.interrupted
-                )
-
-        outcome = self.microphone.switch(requested, fallback, switch_source, switching_current)
-        with self.lock:
-            if outcome is not None and switching_current():
-                self._capture_switched(job, outcome, requested)
-                if outcome.source == requested:
-                    self._remember_microphone(source, saved, persist=persist)
-            return self.status()
-
-    def _capture_switched(self, job: DictationJob, outcome: SwitchOutcome, requested: str) -> None:
-        current = outcome.source
-        if current is None:
-            # Recover existing audio without selecting a new delivery destination.
-            self.report_error(
-                f"Microphone switch failed; recovering recorded audio. {outcome.error}"
-            )
-            self._stop(None)
-            return
-        self.config = replace(self.config, audio_source=current)
-        job.config = replace(job.config, audio_source=current)
-        self.microphone.mark_ready(current)
-        if outcome.failed_previous:
-            failed, error = outcome.failed_previous
-            self.microphone.mark_failed(failed)
-            self.report_error(
-                f"Previous microphone {failed} failed; switched to {current}. {error}"
-            )
-        self.live_preview.reset_meter()
-        self.state.phase = "recording"
-        job.phase = "recording"
-        self.state.message = f"Listening on {current}; microphone switch has a capture gap"
-        if current != requested:
-            self.report_error(f"Selected microphone failed; resumed {current}. {outcome.error}")
-
-    def _remember_microphone(self, source: str, saved: Config, *, persist: bool) -> None:
-        try:
-            self.microphone.remember(source, Config.load() if persist else saved, persist=persist)
-        except (OSError, ValueError, TypeError) as exc:
-            self.microphone.remember(source, saved, persist=False)
-            self.report_error(f"Microphone switched for this session; preference not saved. {exc}")
-
     def _start_recording(self, data: Mapping[str, object]) -> dict[str, object]:
         with self.lock:
             if self.state.interrupted:
@@ -349,7 +278,9 @@ class Controller:
             if self.state.phase not in ("idle", "transcribing", "queued", "delivering"):
                 raise ValueError(f"Busy ({self.state.phase}); wait or cancel before start")
             pending = self.pending_jobs()
-            setup = prepare_recording(data, Config.load(), pending, self.microphone, self.delivery)
+            setup = prepare_recording(
+                data, Config.load(), pending, self.capture.microphone, self.delivery
+            )
             job = setup.job
             self.recording_assistant.bind_session(job, setup.context)
             if job.config.save_history == "on":
@@ -370,60 +301,7 @@ class Controller:
             self.recording_assistant.clear_stream()
             self.state.cancelled = False
             self.state.phase, self.state.message = "starting", "Opening microphone"
-        return self._open_recording(job, setup.capture_config)
-
-    def _open_recording(self, job: DictationJob, config: Config) -> dict[str, object]:
-        def start(chosen: Config, timeout: float) -> Recording:
-            factory = self.recorder_factory
-            capture: Recording
-            if factory is CaptureSession:
-                capture = factory(
-                    chosen, job.audio_path, cancel_event=job.cancel_event, timeout=timeout
-                )
-            else:
-                capture = factory(chosen, job.audio_path)
-            return capture
-
-        failure: Exception | None = None
-        try:
-            self.media.pause(config)
-            capture, chosen = self.microphone.open(
-                job.config, start, lambda: job.cancel_event.is_set() or self.state.interrupted
-            )
-            with self.lock:
-                if not job.cancel_event.is_set() and not self.state.interrupted:
-                    self.recorder = capture
-                    self.config = chosen
-                    job.config = replace(job.config, audio_source=chosen.audio_source)
-                    self.state.notice = None
-                    self.state.phase, self.state.message = (
-                        "recording",
-                        "Listening — toggle again to finish",
-                    )
-                    job.phase = "recording"
-                    if chosen.audio_source != config.audio_source:
-                        self.state.message += f" (fallback microphone: {chosen.audio_source})"
-                    self.started = time.monotonic()
-                    play_sound(chosen)
-                    return self.status()
-            capture.stop()
-        # The job or IPC response reports the failure; avoid duplicating private data in logs.
-        except Exception as exc:  # allow: exception-handling  # noqa: BLE001
-            failure = exc
-
-        with self.lock:
-            cancelled = job.cancel_event.is_set()
-            if not self.state.interrupted:
-                error = "" if cancelled else str(failure)
-                self.state.update_job(job, "cancelled" if cancelled else "failed", error=error)
-                self.state.phase = "idle"
-                self.state.message = "Microphone start cancelled" if cancelled else error
-            job.audio_path.unlink(missing_ok=True)
-            job.done.set()
-        self.media.resume()
-        if failure is not None and not cancelled and not self.state.interrupted:
-            raise failure
-        return self.status()
+        return self.capture.open(job, setup.capture_config, self.status)
 
     def _owns_learning(self, recording_id: str) -> bool:
         # RecordingLearning calls this under the controller state lock.
@@ -477,7 +355,7 @@ class Controller:
             self.recording_assistant.clear_stream()
             self.learning.cancel()
             self.state.cancelled = True
-            recorder, self.recorder = self.recorder, None
+            recorder = self.capture.detach()
             if self.state.job and self.state.job.edit_consumed:
                 self.state.job.cancel_event.set()
             for job in self.pending_jobs():
@@ -493,84 +371,7 @@ class Controller:
                     "Interrupted; audio discarded",
                 )
             self.state.phase, self.state.message = "interrupted", "Interrupted; audio discarded"
-        if recorder is not None:
-            # Logout must continue with interrupted audio cleanup.
-            with suppress(Exception):
-                recorder.stop()
-        # An already-stopping worker owns its recorder. Let it finalize the WAV, without
-        # waiting for model inference or making a second concurrent stop call.
-        self.stop_done.wait(timeout=11)
-        self.media.resume()
-        for job in self.state.jobs:
-            job.audio_path.unlink(missing_ok=True)
-        # Failed capture teardown may still own an open segment; unlink its name too.
-        for segment in (runtime_dir() / "private-recordings").glob("*.wav"):
-            segment.unlink(missing_ok=True)
-
-    def _stop(self, target: object, focus_gate: FocusGate | None = None) -> None:
-        # These phases retain both the job and its recorder until stopping starts.
-        job = cast("DictationJob", self.state.job)
-        recorder, self.recorder = cast("Recording", self.recorder), None
-        if self.started:
-            job.duration = time.monotonic() - self.started
-        job.phase = "stopping"
-        self.stop_done.clear()
-        self.state.notice = None
-        self.state.phase, self.state.message, self.started = "stopping", "Stopping microphone", None
-        self.worker = threading.Thread(
-            target=self._stopped, args=(job, recorder, target, focus_gate), daemon=True
-        )
-        self.worker.start()
-
-    def _stopped(
-        self, job: DictationJob, recorder: Recording, target: object, focus_gate: FocusGate | None
-    ) -> None:
-        try:
-            destination = snapshot_for_stop(
-                self.delivery, job.config, target, start_target=job.start_target, mode=job.mode
-            )
-            job.context = destination.context
-            if focus_gate:
-                focus_gate.resolved()
-            try:
-                recorder.stop()
-            finally:
-                self.stop_done.set()
-                self.media.resume()
-                play_sound(job.config, stop=True)
-            metadata = destination.metadata(self.delivery)
-            if metadata is not None:
-                job.metadata = metadata
-        # The job or IPC response reports the failure; avoid duplicating private data in logs.
-        except Exception as exc:  # allow: exception-handling  # noqa: BLE001
-            with self.lock:
-                if not self.state.interrupted:
-                    if isinstance(exc, CaptureTeardownError):
-                        self.recorder = recorder
-                        self.state.update_job(job, "recording", error=str(exc))
-                        self.state.mark_job(
-                            job,
-                            "capture_failed",
-                            f"{exc}. Stop or Cancel retries microphone shutdown; "
-                            "new recording blocked",
-                        )
-                        return  # Capture still owns audio and pending-job completion.
-                    self.state.update_job(job, "failed", error=str(exc))
-                    self.state.mark_job(job, "idle", str(exc))
-                    job.audio_path.unlink(missing_ok=True)
-                job.done.set()
-            return
-        with self.lock:
-            if self.state.interrupted:
-                job.done.set()
-                return
-            if job.cancelled:
-                self.state.mark_job(job, "queued", "Cancelling; waiting for model cleanup")
-            else:
-                self.state.mark_job(job, "queued", "Waiting for earlier dictation")
-                self.state.update_job(job, "transcribing")
-        target = None if focus_gate and not focus_gate.valid else destination.target
-        self._finish(job, cast("Target", target), auto_paste_expected=destination.automatic)
+        self.capture.discard_after_logout(recorder)
 
     def _manual_delivery(self, action: str, data: Mapping[str, object]) -> dict[str, object]:
         with self.lock:
@@ -593,8 +394,9 @@ class Controller:
                 )
 
         try:
-            paste = (lambda: self.delivery.paste_key(config)) if action == "paste" else None
-            message = replay_transcript(text, self.delivery.copy, paste, active)
+            adapter = cast("_ReplayAdapter", self.delivery)
+            paste = (lambda: adapter.paste_key(config)) if action == "paste" else None
+            message = replay_transcript(text, adapter.copy, paste, active)
         except Exception as exc:
             message = str(exc)
             raise
@@ -607,7 +409,7 @@ class Controller:
     def _warmup(self) -> None:
         try:
             with self.model_lock:
-                self.transcriber.load(self.config)
+                cast("_WarmupModel", self.transcriber).load(self.config)
             message = "Model ready"
         # The job or IPC response reports the failure; avoid duplicating private data in logs.
         except Exception as exc:  # allow: exception-handling  # noqa: BLE001
@@ -626,47 +428,11 @@ class Controller:
         self, job: DictationJob, target: Target, *, auto_paste_expected: bool = False
     ) -> None:
         self.finalizer.finish(
-            job, target, self.transcriber, auto_paste_expected=auto_paste_expected
+            job,
+            target,
+            cast("SpeechModel", self.transcriber),
+            auto_paste_expected=auto_paste_expected,
         )
 
-    def _publish_preview(self, text: str) -> None:
-        self.state.preview_text = text
-
     def tick(self) -> None:
-        with self.lock:
-            if self.state.phase != "recording":
-                return
-            job = cast("DictationJob", self.state.job)  # Recording always has a job.
-            self.live_preview.sample(job.audio_path, self.state.preview_text)
-            if self.live_preview.due(self.config):
-                self.live_preview.schedule(
-                    PreviewWork(
-                        job.audio_path,
-                        self.config,
-                        self.transcriber,
-                        job.predecessors,
-                        is_recording=lambda: (
-                            self.state.phase == "recording" and self.state.job is job
-                        ),
-                        cancelled=lambda: job.cancelled or self.state.interrupted,
-                        publish=self._publish_preview,
-                    )
-                )
-            spoken = self.live_preview.should_stop(self.config, held=job.held_activation)
-            recorder = cast("Recording", self.recorder)  # Recording owns its capture.
-            started = cast("float", self.started)
-            if not (
-                spoken
-                or recorder.finished()
-                or time.monotonic() - started >= self.config.max_seconds
-            ):
-                return
-            # The daemon must keep accepting commands while focus is resolved.
-            gate = FocusGate.automatic()
-            try:
-                self._request_capture_stop(gate, automatic=True, spoken=spoken)
-            # The capture stop worker reports actionable errors.
-            except Exception:  # allow: exception-handling
-                if spoken:
-                    raise
-                return
+        self.capture.tick(self.transcriber)

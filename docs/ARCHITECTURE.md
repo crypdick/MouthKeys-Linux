@@ -6,11 +6,12 @@ then dispatches local work or uses `control` to contact the private Unix socket 
 `daemon.Server`. The socket host owns lifecycle, not the recording queue. It sends the shutdown
 reply before stopping the server.
 
-- **Recording:** `service.Controller` owns capture and a FIFO of `DictationJob`s. `audio.CaptureSession`
-  preserves the PCM prefix across source switches. `capture_recorder` owns the FFmpeg lifeline,
+- **Recording:** `service.Controller` accepts commands and keeps a FIFO of `DictationJob`s.
+  `recording_capture` owns microphone start, switch, and stop, and hands stopped jobs to the
+  finalizer. `audio.CaptureSession` preserves the PCM prefix across source switches. `capture_recorder` owns the FFmpeg lifeline,
   and `capture_readiness` checks when a Bluetooth loopback has a physical source.
   `microphone` owns session source preferences, retry
-  budgets, and device quarantine; the service still commits capture state under its own lock.
+  budgets, and device quarantine. Capture transitions use the shared recording state lock.
   `recording_setup` freezes per-recording settings and prompt rules before the controller
   supersedes any pending desktop action. A rejected start leaves the current job in place.
   `recording_destination` samples focus and formatting context before capture stops and looks up

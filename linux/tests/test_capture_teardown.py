@@ -60,8 +60,8 @@ def test_service_does_not_quarantine_new_source_when_old_teardown_is_unknown(mon
     )
     app.command("select_microphone", source="healthy")
     finish(app)
-    assert "old" in app.microphone.quarantine
-    assert "healthy" not in app.microphone.quarantine
+    assert "old" in app.capture.microphone.quarantine
+    assert "healthy" not in app.capture.microphone.quarantine
     assert app.delivery.calls[0][2] is None
 
 

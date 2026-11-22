@@ -210,7 +210,7 @@ def test_logout_during_capture_stop_never_decodes_or_overwrites_interrupted_stat
     stopping, logging_out, release = Event(), Event(), Event()
     app.command("start")
     job = app.job
-    wait = app.stop_done.wait
+    wait = app.capture.stop_done.wait
 
     def blocked_stop():
         stopping.set()
@@ -223,7 +223,7 @@ def test_logout_during_capture_stop_never_decodes_or_overwrites_interrupted_stat
         return wait(timeout)
 
     monkeypatch.setattr(app.recorder, "stop", blocked_stop)
-    monkeypatch.setattr(app.stop_done, "wait", wait_for_capture)
+    monkeypatch.setattr(app.capture.stop_done, "wait", wait_for_capture)
     app.command("stop")
     logout = Thread(target=app.interrupt, daemon=True)
     try:
@@ -279,7 +279,7 @@ def test_tick_only_propagates_stop_request_failures_for_spoken_send(monkeypatch,
         raise RuntimeError("Cannot stop yet")
 
     monkeypatch.setattr(app.live_preview, "should_stop", lambda *_args, **_kwargs: spoken)
-    monkeypatch.setattr(app, "_request_capture_stop", fail_request)
+    monkeypatch.setattr(app.capture, "request_stop", fail_request)
     if spoken:
         with pytest.raises(RuntimeError, match="Cannot stop yet"):
             app.tick()

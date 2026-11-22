@@ -73,7 +73,7 @@ def test_failed_sources_have_total_time_budget(monkeypatch):
         elapsed[0] += 5
         raise RuntimeError("not ready")
 
-    monkeypatch.setattr("mouthkeys.service.time.monotonic", lambda: elapsed[0])
+    monkeypatch.setattr("mouthkeys.recording_capture.time.monotonic", lambda: elapsed[0])
     monkeypatch.setattr(
         "mouthkeys.microphone.source_candidates",
         lambda config, excluded: [name for name in ("one", "two", "three") if name not in excluded],
@@ -91,11 +91,11 @@ def test_temporary_microphone_pick_switches_now_without_changing_saved_order():
     app.command("start")
     capture = app.recorder
     item_id = app.item_id
-    started = app.started
+    started = app.capture.started
     app.command("select_microphone", source="usb")
     assert capture.sources == ["original", "usb"]
     assert app.item_id == item_id
-    assert app.started == started
+    assert app.capture.started == started
     assert app.status()["microphone"] == "usb"
     assert app.status()["session_microphone"] == "usb"
     assert "capture gap" in app.message
@@ -366,8 +366,8 @@ def test_unplugged_old_microphone_does_not_quarantine_untried_replacement():
     assert opened == ["old", "healthy"]
     assert app.config.audio_source == "healthy"
     assert app.phase == "recording"
-    assert "old" in app.microphone.quarantine
-    assert "healthy" not in app.microphone.quarantine
+    assert "old" in app.capture.microphone.quarantine
+    assert "healthy" not in app.capture.microphone.quarantine
     assert "Old microphone unplugged" in app.notice["message"]
 
     def transcribe(path, config):

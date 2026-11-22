@@ -14,7 +14,7 @@ from .recording_preview import reset_owned_stream
 
 
 @runtime_checkable
-class _SpeechModel(Protocol):
+class SpeechModel(Protocol):
     def transcribe(self, path: Path, config: Config) -> str: ...
 
 
@@ -35,7 +35,7 @@ def _alignment_snapshot(model: object) -> object:
 
 def recognize_audio(
     job: DictationJob,
-    model: _SpeechModel,
+    model: SpeechModel,
     lock: LockType,
     stopped: Callable[[], bool],
 ) -> Recognition:

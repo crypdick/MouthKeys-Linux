@@ -182,7 +182,7 @@ class Controller:
             self.history,
             action,
             data,
-            allow_mutation=self.phase == "idle" and not self._pending_jobs(),
+            allow_mutation=self.phase == "idle" and not self.pending_jobs(),
         )
         if result is not NotImplemented:
             return result
@@ -247,7 +247,7 @@ class Controller:
     def _idle_command(self, action: str) -> dict[str, object]:
         if self.phase != "idle":
             raise ValueError(f"Busy ({self.phase}); wait or cancel before {action}")
-        if self._pending_jobs():
+        if self.pending_jobs():
             raise ValueError(f"Busy (queued); wait or cancel before {action}")
         if action == "warmup":
             self.config = Config.load()
@@ -347,7 +347,7 @@ class Controller:
                 raise ValueError("Service is shutting down")
             if self.phase not in ("idle", "transcribing", "queued", "delivering"):
                 raise ValueError(f"Busy ({self.phase}); wait or cancel before start")
-            pending = self._pending_jobs()
+            pending = self.pending_jobs()
             setup = prepare_recording(data, Config.load(), pending, self.microphone, self.delivery)
             job = setup.job
             self.recording_assistant.bind_session(job, setup.context)
@@ -441,7 +441,7 @@ class Controller:
                 and self.phase == "idle"
                 and job is not None
                 and data.get("id") == job.item_id
-                and not self._pending_jobs()
+                and not self.pending_jobs()
             ):
                 config = replace(job.config, return_to_start="on" if return_to_target else "off")
                 edit = claim_edit(job, self.assistant_proposal, config)
@@ -471,7 +471,7 @@ class Controller:
                     self._update(edit.job, result, edit.text)
                 self._job_status(edit.job, "idle", edit_message(result))
 
-    def _pending_jobs(self) -> list[DictationJob]:
+    def pending_jobs(self) -> list[DictationJob]:
         return [job for job in self.jobs if not job.done.is_set()]
 
     def _update(
@@ -502,7 +502,7 @@ class Controller:
             recorder, self.recorder = self.recorder, None
             if self.job and self.job.edit_consumed:
                 self.job.cancel_event.set()
-            for job in self._pending_jobs():
+            for job in self.pending_jobs():
                 job.cancelled = True
                 job.cancel_event.set()
                 rows = self.history.rows(limit=10000)
@@ -600,7 +600,7 @@ class Controller:
         with self.lock:
             if self.interrupted:
                 raise ValueError("Service is shutting down")
-            if self.phase != "idle" or self._pending_jobs():
+            if self.phase != "idle" or self.pending_jobs():
                 raise ValueError(f"Busy ({self.phase}); wait or cancel before {action}")
             text = self.last_text or self.history.latest_text()
             if data.get("id"):

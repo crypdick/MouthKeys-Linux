@@ -1,32 +1,44 @@
 import base64
+import io
 import json
 import threading
 import urllib.error
 import urllib.request
 import uuid
+from email.message import Message
+from types import SimpleNamespace
 
 import pytest
 
+from mouthkeys import local_api
 from mouthkeys.config import Config
 from mouthkeys.dictionary import Dictionary
-from mouthkeys.local_api import Handler, Server
+from mouthkeys.local_api import Handler, Server, history_item
 from mouthkeys.service import Controller
 
 
 @pytest.fixture
-def api():
+def api_server():
     controller = Controller()
     server = Server(("127.0.0.1", 0), Handler)
     server.controller = controller
     server.token = "a-long-test-token-for-loopback-only"  # noqa: S105
-    server.inference_lock = threading.Lock()
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread = threading.Thread(
+        target=server.serve_forever, kwargs={"poll_interval": 0.02}, daemon=True
+    )
     thread.start()
-    yield f"http://127.0.0.1:{server.server_port}", server.token
-    server.shutdown()
-    server.server_close()
-    thread.join(2)
+    try:
+        yield server
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(2)
     assert not thread.is_alive()
+
+
+@pytest.fixture
+def api(api_server):
+    return f"http://127.0.0.1:{api_server.server_port}", api_server.token
 
 
 def call(api, path, data=None, *, authenticated=True, headers=None):
@@ -174,8 +186,6 @@ def test_plain_text_postprocess_and_response_metadata(api, monkeypatch):
 
 
 def test_history_envelope_metadata_and_legacy_rows():
-    from mouthkeys.local_api import history_item
-
     row = {
         "id": "test",
         "created": 0,
@@ -232,7 +242,7 @@ def test_api_upsert_replaces_target_triggers_instead_of_transfer_merge(api):
 
 
 @pytest.mark.parametrize(
-    "path,data,code",
+    ("path", "data", "code"),
     [
         ("/v1/history", {}, 405),
         ("/v1/missing", None, 404),
@@ -243,3 +253,190 @@ def test_route_and_format_contract(api, path, data, code):
     with pytest.raises(urllib.error.HTTPError) as error:
         call(api, path, data)
     assert error.value.code == code
+
+
+@pytest.mark.parametrize("route", ["postprocess", "transcribe"])
+def test_completed_inference_does_not_block_while_response_is_written(api, monkeypatch, route):
+    writing, release = threading.Event(), threading.Event()
+    responses = []
+    respond = Handler.answer
+
+    def answer(handler, status, value):
+        if status == 200 and value.get("text") == "first":
+            writing.set()
+            assert release.wait(3)
+        return respond(handler, status, value)
+
+    monkeypatch.setattr(Handler, "answer", answer)
+    if route == "postprocess":
+        monkeypatch.setattr("mouthkeys.postprocess.process", lambda text, _config: text)
+    else:
+        monkeypatch.setattr(
+            "mouthkeys.file_transcription.transcribe_file",
+            lambda path, _config, **_options: {"text": path.read_text(), "duration": 1.0},
+        )
+
+    def submit(text):
+        data = (
+            {"text": text}
+            if route == "postprocess"
+            else {"audioBase64": base64.b64encode(text.encode()).decode()}
+        )
+        return call(api, f"/v1/{route}", data)["text"]
+
+    worker = threading.Thread(target=lambda: responses.append(submit("first")))
+    worker.start()
+    try:
+        assert writing.wait(2)
+        assert submit("second") == "second"
+    finally:
+        release.set()
+        worker.join(3)
+    assert not worker.is_alive()
+    assert responses == ["first"]
+
+
+@pytest.mark.parametrize(
+    ("headers", "raw", "response"),
+    [
+        ({"Transfer-Encoding": "chunked"}, b"", 400),
+        ({"Content-Length": str(local_api.MAX_BODY + 1)}, b"", 413),
+        ({"Content-Length": "-1"}, b"", 413),
+        ({"Content-Length": "2"}, b"x", 400),
+        ({"Content-Type": "application/json", "Content-Length": "2"}, b"[]", 400),
+        ({"Content-Type": "text/plain", "Content-Length": "3"}, b"abc", 400),
+    ],
+)
+def test_dictionary_rejects_invalid_body_before_mutation(monkeypatch, headers, raw, response):
+    request_headers = Message()
+    request_headers["Host"] = "localhost"
+    request_headers["Authorization"] = "Bearer test-token"
+    for key, value in headers.items():
+        request_headers[key] = value
+    replies = []
+    handler = object.__new__(Handler)
+    handler.headers = request_headers
+    handler.server = SimpleNamespace(token="test-token")  # noqa: S106
+    handler.command = "POST"
+    handler.path = "/v1/dictionary/replacements"
+    handler.rfile = io.BytesIO(raw)
+    handler.answer = lambda status, body: replies.append((status, body))
+    monkeypatch.setattr(Dictionary, "save", lambda _: pytest.fail("Invalid request wrote data"))
+    handler.dispatch()
+    assert replies[0][0] == response
+
+
+@pytest.mark.parametrize("route", ["postprocess", "transcribe"])
+def test_inference_rejects_request_while_slot_is_claimed(api_server, api, route):
+    data = {"text": "hello"} if route == "postprocess" else {"audioBase64": "YWJj"}
+    with api_server.inference_lock, pytest.raises(urllib.error.HTTPError) as caught:
+        call(api, f"/v1/{route}", data)
+    assert caught.value.code == 409
+    assert json.load(caught.value)["error"] == "API inference is busy"
+
+
+@pytest.mark.parametrize("during_lock", [False, True])
+def test_upload_never_transcribes_while_recording_is_pending(
+    api_server, api, monkeypatch, during_lock
+):
+    checked = []
+
+    def pending():
+        held = api_server.controller.model_lock.locked()
+        checked.append(held)
+        return [object()] if held is during_lock else []
+
+    monkeypatch.setattr(api_server.controller, "pending_jobs", pending)
+    monkeypatch.setattr(
+        "mouthkeys.file_transcription.transcribe_file", lambda *a, **kw: pytest.fail("Model ran")
+    )
+    with pytest.raises(urllib.error.HTTPError) as caught:
+        call(api, "/v1/transcribe", {"audioBase64": "YWJj"})
+    assert caught.value.code == 409
+    assert json.load(caught.value)["error"] == "Recording or dictation inference is active"
+    assert checked == ([False, True] if during_lock else [False])
+    assert not api_server.inference_lock.locked()
+
+
+def test_failed_postprocessing_is_generic_and_releases_inference_slot(api, monkeypatch):
+    def fail(_text, _config):
+        raise RuntimeError("Private detail")
+
+    monkeypatch.setattr("mouthkeys.postprocess.process", fail)
+    with pytest.raises(urllib.error.HTTPError) as caught:
+        call(api, "/v1/postprocess", {"text": "hello"})
+    assert caught.value.code == 500
+    assert json.load(caught.value) == {"error": "Operation failed; verify configuration and models"}
+    monkeypatch.setattr("mouthkeys.postprocess.process", lambda text, _config: text)
+    assert call(api, "/v1/postprocess", {"text": "hello"}) == {
+        "text": "hello",
+        "provider": "",
+        "model": "",
+    }
+
+
+@pytest.mark.parametrize(
+    ("route", "payload"),
+    [
+        ("postprocess", {"text": 1}),
+        ("transcribe", {"audioBase64": 1}),
+        ("transcribe", {"audio_base64": [], "audioBase64": []}),
+        ("dictionary/replacements", {"mode": "unknown"}),
+        ("dictionary/replacements", {}),
+        ("dictionary/custom-words", {"mode": "unknown"}),
+        ("dictionary/custom-words", {}),
+    ],
+)
+def test_invalid_route_payload_is_rejected(api, route, payload):
+    with pytest.raises(urllib.error.HTTPError) as caught:
+        call(api, f"/v1/{route}", payload)
+    assert caught.value.code == 400
+
+
+def test_replacement_batch_replaces_old_rules_and_custom_words_can_be_read(api):
+    call(api, "/v1/dictionary/replacements", {"triggers": ["old"], "replacement": "gone"})
+    rules = [{"triggers": ["new"], "replacement": "kept"}]
+    assert (
+        call(
+            api,
+            "/v1/dictionary/replacements?format=native",
+            {
+                "mode": "replace",
+                "entries": rules,
+            },
+        )
+        == rules
+    )
+    assert Dictionary.apply("old new") == "old kept"
+
+    call(api, "/v1/dictionary/custom-words", {"text": "Linux", "weight": 1})
+    call(api, "/v1/dictionary/custom-words", {"text": "GTK"})
+    result = call(api, "/v1/dictionary/custom-words", {"text": "LINUX", "weight": 9})
+    assert call(api, "/v1/dictionary/custom-words") == result
+    assert {e["text"]: e["weight"] for e in result["items"]} == {"LINUX": 9, "GTK": None}
+
+
+def test_start_is_opt_in_and_requires_token(monkeypatch):
+    monkeypatch.delenv(Config().api_token_env, raising=False)
+    controller = Controller()
+    assert local_api.start(controller) is None
+    Config(api_enabled="on").save()
+    with pytest.raises(ValueError, match="at least 24 characters"):
+        local_api.start(controller)
+
+
+def test_start_serves_only_loopback_and_sets_configured_token(monkeypatch):
+    env_name = "MOUTHKEYS_TEST_TOKEN"
+    config = SimpleNamespace(api_enabled="on", api_token_env=env_name, api_port=0)
+    token = "a-long-test-token-for-loopback"  # noqa: S105
+    monkeypatch.setenv(config.api_token_env, token)
+    monkeypatch.setattr(Config, "load", lambda: config)
+    server = local_api.start(Controller())
+    try:
+        assert server.server_address[0] == "127.0.0.1"
+        assert (
+            call((f"http://127.0.0.1:{server.server_port}", token), "/v1/health")["status"] == "ok"
+        )
+    finally:
+        server.shutdown()
+        server.server_close()

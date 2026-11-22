@@ -71,7 +71,9 @@ reply before stopping the server.
   decoded file.
   `file_transcription_ui` owns the file worker and its history; Settings and the tray check whether
   it is busy before closing.
-  `local_api` is opt-in loopback access. `ai_providers` and `ai_stream` handle configured AI
+  `local_api` owns authenticated loopback routing and releases inference slots before sending
+  responses. `api_dictionary` commits dictionary updates under the shared lock.
+  `ai_providers` and `ai_stream` handle configured AI
   requests only. `ai_stream_events` normalizes provider frames before callbacks; the transport
   discards frames read after cancellation or timeout. Imports, status, and Settings opening must
   not contact providers or download models.

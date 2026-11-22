@@ -191,15 +191,11 @@
 1	src/mouthkeys/delivery.py	PLR0911	Too many return statements (9 > 6)
 2	src/mouthkeys/dictionary.py	PLC0415	`import` should be at the top-level of a file
 1	src/mouthkeys/dictionary_transfer.py	ANN001	Missing type annotation for function argument `data`
-2	src/mouthkeys/dictionary_transfer.py	ANN001	Missing type annotation for function argument `existing`
-2	src/mouthkeys/dictionary_transfer.py	ANN001	Missing type annotation for function argument `incoming`
-1	src/mouthkeys/dictionary_transfer.py	ANN001	Missing type annotation for function argument `value`
-2	src/mouthkeys/dictionary_transfer.py	ANN001	Missing type annotation for function argument `values`
+1	src/mouthkeys/dictionary_transfer.py	ANN001	Missing type annotation for function argument `existing`
+1	src/mouthkeys/dictionary_transfer.py	ANN001	Missing type annotation for function argument `incoming`
+1	src/mouthkeys/dictionary_transfer.py	ANN001	Missing type annotation for function argument `values`
 1	src/mouthkeys/dictionary_transfer.py	ANN201	Missing return type annotation for public function `custom_word_entries`
 1	src/mouthkeys/dictionary_transfer.py	ANN201	Missing return type annotation for public function `decode_document`
-1	src/mouthkeys/dictionary_transfer.py	ANN201	Missing return type annotation for public function `merge_replacements`
-1	src/mouthkeys/dictionary_transfer.py	ANN201	Missing return type annotation for public function `phrase_key`
-1	src/mouthkeys/dictionary_transfer.py	ANN201	Missing return type annotation for public function `replacement_entries`
 1	src/mouthkeys/dictionary_transfer.py	ANN202	Missing return type annotation for private function `_merge_rules`
 1	src/mouthkeys/dictionary_transfer.py	PLR0912	Too many branches (13 > 12)
 1	src/mouthkeys/dictionary_transfer.py	PLW2901	`for` loop variable `value` overwritten by assignment target
@@ -310,41 +306,7 @@
 2	src/mouthkeys/learning_ui.py	FBT003	Boolean positional value in function call
 5	src/mouthkeys/learning_ui.py	PLC0415	`import` should be at the top-level of a file
 1	src/mouthkeys/literal_formatting.py	FBT001	Boolean-typed positional argument in function definition
-2	src/mouthkeys/local_api.py	ANN001	Missing type annotation for function argument `address`
-1	src/mouthkeys/local_api.py	ANN001	Missing type annotation for function argument `audio`
-1	src/mouthkeys/local_api.py	ANN001	Missing type annotation for function argument `data`
-1	src/mouthkeys/local_api.py	ANN001	Missing type annotation for function argument `entry`
-1	src/mouthkeys/local_api.py	ANN001	Missing type annotation for function argument `native`
-1	src/mouthkeys/local_api.py	ANN001	Missing type annotation for function argument `path`
-2	src/mouthkeys/local_api.py	ANN001	Missing type annotation for function argument `request`
-1	src/mouthkeys/local_api.py	ANN001	Missing type annotation for function argument `row`
-1	src/mouthkeys/local_api.py	ANN001	Missing type annotation for function argument `status`
-1	src/mouthkeys/local_api.py	ANN001	Missing type annotation for function argument `value`
-1	src/mouthkeys/local_api.py	ANN002	Missing type annotation for `*_`
-1	src/mouthkeys/local_api.py	ANN002	Missing type annotation for `*args`
-1	src/mouthkeys/local_api.py	ANN003	Missing type annotation for `**kwargs`
-1	src/mouthkeys/local_api.py	ANN201	Missing return type annotation for public function `answer`
-1	src/mouthkeys/local_api.py	ANN201	Missing return type annotation for public function `dictionary`
-1	src/mouthkeys/local_api.py	ANN201	Missing return type annotation for public function `dispatch`
-1	src/mouthkeys/local_api.py	ANN201	Missing return type annotation for public function `do_GET`
-1	src/mouthkeys/local_api.py	ANN201	Missing return type annotation for public function `do_POST`
-1	src/mouthkeys/local_api.py	ANN201	Missing return type annotation for public function `expire_read`
-1	src/mouthkeys/local_api.py	ANN201	Missing return type annotation for public function `finish`
-1	src/mouthkeys/local_api.py	ANN201	Missing return type annotation for public function `history_item`
-1	src/mouthkeys/local_api.py	ANN201	Missing return type annotation for public function `log_message`
-1	src/mouthkeys/local_api.py	ANN201	Missing return type annotation for public function `process_request_thread`
-1	src/mouthkeys/local_api.py	ANN201	Missing return type annotation for public function `process_request`
-1	src/mouthkeys/local_api.py	ANN201	Missing return type annotation for public function `replacement_id`
-1	src/mouthkeys/local_api.py	ANN201	Missing return type annotation for public function `setup`
-1	src/mouthkeys/local_api.py	ANN201	Missing return type annotation for public function `transcribe`
-1	src/mouthkeys/local_api.py	ANN204	Missing return type annotation for special method `__init__`
-1	src/mouthkeys/local_api.py	C901	`dispatch` is too complex (29 > 15)
-5	src/mouthkeys/local_api.py	PLC0415	`import` should be at the top-level of a file
-1	src/mouthkeys/local_api.py	PLR0912	Too many branches (31 > 12)
-1	src/mouthkeys/local_api.py	PLR0915	Too many statements (82 > 50)
-1	src/mouthkeys/local_api.py	SIM102	Use a single `if` statement instead of nested `if` statements
-1	src/mouthkeys/local_api.py	SIM105	Use `contextlib.suppress(OSError)` instead of `try`-`except`-`pass`
-2	src/mouthkeys/local_api.py	SLF001	Private member accessed: `_pending_jobs`
+3	src/mouthkeys/local_api.py	PLC0415	`import` should be at the top-level of a file
 1	src/mouthkeys/microphone_ui.py	ANN001	Missing type annotation for function argument `combo`
 1	src/mouthkeys/microphone_ui.py	ANN001	Missing type annotation for function argument `direction`
 1	src/mouthkeys/microphone_ui.py	ANN001	Missing type annotation for function argument `field`
@@ -664,8 +626,6 @@
 2	tests/test_lark.py	PLC0415	`import` should be at the top-level of a file
 1	tests/test_learning.py	PT006	Wrong type passed to first argument of `pytest.mark.parametrize`; expected `tuple`
 2	tests/test_learning.py	PT011	`pytest.raises(ValueError)` is too broad, set the `match` parameter or use a more specific exception
-1	tests/test_local_api.py	PLC0415	`import` should be at the top-level of a file
-1	tests/test_local_api.py	PT006	Wrong type passed to first argument of `pytest.mark.parametrize`; expected `tuple`
 3	tests/test_microphone_capture.py	PLC0415	`import` should be at the top-level of a file
 2	tests/test_microphone_ui.py	RUF059	Unpacked variable `fields` is never used
 2	tests/test_mode_routing.py	PLC0415	`import` should be at the top-level of a file

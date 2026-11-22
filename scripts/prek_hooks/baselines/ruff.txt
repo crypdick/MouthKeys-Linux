@@ -286,27 +286,7 @@
 8	src/mouthkeys/gui.py	PLC0415	`import` should be at the top-level of a file
 1	src/mouthkeys/gui.py	TRY300	Consider moving this statement to an `else` block
 1	src/mouthkeys/hotkeys.py	PLC0415	`import` should be at the top-level of a file
-1	src/mouthkeys/lark.py	ANN001	Missing type annotation for function argument `args`
-1	src/mouthkeys/lark.py	ANN001	Missing type annotation for function argument `config`
-1	src/mouthkeys/lark.py	ANN001	Missing type annotation for function argument `descriptor`
-1	src/mouthkeys/lark.py	ANN001	Missing type annotation for function argument `dev_root`
-1	src/mouthkeys/lark.py	ANN001	Missing type annotation for function argument `path`
-1	src/mouthkeys/lark.py	ANN001	Missing type annotation for function argument `reply`
-3	src/mouthkeys/lark.py	ANN001	Missing type annotation for function argument `source`
-1	src/mouthkeys/lark.py	ANN001	Missing type annotation for function argument `sys_root`
-1	src/mouthkeys/lark.py	ANN201	Missing return type annotation for public function `carries_status_page`
-1	src/mouthkeys/lark.py	ANN201	Missing return type annotation for public function `find_receiver`
-1	src/mouthkeys/lark.py	ANN201	Missing return type annotation for public function `heartbeat`
-1	src/mouthkeys/lark.py	ANN201	Missing return type annotation for public function `input_is_receiver`
-1	src/mouthkeys/lark.py	ANN201	Missing return type annotation for public function `main`
-1	src/mouthkeys/lark.py	ANN201	Missing return type annotation for public function `parse_reply`
-1	src/mouthkeys/lark.py	ANN201	Missing return type annotation for public function `poll`
-1	src/mouthkeys/lark.py	ANN202	Missing return type annotation for private function `_poll`
-1	src/mouthkeys/lark.py	ANN202	Missing return type annotation for private function `run`
-1	src/mouthkeys/lark.py	ANN204	Missing return type annotation for special method `__init__`
 5	src/mouthkeys/lark.py	FBT003	Boolean positional value in function call
-1	src/mouthkeys/lark.py	PERF401	Use `list.extend` to create a transformed list
-1	src/mouthkeys/lark.py	PLR1702	Too many nested blocks (6 > 5)
 1	src/mouthkeys/learning.py	PLR0911	Too many return statements (7 > 6)
 2	src/mouthkeys/learning.py	TRY004	Prefer `TypeError` exception for invalid type
 1	src/mouthkeys/learning_ui.py	ANN001	Missing type annotation for function argument `_checked`
@@ -683,7 +663,7 @@
 2	tests/test_hotkeys.py	PLC0415	`import` should be at the top-level of a file
 1	tests/test_hotkeys.py	PT006	Wrong type passed to first argument of `pytest.mark.parametrize`; expected `tuple`
 6	tests/test_incremental.py	PLC0415	`import` should be at the top-level of a file
-4	tests/test_lark.py	PLC0415	`import` should be at the top-level of a file
+2	tests/test_lark.py	PLC0415	`import` should be at the top-level of a file
 1	tests/test_learning.py	PT006	Wrong type passed to first argument of `pytest.mark.parametrize`; expected `tuple`
 2	tests/test_learning.py	PT011	`pytest.raises(ValueError)` is too broad, set the `match` parameter or use a more specific exception
 1	tests/test_local_api.py	PLC0415	`import` should be at the top-level of a file

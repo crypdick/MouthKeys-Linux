@@ -9,14 +9,9 @@ Linux ioctl definitions follow include/uapi/linux/hidraw.h.
 import fcntl
 import json
 import os
-import shlex
 import struct
-import subprocess
-import threading
-import time
 from pathlib import Path
-
-from .processes import python_command
+from typing import Literal, NotRequired, TypedDict
 
 VENDOR = 0x3547
 PRODUCT = 0x0407
@@ -25,7 +20,29 @@ LENGTH = 64
 HEARTBEAT = bytes([5, 3, 0xAA, 0xDD, 0x1F, 0, 0, 0xEF]) + bytes(56)
 
 
-def carries_status_page(descriptor):
+class MicBattery(TypedDict):
+    linked: bool
+    percent: int | None
+
+
+class ReceiverBattery(TypedDict):
+    result: Literal["ok"]
+    mic1: MicBattery
+    mic2: MicBattery
+
+
+UnavailableReason = Literal["no-device", "permission-denied", "not-receiver", "unavailable"]
+
+
+class UnavailableBattery(TypedDict):
+    result: UnavailableReason
+    error: NotRequired[str]
+
+
+BatteryStatus = ReceiverBattery | UnavailableBattery
+
+
+def carries_status_page(descriptor: bytes | bytearray) -> bool:
     """Parse HID short items, including global Push/Pop; never open consumer HID."""
     page = report = None
     stack = []
@@ -61,7 +78,9 @@ def carries_status_page(descriptor):
     return False
 
 
-def find_receiver(sys_root=Path("/sys/class/hidraw"), dev_root=Path("/dev")):
+def find_receiver(
+    sys_root: Path = Path("/sys/class/hidraw"), dev_root: Path = Path("/dev")
+) -> Path | None:
     for item in sorted(sys_root.glob("hidraw*")):
         try:
             attributes = dict(
@@ -80,7 +99,7 @@ def find_receiver(sys_root=Path("/sys/class/hidraw"), dev_root=Path("/dev")):
     return None
 
 
-def parse_reply(reply):
+def parse_reply(reply: bytes | bytearray) -> ReceiverBattery:
     if len(reply) < 7:
         raise ValueError("short")
     if reply[:5] != bytes([REPORT, 3, 0xBB, 0xDD, 0x1F]):
@@ -88,14 +107,15 @@ def parse_reply(reply):
     length = int.from_bytes(reply[5:7], "big")
     if length < 4 or len(reply) < 7 + length:
         raise ValueError("short heartbeat payload")
-    result = []
-    for index in (0, 1):
+
+    def microphone(index: int) -> MicBattery:
         linked, percent = reply[7 + index] == 1, reply[9 + index]
-        result.append({"linked": linked, "percent": percent if linked and percent <= 100 else None})
-    return {"result": "ok", "mic1": result[0], "mic2": result[1]}
+        return {"linked": linked, "percent": percent if linked and percent <= 100 else None}
+
+    return {"result": "ok", "mic1": microphone(0), "mic2": microphone(1)}
 
 
-def heartbeat(path):
+def heartbeat(path: str | Path) -> ReceiverBattery:
     # Generic Linux _IOC: read|write, 64-byte feature, type H, request 6/7.
     feature = (3 << 30) | (LENGTH << 16) | (ord("H") << 8)
     fd = os.open(path, os.O_RDWR | os.O_NONBLOCK)
@@ -122,100 +142,10 @@ def heartbeat(path):
         os.close(fd)
 
 
-def input_is_receiver(source):
-    def run(args):
-        return subprocess.run(args, capture_output=True, text=True, check=True, timeout=1).stdout  # noqa: S603
-
-    if source == "default":
-        source = run(["pactl", "get-default-source"]).strip()
-    sources = json.loads(run(["pactl", "-f", "json", "list", "sources"]))
-    pending, visited = [source], set()
-    modules = None
-    while pending and len(visited) < 16:
-        name = pending.pop()
-        if name in visited:
-            continue
-        visited.add(name)
-        item = next((item for item in sources if item.get("name") == name), None)
-        if item:
-            props = item.get("properties", {})
-            try:
-                vendor = props.get("device.vendor.id", "0")
-                product = props.get("device.product.id", "0")
-                if (vendor if isinstance(vendor, int) else int(vendor, 16)) == VENDOR and (
-                    product if isinstance(product, int) else int(product, 16)
-                ) == PRODUCT:
-                    return True
-            except (ValueError, TypeError):
-                pass
-            master = props.get("device.master_device")
-            if isinstance(master, str) and master:
-                pending.append(master)
-            # PulseAudio remapped sources name their master in the owning module.
-            if item.get("owner_module") is not None:
-                if modules is None:
-                    modules = json.loads(run(["pactl", "-f", "json", "list", "modules"]))
-                owner = next(
-                    (
-                        module
-                        for module in modules
-                        if str(module.get("index")) == str(item["owner_module"])
-                    ),
-                    {},
-                )
-                if owner.get("name") == "module-remap-source":
-                    for argument in shlex.split(owner.get("argument", "")):
-                        if argument.startswith("master="):
-                            pending.append(argument[7:])
-    return False
-
-
-class BatteryMonitor:
-    def __init__(self):
-        self.value = None
-        self.polled_at = float("-inf")
-        self.worker = None
-        self.source = None
-
-    def poll(self, config, source):
-        if config.mic_battery != "on":
-            self.value = None
-            return None
-        if source != self.source:
-            self.value = None
-            self.polled_at = float("-inf")
-        self.source = source
-        if time.monotonic() - self.polled_at >= 15 and (
-            self.worker is None or not self.worker.is_alive()
-        ):
-            self.polled_at = time.monotonic()
-            self.worker = threading.Thread(target=self._poll, args=(source,), daemon=True)
-            self.worker.start()
-        return self.value
-
-    def _poll(self, source):
-        try:
-            if not input_is_receiver(source):
-                value = {"result": "not-receiver"}
-            else:
-                result = subprocess.run(  # noqa: S603
-                    python_command("mouthkeys.lark"),
-                    capture_output=True,
-                    text=True,
-                    check=True,
-                    timeout=2,
-                )
-                value = json.loads(result.stdout)
-        except (OSError, ValueError, subprocess.SubprocessError) as exc:
-            value = {"result": "unavailable", "error": str(exc)}
-        if self.source == source:
-            self.value = value
-
-
-def main():
+def main() -> None:
     try:
         device = find_receiver()
-        value = heartbeat(device) if device else {"result": "no-device"}
+        value: BatteryStatus = heartbeat(device) if device else {"result": "no-device"}
     except PermissionError:
         value = {"result": "permission-denied"}
     except (OSError, ValueError) as exc:

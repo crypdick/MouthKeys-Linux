@@ -11,7 +11,7 @@ from PySide6.QtWidgets import QApplication, QMenu, QPushButton, QWidget
 
 from .config import Config
 from .desktop import source_names
-from .lark import BatteryMonitor
+from .lark_monitor import BatteryMonitor
 from .overlay_placement import OverlayPlacement
 from .overlay_rendering import (
     DARK,
@@ -353,11 +353,11 @@ class Overlay(QWidget):
         self.data = data
         microphone = data.get("microphone", "default")
         battery = self.battery.poll(config, microphone)
-        if battery and battery.get("result") == "ok":
+        if battery and battery["result"] == "ok":
             values = [
-                str(battery[key]["percent"]) + "%"
-                for key in ("mic1", "mic2")
-                if battery.get(key, {}).get("percent") is not None
+                f"{percent}%"
+                for mic in (battery["mic1"], battery["mic2"])
+                if (percent := mic["percent"]) is not None
             ]
             self.mic_button.setText(microphone + (" " + "/".join(values) if values else ""))
             self.mic_button.setToolTip(

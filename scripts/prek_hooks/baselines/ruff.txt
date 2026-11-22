@@ -100,16 +100,6 @@
 1	src/mouthkeys/file_transcription.py	ANN201	Missing return type annotation for public function `transcribe_file`
 3	src/mouthkeys/file_transcription.py	PLC0415	`import` should be at the top-level of a file
 1	src/mouthkeys/file_transcription.py	SLF001	Private member accessed: `_segments`
-2	src/mouthkeys/forced_alignment.py	ANN001	Missing type annotation for function argument `audio`
-3	src/mouthkeys/forced_alignment.py	ANN001	Missing type annotation for function argument `config`
-1	src/mouthkeys/forced_alignment.py	ANN001	Missing type annotation for function argument `segments`
-1	src/mouthkeys/forced_alignment.py	ANN001	Missing type annotation for function argument `text`
-1	src/mouthkeys/forced_alignment.py	ANN201	Missing return type annotation for public function `align`
-1	src/mouthkeys/forced_alignment.py	ANN201	Missing return type annotation for public function `clear`
-1	src/mouthkeys/forced_alignment.py	ANN202	Missing return type annotation for private function `_load`
-1	src/mouthkeys/forced_alignment.py	ANN202	Missing return type annotation for private function `_words`
-1	src/mouthkeys/forced_alignment.py	ANN204	Missing return type annotation for special method `__init__`
-4	src/mouthkeys/forced_alignment.py	PLC0415	`import` should be at the top-level of a file
 1	src/mouthkeys/gui.py	ANN001	Missing type annotation for function argument `response`
 1	src/mouthkeys/gui.py	ANN001	Missing type annotation for function argument `stop`
 1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `capture_shortcut`
@@ -279,7 +269,6 @@
 1	tests/test_file_progress.py	N802	Function name `setArguments` should be lowercase
 1	tests/test_file_progress.py	N802	Function name `setProgram` should be lowercase
 2	tests/test_file_progress.py	PLC0415	`import` should be at the top-level of a file
-8	tests/test_forced_alignment.py	PLC0415	`import` should be at the top-level of a file
 1	tests/test_forced_alignment.py	RUF059	Unpacked variable `model` is never used
 4	tests/test_formatting.py	ISC004	Unparenthesized implicit string concatenation in collection
 5	tests/test_formatting.py	PT006	Wrong type passed to first argument of `pytest.mark.parametrize`; expected `tuple`

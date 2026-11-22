@@ -2,36 +2,6 @@
 1	src/mouthkeys/ai_providers.py	PLR0913	Too many arguments in function definition (7 > 5)
 1	src/mouthkeys/ai_providers.py	TRY004	Prefer `TypeError` exception for invalid type
 1	src/mouthkeys/ai_stream.py	PLR0913	Too many arguments in function definition (7 > 5)
-2	src/mouthkeys/assistant_ui.py	ANN001	Missing type annotation for function argument `_checked`
-1	src/mouthkeys/assistant_ui.py	ANN001	Missing type annotation for function argument `accept_cancelled`
-1	src/mouthkeys/assistant_ui.py	ANN001	Missing type annotation for function argument `automatic`
-1	src/mouthkeys/assistant_ui.py	ANN001	Missing type annotation for function argument `callback`
-1	src/mouthkeys/assistant_ui.py	ANN001	Missing type annotation for function argument `cancel_event`
-1	src/mouthkeys/assistant_ui.py	ANN001	Missing type annotation for function argument `continuation`
-1	src/mouthkeys/assistant_ui.py	ANN001	Missing type annotation for function argument `function`
-1	src/mouthkeys/assistant_ui.py	ANN001	Missing type annotation for function argument `piece`
-1	src/mouthkeys/assistant_ui.py	ANN001	Missing type annotation for function argument `proposal`
-2	src/mouthkeys/assistant_ui.py	ANN001	Missing type annotation for function argument `response`
-1	src/mouthkeys/assistant_ui.py	ANN001	Missing type annotation for function argument `result`
-1	src/mouthkeys/assistant_ui.py	ANN001	Missing type annotation for function argument `return_to_target`
-1	src/mouthkeys/assistant_ui.py	ANN001	Missing type annotation for function argument `window`
-1	src/mouthkeys/assistant_ui.py	ANN201	Missing return type annotation for public function `accept_edit`
-1	src/mouthkeys/assistant_ui.py	ANN201	Missing return type annotation for public function `cancel_request`
-1	src/mouthkeys/assistant_ui.py	ANN201	Missing return type annotation for public function `current_selection`
-1	src/mouthkeys/assistant_ui.py	ANN201	Missing return type annotation for public function `generate`
-1	src/mouthkeys/assistant_ui.py	ANN201	Missing return type annotation for public function `record`
-1	src/mouthkeys/assistant_ui.py	ANN201	Missing return type annotation for public function `run_command`
-1	src/mouthkeys/assistant_ui.py	ANN201	Missing return type annotation for public function `show_proposal`
-1	src/mouthkeys/assistant_ui.py	ANN202	Missing return type annotation for private function `_task`
-2	src/mouthkeys/assistant_ui.py	ANN202	Missing return type annotation for private function `complete`
-1	src/mouthkeys/assistant_ui.py	ANN202	Missing return type annotation for private function `done`
-1	src/mouthkeys/assistant_ui.py	ANN202	Missing return type annotation for private function `finished`
-1	src/mouthkeys/assistant_ui.py	ANN202	Missing return type annotation for private function `on_delta`
-1	src/mouthkeys/assistant_ui.py	ANN204	Missing return type annotation for special method `__init__`
-2	src/mouthkeys/assistant_ui.py	FBT002	Boolean default positional argument in function definition
-2	src/mouthkeys/assistant_ui.py	FBT003	Boolean positional value in function call
-1	src/mouthkeys/assistant_ui.py	PLC0415	`import` should be at the top-level of a file
-1	src/mouthkeys/assistant_ui.py	SIM108	Use ternary operator `reviewed = f"Working directory: {directory}\n\n{command}" if directory else command` instead of `if`-`else`-block
 2	src/mouthkeys/atspi_helper.py	PLC0415	`import` should be at the top-level of a file
 1	src/mouthkeys/audio.py	SIM115	Use a context manager for opening files
 7	src/mouthkeys/benchmark.py	PLC0415	`import` should be at the top-level of a file

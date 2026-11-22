@@ -260,7 +260,7 @@ def test_assistant_ui_requires_review_of_exact_command(monkeypatch):
     parent = QWidget()
     parent.jobs = set()
     parent.send = lambda *a, **kw: None
-    page = assistant_ui.AssistantPage(parent)
+    page = assistant_ui.AssistantPage(parent, parent.send, parent.jobs)
     page.show_proposal(
         {"mode": "command", "instruction": "List", "text": "Lists files", "command": "ls"}
     )

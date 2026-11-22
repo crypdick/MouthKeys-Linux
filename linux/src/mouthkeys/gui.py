@@ -191,7 +191,7 @@ class Window(QWidget):
             self._profile_keyring,
         )
         tabs.addWidget(_scroll_page(self.prompt_profiles))
-        self.assistant_page = AssistantPage(self)
+        self.assistant_page = AssistantPage(self, self.send, self.jobs)
         tabs.addWidget(self.assistant_page)
         self.setup_page = SetupPage(
             self.fields,

@@ -1,13 +1,3 @@
-2	src/mouthkeys/assistant_ui.py	attr-defined	"Callable[[], QWidget]" has no attribute "jobs"
-3	src/mouthkeys/assistant_ui.py	attr-defined	"Callable[[], QWidget]" has no attribute "send"
-1	src/mouthkeys/assistant_ui.py	method-assign	Cannot assign to a method
-2	src/mouthkeys/assistant_ui.py	no-untyped-call	Call to untyped function "_task" in typed context
-2	src/mouthkeys/assistant_ui.py	no-untyped-call	Call to untyped function "current_selection" in typed context
-1	src/mouthkeys/assistant_ui.py	no-untyped-call	Call to untyped function "generate" in typed context
-1	src/mouthkeys/assistant_ui.py	no-untyped-call	Call to untyped function "run_command" in typed context
-1	src/mouthkeys/assistant_ui.py	no-untyped-call	Call to untyped function "show_proposal" in typed context
-4	src/mouthkeys/assistant_ui.py	no-untyped-def	Function is missing a return type annotation
-10	src/mouthkeys/assistant_ui.py	no-untyped-def	Function is missing a type annotation
 1	src/mouthkeys/benchmark.py	no-untyped-call	Call to untyped function "transcribe_file" in typed context
 1	src/mouthkeys/cli.py	no-untyped-call	Call to untyped function "transcribe_file" in typed context
 3	src/mouthkeys/clipboard.py	no-untyped-call	Call to untyped function "acknowledge" in typed context
@@ -32,7 +22,6 @@
 1	src/mouthkeys/file_history.py	operator	Unsupported operand types for <= ("int" and "None")
 1	src/mouthkeys/file_history.py	operator	Unsupported operand types for > ("int" and "None")
 1	src/mouthkeys/file_transcription.py	no-untyped-def	Function is missing a type annotation
-1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "AssistantPage" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "ModelBrowser" in typed context
 1	src/mouthkeys/local_api.py	no-untyped-call	Call to untyped function "transcribe_file" in typed context
 1	src/mouthkeys/models_ui.py	assignment	Incompatible types in assignment (expression has type "list[Any]", variable has type "dict[str, Any]")
@@ -53,7 +42,6 @@
 1	src/mouthkeys/models_ui.py	union-attr	Item "None" of "QTableWidgetItem | None" has no attribute "setText"
 1	src/mouthkeys/overlay.py	no-untyped-call	Call to untyped function "set_status" in typed context
 3	src/mouthkeys/overlay.py	no-untyped-def	Function is missing a type annotation
-1	src/mouthkeys/overlay_assistant.py	no-untyped-call	Call to untyped function "AssistantPage" in typed context
 1	src/mouthkeys/postprocess.py	no-untyped-call	Call to untyped function "dictation_prompt" in typed context
 1	src/mouthkeys/postprocess.py	no-untyped-call	Call to untyped function "render_dictation_user_message" in typed context
 2	src/mouthkeys/postprocess.py	no-untyped-def	Function is missing a type annotation

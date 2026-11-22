@@ -14,7 +14,7 @@ def page():
     window = QWidget()
     window.jobs = set()
     window.send = lambda *args, **kwargs: None
-    return app, window, AssistantPage(window)
+    return app, window, AssistantPage(window, lambda *args: window.send(*args), window.jobs)
 
 
 def process_until(app, predicate):
@@ -41,11 +41,11 @@ def test_voice_edit_review_button_requires_capture_and_explicit_return(monkeypat
     )
     assert assistant.editor.replace_button.isEnabled()
     monkeypatch.setattr(QMessageBox, "question", lambda *a: QMessageBox.StandardButton.Yes)
-    assistant.accept_edit(True)
+    assistant.accept_edit(return_to_target=True)
     assert sent == [("accept_edit", {"id": "job", "return_to_target": True})]
     assert assistant.feedback.text() == "Edit inserted"
     assert not assistant.editor.replace_button.isEnabled()
-    assistant.accept_edit(False)
+    assistant.accept_edit(return_to_target=False)
     assert len(sent) == 1
     window.close()
 
@@ -53,7 +53,7 @@ def test_voice_edit_review_button_requires_capture_and_explicit_return(monkeypat
 def test_voice_stream_clears_old_actionable_proposal_and_cancels_service():
     app, window, assistant = page()
     sent = []
-    window.send = lambda action: sent.append(action)
+    window.send = lambda action, _data, _callback: sent.append(action)
     assistant.show_proposal({"mode": "command", "text": "Old result", "command": "old"})
     assert assistant.editor.run_button.isEnabled()
     assistant.update_status(
@@ -222,7 +222,7 @@ def test_edit_followup_uses_previous_result_not_original_selection(monkeypatch):
     assert assistant.editor.result.toPlainText() == "Second rewrite"
     assert len(assistant.chats.session["messages"]) == 4
     sent = []
-    window.send = lambda action, data: sent.append(data)
+    window.send = lambda _action, data, _callback: sent.append(data)
     assistant.record()
     assert sent[0]["selected_text"] == ""
     window.close()
@@ -263,7 +263,7 @@ def test_private_voice_to_typed_and_back_preserves_context_without_db(monkeypatc
     process_until(app, lambda: not assistant.jobs)
     assert calls == [private]
     sent = []
-    window.send = lambda action, data: sent.append((action, data))
+    window.send = lambda action, data, _callback: sent.append((action, data))
     assistant.record()
     assert sent[0][0] == "start"
     assert sent[0][1]["assistant_history"][-1]["content"] == "Typed result"

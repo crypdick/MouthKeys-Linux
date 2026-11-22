@@ -2,7 +2,7 @@
 
 from collections.abc import Callable, Mapping
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QThread
 from PySide6.QtGui import QCloseEvent, QColor, QPalette
 from PySide6.QtWidgets import QScrollArea, QVBoxLayout, QWidget
 
@@ -18,11 +18,11 @@ class OverlayAssistant(QWidget):
         self.setWindowTitle("MouthKeys · Assistant")
         self.resize(760, 820)
         self.refresh = refresh
-        self.jobs: set[Request] = set()
+        self.jobs: set[QThread] = set()
         layout = QVBoxLayout(self)
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        self.assistant_page = AssistantPage(self)
+        self.assistant_page = AssistantPage(self, self.send, self.jobs)
         scroll.setWidget(self.assistant_page)
         layout.addWidget(scroll)
         self.apply_theme(colors)

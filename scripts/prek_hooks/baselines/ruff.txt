@@ -7,20 +7,18 @@
 2	src/mouthkeys/ai_providers.py	ANN001	Missing type annotation for function argument `body`
 1	src/mouthkeys/ai_providers.py	ANN001	Missing type annotation for function argument `cancel_event`
 7	src/mouthkeys/ai_providers.py	ANN001	Missing type annotation for function argument `config`
-2	src/mouthkeys/ai_providers.py	ANN001	Missing type annotation for function argument `data`
+1	src/mouthkeys/ai_providers.py	ANN001	Missing type annotation for function argument `data`
 1	src/mouthkeys/ai_providers.py	ANN001	Missing type annotation for function argument `endpoint`
 3	src/mouthkeys/ai_providers.py	ANN001	Missing type annotation for function argument `history`
 1	src/mouthkeys/ai_providers.py	ANN001	Missing type annotation for function argument `on_delta`
 1	src/mouthkeys/ai_providers.py	ANN001	Missing type annotation for function argument `on_thinking`
 2	src/mouthkeys/ai_providers.py	ANN001	Missing type annotation for function argument `opener`
-5	src/mouthkeys/ai_providers.py	ANN001	Missing type annotation for function argument `provider`
-1	src/mouthkeys/ai_providers.py	ANN001	Missing type annotation for function argument `streaming`
+4	src/mouthkeys/ai_providers.py	ANN001	Missing type annotation for function argument `provider`
 3	src/mouthkeys/ai_providers.py	ANN001	Missing type annotation for function argument `text`
 1	src/mouthkeys/ai_providers.py	ANN201	Missing return type annotation for public function `redirect_request`
 1	src/mouthkeys/ai_providers.py	ANN201	Missing return type annotation for public function `request_completion`
 1	src/mouthkeys/ai_providers.py	ANN201	Missing return type annotation for public function `request_headers`
 1	src/mouthkeys/ai_providers.py	ANN201	Missing return type annotation for public function `request_json`
-1	src/mouthkeys/ai_providers.py	ANN201	Missing return type annotation for public function `thinking_text`
 1	src/mouthkeys/ai_providers.py	ANN201	Missing return type annotation for public function `validate_reasoning`
 1	src/mouthkeys/ai_providers.py	ANN202	Missing return type annotation for private function `_apply_reasoning`
 1	src/mouthkeys/ai_providers.py	ANN202	Missing return type annotation for private function `_base_payload`
@@ -29,33 +27,8 @@
 4	src/mouthkeys/ai_providers.py	PLC0415	`import` should be at the top-level of a file
 1	src/mouthkeys/ai_providers.py	PLR0913	Too many arguments in function definition (7 > 5)
 1	src/mouthkeys/ai_providers.py	TRY004	Prefer `TypeError` exception for invalid type
-1	src/mouthkeys/ai_stream.py	ANN001	Missing type annotation for function argument `cancel_event`
-1	src/mouthkeys/ai_stream.py	ANN001	Missing type annotation for function argument `cancelled`
-1	src/mouthkeys/ai_stream.py	ANN001	Missing type annotation for function argument `config`
-1	src/mouthkeys/ai_stream.py	ANN001	Missing type annotation for function argument `data`
-1	src/mouthkeys/ai_stream.py	ANN001	Missing type annotation for function argument `deadline`
-1	src/mouthkeys/ai_stream.py	ANN001	Missing type annotation for function argument `endpoint`
-1	src/mouthkeys/ai_stream.py	ANN001	Missing type annotation for function argument `on_delta`
-1	src/mouthkeys/ai_stream.py	ANN001	Missing type annotation for function argument `on_thinking`
-1	src/mouthkeys/ai_stream.py	ANN001	Missing type annotation for function argument `opener`
-1	src/mouthkeys/ai_stream.py	ANN001	Missing type annotation for function argument `payload`
-2	src/mouthkeys/ai_stream.py	ANN001	Missing type annotation for function argument `provider`
-2	src/mouthkeys/ai_stream.py	ANN001	Missing type annotation for function argument `response`
-1	src/mouthkeys/ai_stream.py	ANN201	Missing return type annotation for public function `stream_completion`
-1	src/mouthkeys/ai_stream.py	ANN202	Missing return type annotation for private function `_abort`
-1	src/mouthkeys/ai_stream.py	ANN202	Missing return type annotation for private function `_delta`
-1	src/mouthkeys/ai_stream.py	ANN202	Missing return type annotation for private function `_events`
-1	src/mouthkeys/ai_stream.py	ANN202	Missing return type annotation for private function `monitor`
-1	src/mouthkeys/ai_stream.py	C901	`_delta` is too complex (16 > 15)
-1	src/mouthkeys/ai_stream.py	C901	`stream_completion` is too complex (26 > 15)
 1	src/mouthkeys/ai_stream.py	N818	Exception name `CompletionCancelled` should be named with an Error suffix
-1	src/mouthkeys/ai_stream.py	PLR0912	Too many branches (16 > 12)
-1	src/mouthkeys/ai_stream.py	PLR0912	Too many branches (23 > 12)
 1	src/mouthkeys/ai_stream.py	PLR0913	Too many arguments in function definition (7 > 5)
-1	src/mouthkeys/ai_stream.py	PLR0915	Too many statements (78 > 50)
-1	src/mouthkeys/ai_stream.py	PLR1702	Too many nested blocks (6 > 5)
-1	src/mouthkeys/ai_stream.py	SIM105	Use `contextlib.suppress(OSError)` instead of `try`-`except`-`pass`
-1	src/mouthkeys/ai_stream.py	TRY004	Prefer `TypeError` exception for invalid type
 1	src/mouthkeys/assistance.py	ANN001	Missing type annotation for function argument `process`
 1	src/mouthkeys/assistance.py	ANN202	Missing return type annotation for private function `_kill_group`
 1	src/mouthkeys/assistance.py	C901	`execute_command` is too complex (18 > 15)

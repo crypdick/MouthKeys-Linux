@@ -6,6 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from mouthkeys import ai_stream
 from mouthkeys.ai_providers import PROVIDER_ENDPOINTS, request_completion
 from mouthkeys.ai_stream import CompletionCancelled
 from mouthkeys.config import Config
@@ -291,4 +292,128 @@ def test_nonstream_cancel_suppresses_late_thinking_and_completion():
             opener=opener,
             cancel_event=cancelled,
             on_thinking=lambda text: pytest.fail("Late callback"),
+        )
+
+
+def test_cancelled_read_never_emits_late_text_or_thinking():
+    cancelled = threading.Event()
+    wire = sse({"choices": [{"delta": {"content": "late", "reasoning_content": "late thought"}}]})
+
+    class LateRead(io.BytesIO):
+        def readline(self, limit=-1):
+            line = super().readline(limit)
+            if not line.strip():
+                cancelled.set()
+            return line
+
+    content, thoughts = [], []
+    with pytest.raises(CompletionCancelled):
+        request_completion(
+            "Raw",
+            config(),
+            cancel_event=cancelled,
+            opener=lambda *_args, **_options: LateRead(wire),
+            on_delta=content.append,
+            on_thinking=thoughts.append,
+        )
+    assert content == thoughts == []
+
+
+def test_stream_discards_terminal_data_read_past_deadline(monkeypatch):
+    elapsed = [0.0]
+    monkeypatch.setattr(ai_stream, "time", SimpleNamespace(monotonic=lambda: elapsed[0]))
+    wire = b'{"message":{"content":"too late"},"done":true}\n'
+
+    class LateRead(io.BytesIO):
+        def readline(self, limit=-1):
+            elapsed[0] = 31.0
+            return super().readline(limit)
+
+    deltas = []
+    with pytest.raises(RuntimeError, match="stream timed out"):
+        request_completion(
+            "Raw", config("ollama"), opener=lambda *_a, **_k: LateRead(wire), on_delta=deltas.append
+        )
+    assert deltas == []
+
+
+@pytest.mark.parametrize("channel", ["content", "reasoning_content"])
+def test_stream_rejects_unpaired_surrogate_before_either_callback(channel):
+    wire = sse(
+        {
+            "choices": [
+                {
+                    "delta": {
+                        "content": "Answer",
+                        "reasoning_content": "Thought",
+                        channel: "\ud800",
+                    },
+                    "finish_reason": "stop",
+                }
+            ]
+        },
+        "[DONE]",
+    )
+    content, thoughts = [], []
+    with pytest.raises(ValueError, match="invalid Unicode"):
+        request_completion(
+            "Raw",
+            config(),
+            opener=lambda *_args, **_options: io.BytesIO(wire),
+            on_delta=content.append,
+            on_thinking=thoughts.append,
+        )
+    assert content == thoughts == []
+
+
+def test_anthropic_stream_separates_opening_text_and_thinking_blocks():
+    wire = sse(
+        {"type": "content_block_start", "content_block": {"type": "thinking", "thinking": "Draft"}},
+        {"type": "content_block_start", "content_block": {"type": "text", "text": "Prefill"}},
+        {"type": "message_delta", "delta": {"stop_reason": "end_turn"}},
+        {"type": "message_stop"},
+    )
+    thoughts = []
+    assert (
+        request_completion(
+            "Raw",
+            config("anthropic"),
+            opener=lambda *_a, **_k: io.BytesIO(wire),
+            on_thinking=thoughts.append,
+        )
+        == "Prefill"
+    )
+    assert thoughts == ["Draft"]
+
+
+@pytest.mark.parametrize(
+    ("provider", "event", "message"),
+    [
+        ("gemini", {"candidates": [{"finishReason": "SAFETY"}]}, "did not complete normally"),
+        ("compatible", {"choices": [{"finish_reason": "filtered"}]}, "did not complete normally"),
+        ("compatible", {"choices": [{"delta": {"content": 4}}]}, "invalid text content"),
+        ("gemini", {"candidates": []}, "partial text discarded"),
+        ("compatible", {"choices": []}, "partial text discarded"),
+    ],
+)
+def test_non_actionable_delta_variants(provider, event, message):
+    with pytest.raises(ValueError, match=message):
+        request_completion("Raw", config(provider), opener=lambda *_a, **_k: io.BytesIO(sse(event)))
+
+
+def test_cancelling_in_text_callback_suppresses_thinking_from_same_event():
+    cancelled = threading.Event()
+    wire = sse({"choices": [{"delta": {"content": "first", "reasoning_content": "do not show"}}]})
+
+    def stop(_):
+        cancelled.set()
+
+    with pytest.raises(CompletionCancelled):
+        request_completion(
+            "Raw",
+            config(),
+            cancel_event=cancelled,
+            opener=lambda *_a, **_k: io.BytesIO(wire),
+            on_delta=stop,
+            on_thinking=lambda _: pytest.fail("Thinking arrived after cancellation"),
         )

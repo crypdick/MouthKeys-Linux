@@ -1,9 +1,34 @@
 """Read optional desktop evidence without changing focus."""
 
-from dataclasses import dataclass
+import threading
+import time
+from dataclasses import dataclass, field
 
 from . import accessibility
 from .config import Config
+
+FOCUS_TIMEOUT = 4
+
+
+@dataclass
+class FocusGate:
+    ready: threading.Event = field(default_factory=threading.Event)
+    valid: bool = True
+    deadline: float | None = None
+
+    @classmethod
+    def automatic(cls) -> "FocusGate":
+        return cls(deadline=time.monotonic() + FOCUS_TIMEOUT)
+
+    def wait(self) -> None:
+        # A stop acknowledgment must not precede its focus snapshot.
+        if not self.ready.wait(timeout=FOCUS_TIMEOUT):
+            self.valid = False
+
+    def resolved(self) -> None:
+        if self.deadline is not None and time.monotonic() >= self.deadline:
+            self.valid = False
+        self.ready.set()
 
 
 @dataclass(frozen=True)

@@ -3,7 +3,7 @@ import threading
 import time
 import uuid
 from collections.abc import Mapping
-from dataclasses import dataclass, field, replace
+from dataclasses import replace
 from typing import Any, cast
 
 from . import __version__
@@ -15,8 +15,14 @@ from .microphone import MicrophoneSelection, Recording, SwitchOutcome, selection
 from .pronunciation import PronunciationStore
 from .recording_assistant import RecordingAssistant
 from .recording_cleanup import cleanup_transcript
-from .recording_delivery import DeliveryRequest, RecordingDelivery, delivery_message
-from .recording_destination import snapshot_for_stop
+from .recording_delivery import (
+    DeliveryRequest,
+    RecordingDelivery,
+    delivery_message,
+    replay_text,
+    replay_transcript,
+)
+from .recording_destination import FocusGate, snapshot_for_stop
 from .recording_edit import (
     EditReplacement,
     claim_edit,
@@ -31,25 +37,6 @@ from .recording_setup import prepare_recording, routed_config
 from .recording_transcript import format_dictation
 from .storage import History
 from .transcribe import Transcriber
-
-FOCUS_TIMEOUT = 4
-
-
-@dataclass
-class FocusGate:
-    ready: threading.Event = field(default_factory=threading.Event)
-    valid: bool = True
-    deadline: float | None = None
-
-    def wait(self) -> None:
-        # A stop acknowledgment must not precede its focus snapshot.
-        if not self.ready.wait(timeout=FOCUS_TIMEOUT):
-            self.valid = False
-
-    def resolved(self) -> None:
-        if self.deadline is not None and time.monotonic() >= self.deadline:
-            self.valid = False
-        self.ready.set()
 
 
 class Controller:
@@ -596,37 +583,32 @@ class Controller:
         target = None if focus_gate and not focus_gate.valid else destination.target
         self._finish(job, cast("Target", target), auto_paste_expected=destination.automatic)
 
-    def _manual_delivery(self, action, data):
+    def _manual_delivery(self, action: str, data: Mapping[str, object]) -> dict[str, object]:
         with self.lock:
             if self.interrupted:
                 raise ValueError("Service is shutting down")
             if self.phase != "idle" or self.pending_jobs():
                 raise ValueError(f"Busy ({self.phase}); wait or cancel before {action}")
-            text = self.last_text or self.history.latest_text()
-            if data.get("id"):
-                text = self.history.get(data["id"])["text"]
-                if not text:
-                    raise ValueError("No transcript for this entry")
+            text = replay_text(self.history, self.last_text, data.get("id"))
             config = Config.load()
-            self.phase, self.message = "delivering", "Delivering transcript"
+            owner = self.job
+            message = "Delivering transcript"
+            self.phase, self.message = "delivering", message
+
+        def active() -> bool:
+            with self.lock:
+                return not self.interrupted and self.job is owner and self.phase == "delivering"
+
         try:
-            self.delivery.copy(text)
-            if action == "paste" and not self.interrupted:
-                time.sleep(0.2)
-                if not self.interrupted:
-                    self.delivery.paste_key(config)
-            with self.lock:
-                if not self.interrupted:
-                    self.message = "Copied" if action == "copy" else "Paste requested"
+            paste = (lambda: self.delivery.paste_key(config)) if action == "paste" else None
+            message = replay_transcript(text, self.delivery.copy, paste, active)
         except Exception as exc:
-            with self.lock:
-                if not self.interrupted:
-                    self.message = str(exc)
+            message = str(exc)
             raise
         finally:
             with self.lock:
-                if not self.interrupted:
-                    self.phase = "idle"
+                if active():
+                    self.phase, self.message = "idle", message
         return self.status()
 
     def _warmup(self):
@@ -884,7 +866,7 @@ class Controller:
             ):
                 return
             # The daemon must keep accepting commands while focus is resolved.
-            gate = FocusGate(deadline=time.monotonic() + FOCUS_TIMEOUT)
+            gate = FocusGate.automatic()
             try:
                 self._request_capture_stop(gate, automatic=True, spoken=spoken)
             # The capture stop worker reports actionable errors.

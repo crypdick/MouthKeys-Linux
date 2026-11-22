@@ -30,6 +30,8 @@ reply before stopping the server.
   cancellation event.
   `recording_delivery` receives committed text and owns the cancellable Spoken Send review
   window. The key reservation uses the same lock as cancel and new-recording commands.
+  Manual replay checks ownership again before requesting a paste; it cannot update a newer
+  recording's status.
   `recording_edit` validates captured selection evidence and reserves replacement once for
   reviewed and automatic Edit. A newer recording cancels a replacement still in progress.
   `recording_learning` observes confirmed insertions and coordinates review without holding

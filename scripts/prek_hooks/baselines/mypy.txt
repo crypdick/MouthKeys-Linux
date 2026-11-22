@@ -259,11 +259,10 @@
 1	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "CaptureSession" in typed context
 1	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "Transcriber" in typed context
 1	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "_command" in typed context
-1	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "_manual_delivery" in typed context
 1	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "enroll" of "PronunciationStore" in typed context
 1	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "handle_action" in typed context
 2	src/mouthkeys/service.py	no-untyped-def	Function is missing a return type annotation
-4	src/mouthkeys/service.py	no-untyped-def	Function is missing a type annotation
+3	src/mouthkeys/service.py	no-untyped-def	Function is missing a type annotation
 1	src/mouthkeys/service.py	operator	Unsupported operand types for - ("float" and "None")
 1	src/mouthkeys/service.py	union-attr	Item "None" of "Any | None" has no attribute "cancel_event"
 1	src/mouthkeys/service.py	union-attr	Item "None" of "Any | None" has no attribute "cancelled"

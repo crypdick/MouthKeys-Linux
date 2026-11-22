@@ -500,8 +500,7 @@
 1	src/mouthkeys/routing.py	PLC0415	`import` should be at the top-level of a file
 1	src/mouthkeys/routing.py	PLR0913	Too many arguments in function definition (6 > 5)
 1	src/mouthkeys/service.py	ANN001	Missing type annotation for function argument `_focus_gate`
-3	src/mouthkeys/service.py	ANN001	Missing type annotation for function argument `action`
-1	src/mouthkeys/service.py	ANN001	Missing type annotation for function argument `data`
+2	src/mouthkeys/service.py	ANN001	Missing type annotation for function argument `action`
 1	src/mouthkeys/service.py	ANN001	Missing type annotation for function argument `delivery`
 1	src/mouthkeys/service.py	ANN001	Missing type annotation for function argument `history`
 1	src/mouthkeys/service.py	ANN001	Missing type annotation for function argument `recorder`
@@ -510,7 +509,6 @@
 1	src/mouthkeys/service.py	ANN201	Missing return type annotation for public function `command`
 1	src/mouthkeys/service.py	ANN201	Missing return type annotation for public function `interrupt`
 1	src/mouthkeys/service.py	ANN202	Missing return type annotation for private function `_command`
-1	src/mouthkeys/service.py	ANN202	Missing return type annotation for private function `_manual_delivery`
 1	src/mouthkeys/service.py	ANN202	Missing return type annotation for private function `_warmup`
 1	src/mouthkeys/service.py	ANN204	Missing return type annotation for special method `__init__`
 1	src/mouthkeys/service.py	C901	`_finish` is too complex (23 > 15)

@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from mouthkeys import recording_preview, service
+from mouthkeys import recording_destination, recording_preview
 from mouthkeys.config import Config
 from mouthkeys.recording_preview import PreviewWork, RecordingPreview, reset_owned_stream
 
@@ -163,9 +163,9 @@ def test_automatic_stop_keeps_daemon_available_during_focus_lookup(monkeypatch, 
     destinations = []
     clock = SimpleNamespace(offset=0.0)
     monkeypatch.setattr(
-        service,
+        recording_destination,
         "time",
-        SimpleNamespace(monotonic=lambda: time.monotonic() + clock.offset, time=time.time),
+        SimpleNamespace(monotonic=lambda: time.monotonic() + clock.offset),
     )
 
     def focus():
@@ -184,7 +184,7 @@ def test_automatic_stop_keeps_daemon_available_during_focus_lookup(monkeypatch, 
             assert not tick.is_alive()  # service_actions can accept another command.
             assert app.status()["phase"] == "stopping"
             if expired:
-                clock.offset = service.FOCUS_TIMEOUT + 1
+                clock.offset = recording_destination.FOCUS_TIMEOUT + 1
     finally:
         release.set()
         tick.join(3)

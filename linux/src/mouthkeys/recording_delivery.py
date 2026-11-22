@@ -1,5 +1,6 @@
 """Deliver a committed transcript, optionally sending a key after verified insertion."""
 
+import time
 from _thread import RLock
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -10,6 +11,7 @@ from .config import Config
 from .delivery import Target
 from .recording_job import DictationJob
 from .recording_learning import RecordingLearning
+from .storage import History
 
 SEND_REVIEW_SECONDS = 0.5
 
@@ -47,6 +49,34 @@ def delivery_message(request: DeliveryRequest, outcome: DeliveryOutcome) -> str:
     if request.config.save_history == "on":
         return "Insertion requested — transcript saved in history"
     return "Insertion requested — history disabled"
+
+
+def replay_text(history: History, latest: str, item_id: object) -> str:
+    if not item_id:
+        return latest or history.latest_text()
+    if not isinstance(item_id, str):
+        raise ValueError("Invalid history entry ID")  # noqa: TRY004 - client validation
+    text = history.get(item_id)["text"]
+    if not isinstance(text, str) or not text:
+        raise ValueError("No transcript for this entry")
+    return text
+
+
+def replay_transcript(
+    text: str,
+    copy: Callable[[str], object],
+    paste: Callable[[], object] | None,
+    active: Callable[[], bool],
+) -> str:
+    if not active():
+        return "Delivery cancelled"
+    copy(text)
+    if paste is not None and active():
+        time.sleep(0.2)
+        if active():
+            paste()
+            return "Paste requested"
+    return "Copied"
 
 
 def _paste_warning(request: DeliveryRequest, status: str) -> str | None:

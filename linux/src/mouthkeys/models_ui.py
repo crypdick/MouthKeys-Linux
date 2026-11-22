@@ -137,8 +137,10 @@ class ModelBrowser(QDialog):
                 model["languages"],
                 model.get("weight_bytes") or 0,
                 model.get("memory_note", "Model/device dependent"),
-                f"streaming: {'yes' if model.get('native_streaming') else 'provisional/offline'}; "
-                f"vocabulary: {model.get('vocabulary_method', 'backend dependent')}",
+                (
+                    f"streaming: {'yes' if model.get('native_streaming') else 'provisional/offline'}; "
+                    f"vocabulary: {model.get('vocabulary_method', 'backend dependent')}"
+                ),
                 "Yes" if model["installed"] else "No",
                 "No",
                 model.get("speed_note", "Not benchmarked on this hardware"),

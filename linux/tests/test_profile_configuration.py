@@ -43,6 +43,14 @@ def test_profiles_enforce_aggregate_limit_without_writing():
     assert not config_path().with_name("profiles.json").exists()
 
 
+def test_non_object_profile_does_not_replace_saved_profiles():
+    original = profile()
+    save_profiles([original])
+    with pytest.raises(ValueError, match="AI profile has missing or unknown fields"):
+        save_profiles([None])
+    assert load_profiles() == [original | {"shortcut": ""}]
+
+
 def test_duplicate_profile_ids_cannot_replace_existing_profile():
     original = profile()
     save_profiles([original])

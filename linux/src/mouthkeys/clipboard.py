@@ -63,10 +63,10 @@ class ClipboardPaste:
                     b"restored\n",
                     b"skipped\n",
                 )
-            return True
         except (OSError, ValueError):
             return False
         finally:
             with suppress(OSError):
                 self._stdin.close()
             self._stdout.close()
+        return True

@@ -75,7 +75,7 @@ def _apply_reasoning(body: dict[str, object], config: object) -> dict[str, objec
         for part in parts[:-1]:
             child = destination.setdefault(part, {})
             if not isinstance(child, dict):
-                raise ValueError("Reasoning parameter conflicts with request structure")
+                raise ValueError("Reasoning parameter conflicts with request structure")  # noqa: TRY004 - provider request shape
             destination = child
         destination[parts[-1]] = value
     return body
@@ -270,7 +270,7 @@ def _completion(data: object, provider: str) -> object:
     return choice["message"]["content"]
 
 
-def request_completion(
+def request_completion(  # noqa: PLR0913 - optional streaming hooks and request context
     text: str,
     config: _CompletionSettings,
     *,
@@ -298,7 +298,7 @@ def request_completion(
     model = urllib.parse.quote(config.ai_model.removeprefix("models/"), safe="")
     endpoint = endpoint_url(config.ai_endpoint.replace("{model}", model))
     if getattr(config, "ai_streaming", "off") == "on":
-        from .ai_stream import stream_completion
+        from .ai_stream import stream_completion  # noqa: PLC0415 - load streaming only for a streaming request
 
         return stream_completion(
             endpoint,

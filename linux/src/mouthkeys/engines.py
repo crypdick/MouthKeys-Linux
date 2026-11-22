@@ -48,7 +48,7 @@ ONNX_MODELS = {
 
 def onnx_module() -> ModuleType:
     try:
-        import onnx_asr
+        import onnx_asr  # noqa: PLC0415 - load only the requested engine or catalog dependencies
     except ImportError:
         raise RuntimeError("Install the onnx extra: uv tool install './linux[gui,onnx]'") from None
     module: ModuleType = onnx_asr
@@ -59,7 +59,7 @@ def resolve_whisper(config: Config) -> str:
     """Resolve and preflight locally before faster-whisper can fetch a tokenizer."""
     path = Path(config.model).expanduser()
     if not path.is_dir():
-        from faster_whisper.utils import download_model
+        from faster_whisper.utils import download_model  # noqa: PLC0415 - load only the requested engine or catalog dependencies
 
         try:
             path = Path(
@@ -91,14 +91,14 @@ def _download_onnx_revision(
 ) -> None:
     # onnx-asr 0.12's downloader has no revision parameter. Use its pinned
     # resolver's file manifest, but perform the explicit Hub request ourselves.
-    from huggingface_hub import hf_hub_download, snapshot_download
-    from onnx_asr.loader import create_asr_resolver
-    from onnx_asr.resolver import model_repos
+    from huggingface_hub import hf_hub_download, snapshot_download  # noqa: PLC0415 - load only the requested engine or catalog dependencies
+    from onnx_asr.loader import create_asr_resolver  # noqa: PLC0415 - load only the requested engine or catalog dependencies
+    from onnx_asr.resolver import model_repos  # noqa: PLC0415 - load only the requested engine or catalog dependencies
 
     repository = model_repos.get(model, model)
     hf_hub_download(repository, "config.json", revision=revision, local_dir=path)
     resolver = create_asr_resolver(model, path, offline=True)
-    files = list(resolver.model_type._get_model_files(quantization).values())
+    files = list(resolver.model_type._get_model_files(quantization).values())  # noqa: SLF001 - pinned resolver exposes no public revision manifest
     files += [file.removeprefix("**/") for file in files if file.startswith("**/")]
     patterns = ["config.json", "config.yaml", *files]
     patterns += [
@@ -161,7 +161,7 @@ def load_onnx(config: Config) -> object:
         raise RuntimeError("ONNX model or Silero VAD missing; run mouthkeys download first")
     providers = ["CPUExecutionProvider"]
     if config.device == "cuda":
-        import onnxruntime
+        import onnxruntime  # noqa: PLC0415 - load only the requested engine or catalog dependencies
 
         if "CUDAExecutionProvider" not in onnxruntime.get_available_providers():
             raise RuntimeError("CUDA ONNX requires onnxruntime-gpu; choose CPU or install it")
@@ -203,7 +203,7 @@ def _model_catalog(engine: str = "whisper", *, revision: str = "main") -> list[d
             for name, (label, languages) in ONNX_MODELS.items()
         ]
     if engine in ("transformers", "nemo"):
-        from .native_asr import NEMO_MODELS, TRANSFORMERS_MODELS, artifact_path, effective_revision
+        from .native_asr import NEMO_MODELS, TRANSFORMERS_MODELS, artifact_path, effective_revision  # noqa: PLC0415 - load only the requested engine or catalog dependencies
 
         models = TRANSFORMERS_MODELS if engine == "transformers" else NEMO_MODELS
         return [
@@ -279,7 +279,7 @@ def model_catalog(
     and four bytes per float32 parameter. They exclude inference workspace,
     activations and caches; archive size is not a runtime RAM measurement.
     """
-    from .benchmark import matching_measurement
+    from .benchmark import matching_measurement  # noqa: PLC0415 - load only the requested engine or catalog dependencies
 
     measured = measurements()
     rows = _model_catalog(engine, revision=revision)

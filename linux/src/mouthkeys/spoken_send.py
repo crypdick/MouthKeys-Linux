@@ -116,8 +116,8 @@ def _sentence_owns_phrase(prefix: str) -> bool:
 def parse_send(
     text: str,
     phrase: str = "send it",
-    active: bool = False,
-    literal_prefix: str = "literal",  # noqa: FBT001, FBT002
+    active: bool = False,  # noqa: FBT001, FBT002 - retain positional parser compatibility
+    literal_prefix: str = "literal",
 ) -> SendPlan:
     if not active or not phrase.strip():
         return SendPlan(text)

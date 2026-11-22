@@ -5,7 +5,7 @@ import re
 import uuid
 from dataclasses import replace
 from pathlib import Path
-from typing import Any, TypedDict, cast
+from typing import TYPE_CHECKING, Any, TypedDict, cast
 
 from .ai_provider_settings import (
     PROVIDER_ENDPOINTS,
@@ -15,6 +15,9 @@ from .ai_provider_settings import (
 )
 from .config import Config, config_path, private_dir
 from .private_files import write_private
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 
 class PromptProfile(TypedDict):
@@ -63,81 +66,84 @@ def profiles_path() -> Path:
     return config_path().parent / "profiles.json"
 
 
+def _profile_shape(value: object) -> PromptProfile:
+    if not isinstance(value, dict):
+        raise ValueError("AI profile has missing or unknown fields")  # noqa: TRY004
+    profile = {"shortcut": "", **PROFILE_DEFAULTS, **value}
+    if set(profile) != {"id", "name", "shortcut", *PROFILE_FIELDS}:
+        raise ValueError("AI profile has missing or unknown fields")
+    for key in ("id", "name", "ai_provider", "ai_endpoint", "ai_model", "ai_key_env", "ai_prompt"):
+        if not isinstance(profile[key], str):
+            raise ValueError(f"AI profile {key} must be text")  # noqa: TRY004 - document validation
+    try:
+        uuid.UUID(profile["id"])
+    except ValueError:
+        raise ValueError("AI profile ID must be a UUID") from None
+    return cast("PromptProfile", profile)
+
+
+def _validate_profile_identity(profile: PromptProfile) -> None:
+    if (
+        not isinstance(profile["shortcut"], str)
+        or len(profile["shortcut"]) > 128
+        or any(ord(character) < 32 for character in profile["shortcut"])
+    ):
+        raise ValueError("AI profile shortcut must be a printable chord")
+    if not profile["name"].strip() or len(profile["name"]) > 100:
+        raise ValueError("AI profile name must contain 1–100 characters")
+    if profile["ai_provider"] not in PROVIDER_ENDPOINTS:
+        raise ValueError("Unknown AI profile provider protocol")
+    if not profile["ai_model"].strip() or len(profile["ai_model"]) > 500:
+        raise ValueError("AI profile must name a model (maximum 500 characters)")
+    if len(profile["ai_endpoint"]) > 2048:
+        raise ValueError("AI profile endpoint exceeds 2048 characters")
+    endpoint_url(profile["ai_endpoint"])
+
+
+def _validate_profile_options(profile: PromptProfile) -> None:
+    values: Mapping[str, object] = profile
+    for name in PROFILE_DEFAULTS:
+        if not isinstance(values[name], str):
+            raise ValueError(f"AI profile {name} must be text")  # noqa: TRY004 - document validation
+    if profile["ai_models_endpoint"]:
+        models_endpoint(
+            profile["ai_endpoint"],
+            profile["ai_provider"],
+            explicit=profile["ai_models_endpoint"],
+        )
+    reasoning_option(profile["ai_reasoning_parameter"], profile["ai_reasoning_value"])
+    if profile["ai_streaming"] not in ("on", "off"):
+        raise ValueError("AI profile streaming must be on or off")
+    if profile["ai_credential_source"] not in ("environment", "secret-service"):
+        raise ValueError("AI credential source must be environment or secret-service")
+    if profile["ai_key_env"] and not re.fullmatch(
+        r"[A-Za-z_][A-Za-z0-9_]{0,127}", profile["ai_key_env"]
+    ):
+        raise ValueError("AI profile key must name an environment variable, never an API key")
+    if len(profile["ai_prompt"].encode()) > 100000:
+        raise ValueError("AI profile prompt exceeds 100 KB")
+    for key, high in (("ai_max_tokens", 65536), ("ai_timeout", 300)):
+        value = values[key]
+        if type(value) is not int or not 1 <= value <= high:
+            raise ValueError(f"AI profile {key} must be between 1 and {high}")
+
+
 def validate_profiles(profiles: object) -> list[PromptProfile]:
     if not isinstance(profiles, list) or len(profiles) > 100:
         raise ValueError("AI profiles must be a list with at most 100 entries")
-    profiles = [
-        {"shortcut": "", **PROFILE_DEFAULTS, **profile} if isinstance(profile, dict) else profile
-        for profile in profiles
-    ]
-    ids = set()
-    for profile in profiles:
-        if not isinstance(profile, dict) or set(profile) != {
-            "id",
-            "name",
-            "shortcut",
-            *PROFILE_FIELDS,
-        }:
-            raise ValueError("AI profile has missing or unknown fields")
-        for key in (
-            "id",
-            "name",
-            "ai_provider",
-            "ai_endpoint",
-            "ai_model",
-            "ai_key_env",
-            "ai_prompt",
-        ):
-            if not isinstance(profile[key], str):
-                raise ValueError(f"AI profile {key} must be text")
-        try:
-            uuid.UUID(profile["id"])
-        except ValueError:
-            raise ValueError("AI profile ID must be a UUID") from None
+    validated = []
+    ids: set[str] = set()
+    for value in profiles:
+        profile = _profile_shape(value)
         if profile["id"] in ids:
             raise ValueError("Duplicate AI profile ID")
         ids.add(profile["id"])
-        if (
-            not isinstance(profile["shortcut"], str)
-            or len(profile["shortcut"]) > 128
-            or any(ord(character) < 32 for character in profile["shortcut"])
-        ):
-            raise ValueError("AI profile shortcut must be a printable chord")
-        if not profile["name"].strip() or len(profile["name"]) > 100:
-            raise ValueError("AI profile name must contain 1–100 characters")
-        if profile["ai_provider"] not in PROVIDER_ENDPOINTS:
-            raise ValueError("Unknown AI profile provider protocol")
-        if not profile["ai_model"].strip() or len(profile["ai_model"]) > 500:
-            raise ValueError("AI profile must name a model (maximum 500 characters)")
-        if len(profile["ai_endpoint"]) > 2048:
-            raise ValueError("AI profile endpoint exceeds 2048 characters")
-        endpoint_url(profile["ai_endpoint"])
-        for name in PROFILE_DEFAULTS:
-            if not isinstance(profile[name], str):
-                raise ValueError(f"AI profile {name} must be text")
-        if profile["ai_models_endpoint"]:
-            models_endpoint(
-                profile["ai_endpoint"],
-                profile["ai_provider"],
-                explicit=profile["ai_models_endpoint"],
-            )
-        reasoning_option(profile["ai_reasoning_parameter"], profile["ai_reasoning_value"])
-        if profile["ai_streaming"] not in ("on", "off"):
-            raise ValueError("AI profile streaming must be on or off")
-        if profile["ai_credential_source"] not in ("environment", "secret-service"):
-            raise ValueError("AI credential source must be environment or secret-service")
-        if profile["ai_key_env"] and not re.fullmatch(
-            r"[A-Za-z_][A-Za-z0-9_]{0,127}", profile["ai_key_env"]
-        ):
-            raise ValueError("AI profile key must name an environment variable, never an API key")
-        if len(profile["ai_prompt"].encode()) > 100000:
-            raise ValueError("AI profile prompt exceeds 100 KB")
-        for key, high in (("ai_max_tokens", 65536), ("ai_timeout", 300)):
-            if type(profile[key]) is not int or not 1 <= profile[key] <= high:
-                raise ValueError(f"AI profile {key} must be between 1 and {high}")
-    if len(json.dumps(profiles).encode()) > 1024 * 1024:
+        _validate_profile_identity(profile)
+        _validate_profile_options(profile)
+        validated.append(profile)
+    if len(json.dumps(validated).encode()) > 1024 * 1024:
         raise ValueError("AI profiles exceed 1 MB")
-    return cast("list[PromptProfile]", profiles)
+    return validated
 
 
 def load_profiles() -> list[PromptProfile]:

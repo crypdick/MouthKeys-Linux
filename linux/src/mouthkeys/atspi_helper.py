@@ -94,10 +94,10 @@ class _Position(NamedTuple):
 
 class Bus:
     def __init__(self) -> None:
-        import gi
+        import gi  # noqa: PLC0415 - distribution GI bindings are optional
 
         gi.require_version("Atspi", "2.0")
-        from gi.repository import Atspi, Gio, GLib
+        from gi.repository import Atspi, Gio, GLib  # noqa: PLC0415 - distribution GI bindings are optional
 
         self.Gio, self.GLib = Gio, GLib
         self.password_role = int(Atspi.Role.PASSWORD_TEXT)

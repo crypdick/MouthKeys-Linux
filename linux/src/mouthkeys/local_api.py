@@ -200,8 +200,8 @@ class Handler(BaseHTTPRequestHandler):
         return self._transcribe(_uploaded_audio(request))
 
     def _postprocess(self, request: ApiRequest) -> dict[str, str]:
-        from .postprocess import process
-        from .profiles import resolve_profile
+        from .postprocess import process  # noqa: PLC0415 - load inference and profile helpers only on the matching route
+        from .profiles import resolve_profile  # noqa: PLC0415 - load inference and profile helpers only on the matching route
 
         text = request.data.get("text") if request.is_json else request.raw.decode("utf-8")
         if not isinstance(text, str):
@@ -217,7 +217,7 @@ class Handler(BaseHTTPRequestHandler):
             }
 
     def _transcribe(self, audio: bytes) -> dict[str, object]:
-        from .file_transcription import SegmentDecoder, transcribe_file
+        from .file_transcription import SegmentDecoder, transcribe_file  # noqa: PLC0415 - load inference and profile helpers only on the matching route
 
         controller = self.server.controller
         _require_recording_idle(controller)

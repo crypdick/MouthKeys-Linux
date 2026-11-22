@@ -143,7 +143,7 @@ def download_native(
     revision: str = "main",
     progress: Callable[[DownloadProgress], None] | None = None,
 ) -> str:
-    from huggingface_hub import snapshot_download
+    from huggingface_hub import snapshot_download  # noqa: PLC0415 - load only the selected model or audio backend
 
     if engine not in ("transformers", "nemo"):
         raise ValueError("Unknown native speech engine")
@@ -181,7 +181,7 @@ def download_native(
 
 
 def _validate_nemo_archive(path: Path) -> None:
-    import yaml
+    import yaml  # noqa: PLC0415 - load only the selected model or audio backend
 
     artifacts = [path] if path.is_file() else list(path.glob("*.nemo"))
     if len(artifacts) != 1:
@@ -274,7 +274,7 @@ def local_artifact(config: Config) -> Path:
 
 def torch_runtime(config: Config) -> tuple[ModuleType, str, object]:
     try:
-        import torch
+        import torch  # noqa: PLC0415 - load only the selected model or audio backend
     except ImportError:
         raise RuntimeError(f"Install the {config.engine} optional dependency extra") from None
     device = config.device
@@ -302,7 +302,7 @@ def torch_runtime(config: Config) -> tuple[ModuleType, str, object]:
 
 def speech_spans(samples: object) -> list[SpeechSpan]:
     """Reuse packaged offline VAD to bound model input, preserving speech timestamps."""
-    from faster_whisper.vad import VadOptions, get_speech_timestamps
+    from faster_whisper.vad import VadOptions, get_speech_timestamps  # noqa: PLC0415 - load only the selected model or audio backend
 
     spans: list[SpeechSpan] = get_speech_timestamps(
         samples,
@@ -315,7 +315,7 @@ def transcript_text(value: object) -> str:
     if isinstance(value, list):
         return " ".join(transcript_text(item) for item in value).strip()
     if not isinstance(value, str):
-        raise ValueError("Speech engine returned no text")
+        raise ValueError("Speech engine returned no text")  # noqa: TRY004 - backend result validation
     return value.strip()
 
 

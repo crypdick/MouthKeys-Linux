@@ -26,7 +26,7 @@ def download(
     if progress:
         progress({"phase": "preparing", "completed": 0, "total": None, "unit": "file"})
     if engine == "onnx":
-        from .engines import download_onnx
+        from .engines import download_onnx  # noqa: PLC0415 - load engine dependencies only on demand
 
         path: str = download_onnx(model, compute_type, progress=progress, revision=revision)
         return path
@@ -34,11 +34,11 @@ def download(
         return download_native(model, engine, revision, progress)
     if engine != "whisper":
         raise ValueError("Unknown engine")
-    from faster_whisper.utils import download_model
+    from faster_whisper.utils import download_model  # noqa: PLC0415 - load engine dependencies only on demand
 
     if progress:
-        from faster_whisper.utils import _MODELS
-        from huggingface_hub import snapshot_download
+        from faster_whisper.utils import _MODELS  # noqa: PLC0415 - load engine dependencies only on demand
+        from huggingface_hub import snapshot_download  # noqa: PLC0415 - load engine dependencies only on demand
 
         repository = model if "/" in model else _MODELS.get(model)
         if not repository:
@@ -65,18 +65,18 @@ def download(
 def _model_for_config(config: Config) -> object:
     # Keep heavyweight engines unloaded until the first request.
     if config.engine == "onnx":
-        from .engines import load_onnx
+        from .engines import load_onnx  # noqa: PLC0415 - load engine dependencies only on demand
 
         return load_onnx(config)
     if config.engine in ("transformers", "nemo"):
-        from .native_worker import NativeWorkerBackend
+        from .native_worker import NativeWorkerBackend  # noqa: PLC0415 - load engine dependencies only on demand
 
         return NativeWorkerBackend(config)
     if config.engine != "whisper":
         raise ValueError("Unknown speech engine")
-    from faster_whisper import WhisperModel
+    from faster_whisper import WhisperModel  # noqa: PLC0415 - load engine dependencies only on demand
 
-    from .engines import resolve_whisper
+    from .engines import resolve_whisper  # noqa: PLC0415 - load engine dependencies only on demand
 
     return WhisperModel(
         resolve_whisper(config),
@@ -189,7 +189,7 @@ class Transcriber:
         if config.pronunciation_matching != "on" or not config.pronunciation_aligner_model:
             return segments
         if self.aligner is None:
-            from .forced_alignment import WhisperForcedAligner
+            from .forced_alignment import WhisperForcedAligner  # noqa: PLC0415 - load engine dependencies only on demand
 
             self.aligner = WhisperForcedAligner()
         aligned, warning = self.aligner.align(audio, segments, config)
@@ -275,7 +275,7 @@ class Transcriber:
     def segments(self, audio: str | NDArray[np.generic], config: Config) -> list[Segment]:
         self.load(config)
         if config.engine == "whisper":
-            from .vocabulary import whisper_options
+            from .vocabulary import whisper_options  # noqa: PLC0415 - load engine dependencies only on demand
 
             segments, _ = self.model.transcribe(
                 audio,
@@ -290,7 +290,7 @@ class Transcriber:
 
         samples: NDArray[np.generic]
         if isinstance(audio, str):
-            from faster_whisper.audio import decode_audio
+            from faster_whisper.audio import decode_audio  # noqa: PLC0415 - load engine dependencies only on demand
 
             samples = decode_audio(audio, sampling_rate=16000)
         else:

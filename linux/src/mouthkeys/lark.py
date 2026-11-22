@@ -121,22 +121,22 @@ def heartbeat(path: str | Path) -> ReceiverBattery:
     fd = os.open(path, os.O_RDWR | os.O_NONBLOCK)
     try:
         info = bytearray(8)
-        fcntl.ioctl(fd, (2 << 30) | (8 << 16) | (ord("H") << 8) | 3, info, True)
+        fcntl.ioctl(fd, (2 << 30) | (8 << 16) | (ord("H") << 8) | 3, info, True)  # noqa: FBT003 - ioctl mutate flag is positional-only
         _, vendor, product = struct.unpack("IHH", info)
         if vendor != VENDOR or product != PRODUCT:
             raise ValueError("Receiver changed before open")
         descriptor_size = bytearray(4)
-        fcntl.ioctl(fd, (2 << 30) | (4 << 16) | (ord("H") << 8) | 1, descriptor_size, True)
+        fcntl.ioctl(fd, (2 << 30) | (4 << 16) | (ord("H") << 8) | 1, descriptor_size, True)  # noqa: FBT003 - ioctl mutate flag is positional-only
         length = struct.unpack("I", descriptor_size)[0]
         if not 0 < length <= 4096:
             raise ValueError("Invalid HID report descriptor")
         descriptor = bytearray(struct.pack("I", length)) + bytearray(4096)
-        fcntl.ioctl(fd, (2 << 30) | (4100 << 16) | (ord("H") << 8) | 2, descriptor, True)
+        fcntl.ioctl(fd, (2 << 30) | (4100 << 16) | (ord("H") << 8) | 2, descriptor, True)  # noqa: FBT003 - ioctl mutate flag is positional-only
         if not carries_status_page(descriptor[4 : 4 + length]):
             raise ValueError("Receiver has no status feature report")
-        fcntl.ioctl(fd, feature | 6, bytearray(HEARTBEAT), True)
+        fcntl.ioctl(fd, feature | 6, bytearray(HEARTBEAT), True)  # noqa: FBT003 - ioctl mutate flag is positional-only
         reply = bytearray([REPORT]) + bytearray(LENGTH - 1)
-        size = fcntl.ioctl(fd, feature | 7, reply, True)
+        size = fcntl.ioctl(fd, feature | 7, reply, True)  # noqa: FBT003 - ioctl mutate flag is positional-only
         return parse_reply(reply[: size if 0 < size <= LENGTH else LENGTH])
     finally:
         os.close(fd)

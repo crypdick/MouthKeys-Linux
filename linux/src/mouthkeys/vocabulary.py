@@ -44,7 +44,7 @@ class VocabularyStore:
     @staticmethod
     def validate(words: object) -> list[str]:
         if not isinstance(words, list):
-            raise ValueError("Vocabulary must be a list")
+            raise ValueError("Vocabulary must be a list")  # noqa: TRY004 - vocabulary document validation
         entries = VocabularyStore.validate_entries(
             [{"text": word, "weight": 1, "aliases": []} for word in words]
         )

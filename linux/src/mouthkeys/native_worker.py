@@ -117,7 +117,7 @@ def worker_main() -> None:
         isolate_network()
         request, _ = read_message(source)
         config = Config.from_mapping(request["config"])
-        from . import nemo_asr, transformers_asr
+        from . import nemo_asr, transformers_asr  # noqa: PLC0415 - defer backend imports until worker setup
 
         backend = (
             nemo_asr.NemoBackend
@@ -281,7 +281,7 @@ class NativeWorkerBackend:
             return self._decode_segments(request, audio)
 
         # Reuse bounded VAD spans instead of splitting words or sending a multi-hour file.
-        from .native_asr import speech_spans
+        from .native_asr import speech_spans  # noqa: PLC0415 - defer backend imports until worker setup
 
         output = []
         for span in speech_spans(audio):

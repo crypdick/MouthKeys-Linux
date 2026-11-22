@@ -60,8 +60,8 @@ def _key_from_input(*, stdin: bool) -> str:
 
 
 def _credential(args: argparse.Namespace) -> int:
-    from .credentials import delete_key, store_key
-    from .profiles import resolve_profile
+    from .credentials import delete_key, store_key  # noqa: PLC0415 - keep unrelated CLI commands lightweight
+    from .profiles import resolve_profile  # noqa: PLC0415 - keep unrelated CLI commands lightweight
 
     config = Config.load()
     if args.profile is not None:
@@ -79,7 +79,7 @@ def _credential(args: argparse.Namespace) -> int:
 
 
 def _benchmark(args: argparse.Namespace) -> int:
-    from .benchmark import run_benchmark
+    from .benchmark import run_benchmark  # noqa: PLC0415 - keep unrelated CLI commands lightweight
 
     changes = {
         name: getattr(args, name)
@@ -98,7 +98,7 @@ def _benchmark(args: argparse.Namespace) -> int:
 
 
 def _download_model(args: argparse.Namespace) -> int:
-    from .transcribe import download
+    from .transcribe import download  # noqa: PLC0415 - keep unrelated CLI commands lightweight
 
     config = Config.load()
 
@@ -118,7 +118,7 @@ def _download_model(args: argparse.Namespace) -> int:
 
 
 def _transcribe_file(args: argparse.Namespace) -> int:
-    from .file_transcription import export_result, result_text, transcribe_file
+    from .file_transcription import export_result, result_text, transcribe_file  # noqa: PLC0415 - keep unrelated CLI commands lightweight
 
     config = Config.load()
 
@@ -132,7 +132,7 @@ def _transcribe_file(args: argparse.Namespace) -> int:
         else transcribe_file(args.file, config)
     )
     if args.save_history and config.save_history == "on" and config.save_file_history == "on":
-        from .file_history import FileHistory
+        from .file_history import FileHistory  # noqa: PLC0415 - keep unrelated CLI commands lightweight
 
         file_progress({"stage": "save"})
         FileHistory().add(args.file.name, result, config.file_history_limit)
@@ -146,7 +146,7 @@ def _transcribe_file(args: argparse.Namespace) -> int:
 
 
 def _file_history(args: argparse.Namespace) -> int:
-    from .file_history import FileHistory
+    from .file_history import FileHistory  # noqa: PLC0415 - keep unrelated CLI commands lightweight
 
     history = FileHistory()
     if args.command == "file-history":
@@ -159,7 +159,7 @@ def _file_history(args: argparse.Namespace) -> int:
 
 
 def _assistant_history(args: argparse.Namespace) -> int:
-    from .assistant_history import AssistantHistory
+    from .assistant_history import AssistantHistory  # noqa: PLC0415 - keep unrelated CLI commands lightweight
 
     history = AssistantHistory()
     result: object
@@ -192,14 +192,14 @@ def _assistant_history(args: argparse.Namespace) -> int:
 
 
 def _download_speakers(_args: argparse.Namespace) -> int:
-    from .file_transcription import download_diarization
+    from .file_transcription import download_diarization  # noqa: PLC0415 - keep unrelated CLI commands lightweight
 
     print(download_diarization())
     return 0
 
 
 def _models(args: argparse.Namespace) -> int:
-    from .engines import delete_model, model_catalog
+    from .engines import delete_model, model_catalog  # noqa: PLC0415 - keep unrelated CLI commands lightweight
 
     config = Config.load()
     if args.command == "models":
@@ -211,7 +211,7 @@ def _models(args: argparse.Namespace) -> int:
 
 
 def _backup_preview(args: argparse.Namespace) -> int:
-    from .operations import backup_preview
+    from .operations import backup_preview  # noqa: PLC0415 - keep unrelated CLI commands lightweight
 
     result = backup_preview(args.path, app_map=_read_app_map(args.app_map))
     print(json.dumps(result, ensure_ascii=False, indent=2))
@@ -219,7 +219,7 @@ def _backup_preview(args: argparse.Namespace) -> int:
 
 
 def _dictionary(args: argparse.Namespace) -> int:
-    from .dictionary import Dictionary
+    from .dictionary import Dictionary  # noqa: PLC0415 - keep unrelated CLI commands lightweight
 
     if args.command == "dictionary-import":
         Dictionary.import_file(args.path, mode=args.mode)
@@ -255,7 +255,7 @@ def _launch_desktop(args: argparse.Namespace) -> int:
 
 
 def _serve(_args: argparse.Namespace) -> int:
-    from .daemon import serve
+    from .daemon import serve  # noqa: PLC0415 - keep unrelated CLI commands lightweight
 
     serve()
     return 0

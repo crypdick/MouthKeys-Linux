@@ -6,7 +6,6 @@ from unittest.mock import Mock
 
 import pytest
 
-from mouthkeys import engines
 from mouthkeys.config import Config
 
 widgets = pytest.importorskip("PySide6.QtWidgets")
@@ -217,19 +216,17 @@ def test_late_signals_from_failed_start_cannot_change_retry(monkeypatch, downloa
 
 def test_settings_routes_catalog_and_cache_actions_to_selected_model(monkeypatch, downloads):
     monkeypatch.setattr(gui.Window, "poll", lambda self: None)
-    catalog = Mock(return_value=[{"model": "built-in"}])
-    monkeypatch.setattr(engines, "model_catalog", catalog)
+    built_in = "nemo-parakeet-tdt-0.6b-v3"
     Config(engine="onnx", model="custom/model", model_revision="pinned").save()
     window = gui.Window()
     window.timer.stop()
     assert window.fields["model"].currentText() == "custom/model"
-    assert window.fields["model"].findData("built-in") >= 0
-    catalog.assert_called_once_with("onnx")
+    assert window.fields["model"].findData(built_in) >= 0
 
     engine = window.fields["engine"]
     engine.setCurrentIndex(engine.findData("whisper"))
     assert window.fields["model"].currentText() == "custom/model"
-    assert window.fields["model"].findData("built-in") == -1
+    assert window.fields["model"].findData(built_in) == -1
     assert window.fields["model"].findData("tiny") >= 0
     engine.setCurrentIndex(engine.findData("onnx"))
     assert window.fields["model"].currentText() == "custom/model"
@@ -268,9 +265,9 @@ def test_settings_keeps_running_download_open_and_groups_controls_under_speech(
     window.timer.stop()
     page = window.model_downloads
     window.settings_category.setCurrentText("Appearance")
-    assert not window.settings_form.isRowVisible(page)
+    assert not window.settings_options.layout.isRowVisible(page)
     window.settings_category.setCurrentText("Speech")
-    assert window.settings_form.isRowVisible(page)
+    assert window.settings_options.layout.isRowVisible(page)
     window.download_model()
     try:
         assert window.busy

@@ -122,10 +122,10 @@ def test_config_rejects_unknown_destination_guard_and_credential_source():
 def test_settings_keyring_storage_is_explicit_and_enables_only_editor_source(monkeypatch):
     from PySide6.QtWidgets import QApplication, QInputDialog
 
-    from mouthkeys import gui
+    from mouthkeys import gui, settings_choices
 
     monkeypatch.setattr(gui.Window, "send", lambda *a, **kw: None)
-    monkeypatch.setattr(gui, "audio_sources", lambda: ["default"])
+    monkeypatch.setattr(settings_choices, "audio_sources", lambda: ["default"])
     calls = []
     monkeypatch.setattr(credentials, "store_key", lambda config, key: calls.append((config, key)))
     monkeypatch.setattr(QInputDialog, "getText", lambda *a, **kw: ("typed-secret", True))

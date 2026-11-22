@@ -159,9 +159,11 @@ def test_settings_show_app_and_running_service_versions(monkeypatch):
     assert guard.currentData() == "field_then_window"
     assert guard.currentText() == "Field first, window fallback"
     combo.setCurrentIndex(combo.findData("x11"))
-    assert "X11 auto-paste needs an X11 login session" in window.delivery_hint.text()
+    assert (
+        "X11 auto-paste needs an X11 login session" in window.settings_options.delivery_hint.text()
+    )
     combo.setCurrentIndex(combo.findData("clipboard"))
-    assert "Dictation copies text" in window.delivery_hint.text()
+    assert "Dictation copies text" in window.settings_options.delivery_hint.text()
     status["version"] = "0.0.1"
     window.poll()
     assert window.service_version.text() == "0.0.1 — restart MouthKeys after updating"
@@ -251,8 +253,16 @@ def test_dropdowns_preserve_existing_custom_settings(monkeypatch):
     app.processEvents()
 
 
-@pytest.mark.parametrize("model", ["large", "turbo", "large-v3", "large-v3-turbo"])
-def test_model_dropdown_uses_specific_names_for_saved_aliases(monkeypatch, model):
+@pytest.mark.parametrize(
+    ("model", "expected"),
+    [
+        ("large", "large-v3"),
+        ("turbo", "large-v3-turbo"),
+        ("large-v3", "large-v3"),
+        ("large-v3-turbo", "large-v3-turbo"),
+    ],
+)
+def test_model_dropdown_uses_specific_names_for_saved_aliases(monkeypatch, model, expected):
 
     from mouthkeys import gui
     from mouthkeys.config import Config
@@ -269,7 +279,7 @@ def test_model_dropdown_uses_specific_names_for_saved_aliases(monkeypatch, model
     assert names.count("large-v3") == names.count("large-v3-turbo") == 1
     assert names[0] == "large-v3"
     assert names.index("large-v3-turbo") < names.index("medium") < names.index("tiny")
-    assert field.currentText() == gui.MODEL_ALIASES.get(model, model)
+    assert field.currentText() == expected
     assert Config.load().model == model  # Opening settings does not rewrite configuration.
     assert window.save()
     assert Config.load().model == field.currentText()
@@ -302,7 +312,7 @@ def test_model_dropdown_preserves_local_directory_named_like_alias(monkeypatch, 
 def test_microphone_choices_use_discovery_without_capture(monkeypatch):
     import subprocess
 
-    from mouthkeys import desktop_input, gui
+    from mouthkeys import desktop_input, settings_choices
 
     monkeypatch.setattr(desktop_input, "session", lambda: "x11")
 
@@ -312,13 +322,13 @@ def test_microphone_choices_use_discovery_without_capture(monkeypatch):
         return subprocess.CompletedProcess(args, 0, "12\tmy_microphone\tdriver\tRUNNING\n")
 
     monkeypatch.setattr(subprocess, "run", run)
-    assert gui.audio_sources() == ["default", "my_microphone"]
+    assert settings_choices.audio_sources() == ["default", "my_microphone"]
 
 
 def test_missing_pactl_keeps_manual_microphone_selection(monkeypatch):
     import subprocess
 
-    from mouthkeys import desktop_input, gui
+    from mouthkeys import desktop_input, settings_choices
 
     monkeypatch.setattr(desktop_input, "session", lambda: "x11")
 
@@ -326,7 +336,7 @@ def test_missing_pactl_keeps_manual_microphone_selection(monkeypatch):
         raise FileNotFoundError("pactl")
 
     monkeypatch.setattr(subprocess, "run", run)
-    assert gui.audio_sources() == ["default"]
+    assert settings_choices.audio_sources() == ["default"]
 
 
 def test_every_config_is_editable_in_settings_and_new_options_roundtrip(monkeypatch):

@@ -35,29 +35,14 @@
 1	src/mouthkeys/file_history.py	operator	Unsupported operand types for > ("int" and "None")
 1	src/mouthkeys/file_transcription.py	no-untyped-def	Function is missing a type annotation
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "AssistantPage" in typed context
-1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "MicrophonePage" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "ModelBrowser" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "SetupPage" in typed context
 2	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "preview_sound" in typed context
 2	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "save" in typed context
-2	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "update_status" in typed context
+1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "update_status" in typed context
 4	src/mouthkeys/gui.py	no-untyped-def	Function is missing a return type annotation
 2	src/mouthkeys/gui.py	no-untyped-def	Function is missing a type annotation
 1	src/mouthkeys/local_api.py	no-untyped-call	Call to untyped function "transcribe_file" in typed context
-3	src/mouthkeys/microphone_ui.py	arg-type	Argument 1 to "append" of "list" has incompatible type "QPushButton"; expected "QComboBox"
-1	src/mouthkeys/microphone_ui.py	arg-type	Argument 2 to "replace" of "Config" has incompatible type "**dict[str, str]"; expected "int"
-1	src/mouthkeys/microphone_ui.py	method-assign	Cannot assign to a method
-2	src/mouthkeys/microphone_ui.py	no-untyped-call	Call to untyped function "add_item" in typed context
-1	src/mouthkeys/microphone_ui.py	no-untyped-call	Call to untyped function "add_source" in typed context
-5	src/mouthkeys/microphone_ui.py	no-untyped-call	Call to untyped function "combo_value" of "MicrophonePage" in typed context
-1	src/mouthkeys/microphone_ui.py	no-untyped-call	Call to untyped function "discover" in typed context
-1	src/mouthkeys/microphone_ui.py	no-untyped-call	Call to untyped function "move_selected" in typed context
-1	src/mouthkeys/microphone_ui.py	no-untyped-call	Call to untyped function "refresh" in typed context
-2	src/mouthkeys/microphone_ui.py	no-untyped-call	Call to untyped function "reorder" in typed context
-1	src/mouthkeys/microphone_ui.py	no-untyped-call	Call to untyped function "select_group" in typed context
-1	src/mouthkeys/microphone_ui.py	no-untyped-call	Call to untyped function "sync_field" in typed context
-3	src/mouthkeys/microphone_ui.py	no-untyped-def	Function is missing a return type annotation
-10	src/mouthkeys/microphone_ui.py	no-untyped-def	Function is missing a type annotation
 1	src/mouthkeys/models_ui.py	assignment	Incompatible types in assignment (expression has type "list[Any]", variable has type "dict[str, Any]")
 1	src/mouthkeys/models_ui.py	attr-defined	"Callable[[], QWidget]" has no attribute "delete_model"
 1	src/mouthkeys/models_ui.py	attr-defined	"Callable[[], QWidget]" has no attribute "download_model"

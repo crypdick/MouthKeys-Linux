@@ -23,9 +23,8 @@ available outside disposable feature worktrees. To run a single gate:
   corresponding code: identical messages in one file share a count. If a complexity diagnostic's
   message changes as the score falls, replace its baseline entry with the lower measurement
   explicitly.
-- **Size:** New Python files are limited to 400 code-containing lines. Existing oversized files
-  may shrink, not grow. In `service`, extract complete workflows without changing locking,
-  cancellation, or delivery order.
+- **Size:** Python files are limited to 400 code-containing lines. Extract complete workflows
+  without changing locking, cancellation, or delivery order.
 - **Coverage:** The combined headless line and branch coverage floor is 98.6%, with 100% as the target.
   The gate includes Python subprocesses started by the tests. Raise the floor when measured coverage
   improves. Desktop and optional pretrained-model checks remain separate; see

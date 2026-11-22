@@ -278,11 +278,6 @@
 3	src/mouthkeys/provider_tools.py	TRY004	Prefer `TypeError` exception for invalid type
 1	src/mouthkeys/routing.py	PLC0415	`import` should be at the top-level of a file
 1	src/mouthkeys/routing.py	PLR0913	Too many arguments in function definition (6 > 5)
-1	src/mouthkeys/service.py	ANN001	Missing type annotation for function argument `delivery`
-1	src/mouthkeys/service.py	ANN001	Missing type annotation for function argument `history`
-1	src/mouthkeys/service.py	ANN001	Missing type annotation for function argument `recorder`
-1	src/mouthkeys/service.py	ANN001	Missing type annotation for function argument `transcriber`
-1	src/mouthkeys/service.py	ANN204	Missing return type annotation for special method `__init__`
 1	src/mouthkeys/setup_languages.py	ANN001	Missing type annotation for function argument `engine`
 1	src/mouthkeys/setup_languages.py	ANN001	Missing type annotation for function argument `label`
 1	src/mouthkeys/setup_languages.py	ANN001	Missing type annotation for function argument `language_code`

@@ -14,7 +14,7 @@ def test_standard_capture_factory_receives_job_cancel_event_and_readiness_budget
             self.cancel_event = cancel_event
             self.timeout = timeout
 
-    monkeypatch.setattr("mouthkeys.service.CaptureSession", Standard)
+    monkeypatch.setattr("mouthkeys.recording_capture.CaptureSession", Standard)
     app = make_controller(Standard)
     assert app.command("start")["phase"] == "recording"
     assert app.recorder.cancel_event is app.job.cancel_event
@@ -159,8 +159,8 @@ def test_stop_during_readiness_cancels_even_when_capture_then_fails(monkeypatch)
 
     app = make_controller(failed_capture)
     pauses, resumes, result = [], [], []
-    monkeypatch.setattr(app.media, "pause", pauses.append)
-    monkeypatch.setattr(app.media, "resume", lambda: resumes.append(True))
+    monkeypatch.setattr(app.capture.media, "pause", pauses.append)
+    monkeypatch.setattr(app.capture.media, "resume", lambda: resumes.append(True))
     worker = threading.Thread(target=lambda: result.append(app.command("start")))
     worker.start()
     try:

@@ -42,10 +42,10 @@ class StopDestination:
     def metadata(self, delivery: object) -> dict[str, object] | None:
         if not self.collect_metadata:
             return None
-        lookup = getattr(delivery, "target_metadata", None)
-        if not callable(lookup):
-            return None
         try:
+            lookup = getattr(delivery, "target_metadata", None)
+            if not callable(lookup):
+                return None
             values = lookup(self.metadata_target)
         # Destination metadata is optional; an unavailable desktop must not block transcription.
         except Exception:  # allow: exception-handling  # noqa: BLE001

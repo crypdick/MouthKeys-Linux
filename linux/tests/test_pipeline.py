@@ -138,7 +138,7 @@ def test_auto_stop_at_capture_limit(controller):
 def test_capture_wall_clock_limit_stops_even_a_stalled_source(controller):
     controller.command("start")
     recorder = controller.recorder
-    controller.started -= controller.config.max_seconds + 1
+    controller.capture.started -= controller.config.max_seconds + 1
     controller.tick()
     finish(controller)
     assert recorder.stopped
@@ -148,7 +148,7 @@ def test_capture_start_failure_does_not_leave_busy(controller):
     def fail(*_):
         raise RuntimeError("Source unplugged")
 
-    controller.recorder_factory = fail
+    controller.capture.factory = fail
     with pytest.raises(RuntimeError, match="Source unplugged"):
         controller.command("start")
     assert controller.phase == "idle"
@@ -307,7 +307,7 @@ def test_automatic_stop_never_snapshots_a_paste_destination(controller, wall_clo
 
     controller.delivery.focus = unexpected
     if wall_clock:
-        controller.started -= controller.config.max_seconds + 1
+        controller.capture.started -= controller.config.max_seconds + 1
     else:
         controller.recorder.ended = True
     controller.tick()

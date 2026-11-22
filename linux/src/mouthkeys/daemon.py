@@ -31,6 +31,7 @@ class Handler(socketserver.StreamRequestHandler):
     def handle(self) -> None:
         self.connection.settimeout(5)
         action = None
+        shutdown = False
         try:
             line = self.rfile.readline(MAX_MESSAGE + 1)
             if len(line) > MAX_MESSAGE or not line.endswith(b"\n"):
@@ -45,7 +46,7 @@ class Handler(socketserver.StreamRequestHandler):
             if action == "shutdown":
                 controller.interrupt()
                 result = controller.status()
-                self.server.schedule_shutdown()
+                shutdown = True
             else:
                 result = controller.command(action, **data)
             response = {"ok": True, "result": result}
@@ -54,8 +55,13 @@ class Handler(socketserver.StreamRequestHandler):
             if action in ("start", "stop", "toggle", "warmup"):
                 self.server.controller.report_error(str(exc))
             response = {"ok": False, "error": str(exc)}
-        with suppress(BrokenPipeError, ConnectionResetError):
-            self.wfile.write(json.dumps(response).encode() + b"\n")
+        try:
+            with suppress(BrokenPipeError, ConnectionResetError):
+                self.wfile.write(json.dumps(response).encode() + b"\n")
+        finally:
+            # The process can exit as soon as serve_forever stops; acknowledge first.
+            if shutdown:
+                self.server.schedule_shutdown()
 
 
 class Server(socketserver.ThreadingUnixStreamServer):

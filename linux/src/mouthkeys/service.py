@@ -7,11 +7,10 @@ from dataclasses import dataclass, field, replace
 from typing import Any, cast
 
 from . import __version__
-from .audio import CaptureSession, CaptureTeardownError, check_audio, is_short_silence
+from .audio import CaptureSession, CaptureTeardownError
 from .config import Config, runtime_dir
 from .delivery import Delivery, Target
 from .desktop import MediaSession, choose_source, play_sound
-from .formatting import enabled
 from .microphone import MicrophoneSelection, Recording, SwitchOutcome, selection
 from .pronunciation import PronunciationStore
 from .recording_assistant import RecordingAssistant
@@ -24,9 +23,10 @@ from .recording_edit import (
     edit_message,
     reviewed_return_target,
 )
-from .recording_job import DictationJob
+from .recording_inference import Recognition, recognize_audio, reset_cancelled_stream
+from .recording_job import DictationJob, wait_for_predecessors
 from .recording_learning import RecordingLearning
-from .recording_preview import PreviewWork, RecordingPreview, reset_owned_stream
+from .recording_preview import PreviewWork, RecordingPreview
 from .recording_setup import prepare_recording, routed_config
 from .recording_transcript import format_dictation
 from .storage import History
@@ -492,13 +492,6 @@ class Controller:
             if self.job is job and not self.interrupted:
                 self.phase, self.message = phase, message
 
-    def _wait_for_predecessors(self, job):
-        for previous in job.predecessors:
-            while not previous.wait(0.1):
-                if self.interrupted:
-                    return False
-        return not self.interrupted
-
     def interrupt(self):
         """Stop on logout without interpreting it as the user's discard command."""
         with self.lock:
@@ -651,16 +644,55 @@ class Controller:
     def _automatic_command_started(self, job: DictationJob) -> None:
         self._job_status(job, "transcribing", "Running configured automatic command")
 
+    def _discard_recording(self, job: DictationJob, message: str = "Cancelled") -> None:
+        self._update(job, "cancelled")
+        self._job_status(job, "idle", message)
+
+    def _may_finalize(self, job: DictationJob) -> bool:
+        """Call under the state lock so an interrupted row cannot be overwritten."""
+        if self.interrupted:
+            return False
+        if job.cancelled:
+            self._discard_recording(job)
+            return False
+        return True
+
+    def _commit_recognition(self, job: DictationJob, result: Recognition) -> bool:
+        with self.lock:
+            if not self._may_finalize(job):
+                return False
+            if result.skipped_silence:
+                self._discard_recording(job, "Silent recording skipped")
+                return False
+            config = job.config
+            if not result.text:
+                if self.job is job:
+                    self.preview_text = ""
+                self._update(job, "failed", error="No speech detected")
+                retained = (
+                    "audio discarded"
+                    if config.save_history == "on"
+                    else "history disabled; audio discarded"
+                )
+                self._job_status(job, "idle", f"No speech detected; {retained}")
+                return False
+            # Raw text survives a crash or timeout during optional cleanup.
+            self._update(
+                job,
+                "transcribing",
+                result.text,
+                raw_text=result.text,
+                duration=job.duration,
+                model=config.model,
+                language=config.language,
+            )
+            return True
+
     def _publish_proposal(
         self, job: DictationJob, config: Config, proposal: dict[str, Any], ai_warning: str
     ) -> None:
         with self.lock:
-            if self.interrupted:
-                return
-            if job.cancelled:
-                self._update(job, "cancelled")
-                job.audio_path.unlink(missing_ok=True)
-                self._job_status(job, "idle", "Cancelled")
+            if not self._may_finalize(job):
                 return
             text = proposal["text"]
             assistant_requested = job.mode in ("command", "edit")
@@ -695,61 +727,25 @@ class Controller:
         self, job: DictationJob, target: Target, *, auto_paste_expected: bool = False
     ) -> None:
         text = ""
-        alignment = None
         assistant_error: str | None = None
         config = job.config
         path = job.audio_path
         try:
-            if job.cancelled:
-                self._update(job, "cancelled")
-                path.unlink(missing_ok=True)
-                self._job_status(job, "idle", "Cancelled")
-                return
-            if not self._wait_for_predecessors(job):
+            with self.lock:
+                if not self._may_finalize(job):
+                    return
+            if not wait_for_predecessors(job, lambda: self.interrupted):
                 return
             with self.lock:
-                if not job.cancelled:
-                    self._job_status(job, "transcribing", "Transcribing")
-            check_audio(path)
-            if enabled(config, "skip_silent_recordings") and is_short_silence(path):
-                self._update(job, "cancelled")
-                path.unlink(missing_ok=True)
-                self._job_status(job, "idle", "Silent recording skipped")
+                if not self._may_finalize(job):
+                    return
+                self._job_status(job, "transcribing", "Transcribing")
+            recognition = recognize_audio(
+                job, self.transcriber, self.model_lock, lambda: job.cancelled or self.interrupted
+            )
+            text = recognition.text
+            if not self._commit_recognition(job, recognition):
                 return
-            with self.model_lock:
-                if not job.cancelled and not self.interrupted:
-                    text = self.transcriber.transcribe(path, config)
-                    if config.pronunciation_matching == "on":
-                        alignment = copy.deepcopy(getattr(self.transcriber, "last_alignment", None))
-            with self.lock:
-                if self.interrupted:
-                    return
-                if job.cancelled:
-                    self._update(job, "cancelled")
-                    path.unlink(missing_ok=True)
-                    self._job_status(job, "idle", "Cancelled")
-                    return
-                if not text:
-                    if self.job is job:
-                        self.preview_text = ""
-                    self._update(job, "failed", error="No speech detected")
-                    retained = (
-                        "audio discarded"
-                        if config.save_history == "on"
-                        else "history disabled; audio discarded"
-                    )
-                    self._job_status(job, "idle", f"No speech detected; {retained}")
-                    return
-                # Raw text survives a crash or timeout during optional cleanup.
-                self._update(
-                    job,
-                    "transcribing",
-                    text,
-                    raw_text=text,
-                    duration=job.duration,
-                    model=config.model,
-                    language=config.language,
-                )
             config, ai_warning = routed_config(job)
             if ai_warning:
                 with self.lock:
@@ -775,7 +771,7 @@ class Controller:
                 self._publish_proposal(job, config, proposal, ai_warning)
                 return
             formatted = format_dictation(
-                job, config, text, alignment, has_target=target is not None
+                job, config, text, recognition.alignment, has_target=target is not None
             )
             text = formatted.text
             cleanup = cleanup_transcript(
@@ -784,12 +780,7 @@ class Controller:
             text = cleanup.text
             ai_warning = cleanup.warning or ai_warning
             with self.lock:
-                if self.interrupted:
-                    return
-                if job.cancelled:
-                    self._update(job, "cancelled")
-                    path.unlink(missing_ok=True)
-                    self._job_status(job, "idle", "Cancelled")
+                if not self._may_finalize(job):
                     return
                 if self.job is job:
                     if cleanup.warning:
@@ -828,36 +819,28 @@ class Controller:
         # The job or IPC response reports the failure; avoid duplicating private data in logs.
         except Exception as exc:  # allow: exception-handling  # noqa: BLE001
             with self.lock:
-                if self.interrupted:
+                if not self._may_finalize(job):
                     return
-                if job.cancelled:
-                    self._update(job, "cancelled")
-                    path.unlink(missing_ok=True)
-                    self._job_status(job, "idle", "Cancelled")
-                else:
-                    if self.job is job:
-                        self.preview_text = text
-                        if assistant_error is not None:
-                            self.report_error(f"AI {job.mode} request failed: {exc}", kind="ai")
-                    self._update(
-                        job,
-                        "failed",
-                        text,
-                        str(exc),
-                        **({"ai_processing_error": assistant_error} if assistant_error else {}),
-                    )
-                    retained = (
-                        "Saved in history; audio discarded."
-                        if config.save_history == "on"
-                        else "History disabled; audio discarded."
-                    )
-                    self._job_status(job, "idle", f"{exc}. {retained}")
+                if self.job is job:
+                    self.preview_text = text
+                    if assistant_error is not None:
+                        self.report_error(f"AI {job.mode} request failed: {exc}", kind="ai")
+                self._update(
+                    job,
+                    "failed",
+                    text,
+                    str(exc),
+                    **({"ai_processing_error": assistant_error} if assistant_error else {}),
+                )
+                retained = (
+                    "Saved in history; audio discarded."
+                    if config.save_history == "on"
+                    else "History disabled; audio discarded."
+                )
+                self._job_status(job, "idle", f"{exc}. {retained}")
         finally:
             try:
-                key = getattr(self.transcriber, "stream_key", None)
-                if job.cancelled and key and key[0] == job.audio_path:
-                    with self.model_lock:
-                        reset_owned_stream(self.transcriber, job.audio_path)
+                reset_cancelled_stream(job, self.transcriber, self.model_lock)
             finally:
                 with self.lock:
                     job.audio_path.unlink(missing_ok=True)

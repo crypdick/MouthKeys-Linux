@@ -1,7 +1,7 @@
 """Recording identity, per-job state, and IPC input validation."""
 
 import threading
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -40,6 +40,14 @@ class DictationJob:
     assistant_session_id: str | None = None
     assistant_memory_session: dict[str, Any] | None = None
     edit_consumed: bool = False
+
+
+def wait_for_predecessors(job: DictationJob, interrupted: Callable[[], bool]) -> bool:
+    for previous in job.predecessors:
+        while not previous.wait(0.1):
+            if interrupted():
+                return False
+    return not interrupted()
 
 
 def recording_input(data: Mapping[str, object]) -> tuple[str, str, str]:

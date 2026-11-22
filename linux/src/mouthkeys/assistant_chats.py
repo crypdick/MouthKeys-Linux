@@ -15,7 +15,12 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from .assistant_history import AssistantHistory, append_private_messages, validate_messages
+from .assistant_history import (
+    AssistantHistory,
+    append_private_messages,
+    record_private_execution,
+    validate_messages,
+)
 from .config import Config
 
 ChatSession = dict[str, Any]
@@ -170,6 +175,24 @@ class AssistantChats:
         else:
             self.remember_private(append_private_messages(session, messages))
         self._render()
+
+    def record_execution(
+        self, session: ChatSession | None, receipt: dict[str, Any], *, persistent: bool
+    ) -> str | None:
+        if session is None:
+            return None
+        try:
+            if persistent and Config.load().save_history == "on":
+                store = AssistantHistory()
+                store.record_execution(session["id"], receipt)
+                self.session = store.get(session["id"])
+            else:
+                record_private_execution(session, receipt)
+                self.remember_private(session)
+        # Keep the output available without putting private command results in logs.
+        except Exception as exc:  # allow: exception-handling  # noqa: BLE001
+            return f"Command finished; result could not be saved: {exc}"
+        return None
 
     def adopt_voice(self, proposal: dict[str, Any]) -> str | None:
         if not (proposal.get("session_id") or "private_messages" in proposal):

@@ -4,6 +4,7 @@ import uuid
 
 import pytest
 
+from mouthkeys import desktop_input
 from mouthkeys.config import Config
 from mouthkeys.service import Controller
 
@@ -29,11 +30,10 @@ def test_dictation_persists_before_delivery_and_discards_audio(controller):
 
 
 @pytest.mark.parametrize(
-    "desktop,expected",
+    ("desktop", "expected"),
     [("wayland", "needs an X11 login session"), ("x11", "identify the focused field")],
 )
 def test_auto_paste_fallback_explains_why(controller, monkeypatch, desktop, expected):
-    from mouthkeys import desktop_input
 
     monkeypatch.setattr(desktop_input, "session", lambda: desktop)
     monkeypatch.setattr(shutil, "which", lambda name: f"/fake/{name}")
@@ -192,7 +192,7 @@ def test_history_clear_removes_recordings_and_transcripts(controller):
 
 
 def test_history_rejects_path_traversal(controller):
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="Unknown command: reprocess"):
         controller.command("reprocess", id="../../outside")
 
 

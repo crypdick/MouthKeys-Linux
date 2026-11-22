@@ -1,13 +1,17 @@
 import io
 import subprocess
-from dataclasses import replace
+import time
+from dataclasses import asdict, replace
 from types import SimpleNamespace
 
 import pytest
+from PySide6.QtWidgets import QApplication, QInputDialog, QPushButton
 
-from mouthkeys import credentials
+from mouthkeys import credentials, gui, settings_choices
 from mouthkeys.ai_providers import request_headers
+from mouthkeys.cli import main
 from mouthkeys.config import Config, config_path
+from mouthkeys.profiles import PROFILE_FIELDS, validate_profiles
 
 
 def test_environment_remains_default_and_keyring_never_probed(monkeypatch):
@@ -88,7 +92,6 @@ def test_store_key_rejects_an_empty_secret_before_opening_keyring(monkeypatch):
 
 
 def test_cli_credential_stdin_never_echoes_or_saves_secret(monkeypatch, capsys):
-    from mouthkeys.cli import main
 
     calls = []
     monkeypatch.setattr("sys.stdin", io.StringIO("stdin-secret\n"))
@@ -100,9 +103,6 @@ def test_cli_credential_stdin_never_echoes_or_saves_secret(monkeypatch, capsys):
 
 
 def test_legacy_profiles_gain_environment_default():
-    from dataclasses import asdict
-
-    from mouthkeys.profiles import PROFILE_FIELDS, validate_profiles
 
     values = asdict(Config(ai_model="example"))
     profile = {key: values[key] for key in PROFILE_FIELDS if key != "ai_credential_source"}
@@ -115,14 +115,11 @@ def test_legacy_profiles_gain_environment_default():
 
 def test_config_rejects_unknown_destination_guard_and_credential_source():
     for key in ("destination_guard", "ai_credential_source"):
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match=f"{key} must be"):
             replace(Config(), **{key: "anything"}).validate()
 
 
 def test_settings_keyring_storage_is_explicit_and_enables_only_editor_source(monkeypatch):
-    from PySide6.QtWidgets import QApplication, QInputDialog, QPushButton
-
-    from mouthkeys import gui, settings_choices
 
     monkeypatch.setattr(gui.Window, "send", lambda *a, **kw: None)
     monkeypatch.setattr(settings_choices, "audio_sources", lambda: ["default"])
@@ -139,7 +136,6 @@ def test_settings_keyring_storage_is_explicit_and_enables_only_editor_source(mon
         )
         button.click()
         # Only the fake storage runs; window is never shown and no keyring exists.
-        import time
 
         deadline = time.monotonic() + 2
         while window.jobs and time.monotonic() < deadline:

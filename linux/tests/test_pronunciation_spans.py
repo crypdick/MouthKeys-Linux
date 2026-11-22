@@ -145,7 +145,7 @@ def test_wrong_recording_source_and_misaligned_text_fail_closed(tmp_path):
 
 
 @pytest.mark.parametrize(
-    "start,end", [(float("nan"), 1), (0, float("inf")), (-1, 1), (1, 0), (True, 1), (0, 100)]
+    ("start", "end"), [(float("nan"), 1), (0, float("inf")), (-1, 1), (1, 0), (True, 1), (0, 100)]
 )
 def test_invalid_actual_timing_is_never_guessed_or_clamped(start, end):
     samples, alignment = surrounding(trained())
@@ -162,7 +162,7 @@ def test_anchoring_requires_full_text_and_keeps_exact_character_offsets():
     ]
     aligned = align_words("Hello,  world!", words, duration=2)
     assert [(word["char_start"], word["char_end"]) for word in aligned] == [(0, 6), (8, 14)]
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="Word alignment does not cover transcript"):
         align_words("Hello, world! Missing", words)
 
 

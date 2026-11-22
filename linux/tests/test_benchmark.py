@@ -10,9 +10,11 @@ from subprocess import Popen
 from types import SimpleNamespace
 
 import pytest
+from PySide6.QtWidgets import QComboBox, QLineEdit, QMessageBox, QWidget
 
 from mouthkeys import benchmark, benchmark_reports, engines
 from mouthkeys.config import Config, state_dir
+from mouthkeys.models_ui import ModelBrowser
 
 
 def wav(path, samples=16000):
@@ -461,9 +463,6 @@ def test_gpu_measurement_does_not_match_a_different_driver(monkeypatch, driver):
 
 
 def test_model_browser_missing_weights_does_not_launch_benchmark(monkeypatch):
-    from PySide6.QtWidgets import QComboBox, QLineEdit, QMessageBox, QWidget
-
-    from mouthkeys.models_ui import ModelBrowser
 
     window = QWidget()
     engine = QComboBox()

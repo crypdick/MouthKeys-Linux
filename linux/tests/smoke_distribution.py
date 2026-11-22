@@ -73,8 +73,8 @@ def cli(*args):
 def close_gui(application):
     if application is None:
         return
-    import shiboken6
-    from PySide6.QtCore import QCoreApplication, QEvent, QTimer
+    import shiboken6  # noqa: PLC0415 - load Qt inside the isolated smoke run
+    from PySide6.QtCore import QCoreApplication, QEvent, QTimer  # noqa: PLC0415 - load Qt inside the isolated smoke run
 
     for widget in application.topLevelWidgets():
         for timer in widget.findChildren(QTimer):
@@ -113,7 +113,8 @@ try:
     deadline = time.monotonic() + 5
     while not socket.exists() and daemon.poll() is None and time.monotonic() < deadline:
         time.sleep(0.02)
-    assert socket.exists() and daemon.poll() is None, "Isolated daemon failed to start"
+    assert socket.exists(), "Isolated daemon did not create its socket"
+    assert daemon.poll() is None, "Isolated daemon exited before validation"
     started = True
     # Direct requests cannot auto-spawn an unowned replacement daemon on failure.
     status = request("status")

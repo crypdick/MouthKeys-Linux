@@ -1,5 +1,7 @@
 import os
+import subprocess
 import time
+from pathlib import Path
 
 import pytest
 
@@ -10,7 +12,7 @@ def qt_application_owner():
     applications = []
     yield applications
     if applications:
-        import shiboken6
+        import shiboken6  # noqa: PLC0415 - Qt is optional in headless tooling
 
         application = applications[0]
         application.processEvents()
@@ -20,9 +22,9 @@ def qt_application_owner():
 @pytest.fixture(autouse=True)
 def qt_object_lifetime(isolated_environment, qt_application_owner):
     try:
-        import shiboken6
-        from PySide6.QtCore import QCoreApplication, QEvent, QProcess, QThread, QTimer
-        from PySide6.QtWidgets import QApplication
+        import shiboken6  # noqa: PLC0415 - load Qt after XDG isolation
+        from PySide6.QtCore import QCoreApplication, QEvent, QProcess, QThread, QTimer  # noqa: PLC0415
+        from PySide6.QtWidgets import QApplication  # noqa: PLC0415
     except ImportError:
         yield
         return
@@ -82,8 +84,6 @@ def isolated_environment(tmp_path, tmp_path_factory, monkeypatch):
     # Desktop GTK themes may initialize a display even with Qt offscreen.
     monkeypatch.setenv("QT_QPA_PLATFORMTHEME", "")
     # Never let tests accidentally use a real microphone/clipboard or synthesize keys.
-    import subprocess
-
     original_run, original_popen = subprocess.run, subprocess.Popen
     forbidden = {
         "ffmpeg",
@@ -105,7 +105,8 @@ def isolated_environment(tmp_path, tmp_path_factory, monkeypatch):
     def guarded(function):
         def call(args, *a, **kw):
             executable = args[0] if isinstance(args, list | tuple) else args.split()[0]
-            assert os.path.basename(executable) not in forbidden, "Live desktop operation in test"
+            name = Path(os.fsdecode(executable)).name
+            assert name not in forbidden, "Live desktop operation in test"
             return function(args, *a, **kw)
 
         return call

@@ -55,7 +55,7 @@ def test_formatting_is_opt_in_and_handles_literals_and_qq():
 
 
 @pytest.mark.parametrize(
-    "text,expected,send",
+    ("text", "expected", "send"),
     [
         ("Fix the typo send it.", "Fix the typo", True),
         ("Fix the typo and send it", "Fix the typo", True),
@@ -95,7 +95,7 @@ def test_spoken_send_handles_punctuation_only_phrases_and_bounded_lookbehind():
 
 
 @pytest.mark.parametrize(
-    "text,expected",
+    ("text", "expected"),
     [
         ("Is that right Q", "Is that right?"),
         ("Is that right Q.", "Is that right?"),
@@ -197,14 +197,16 @@ def test_ai_cleanup_explicit_payload_env_secret_and_bounded_timeout(monkeypatch)
     ],
 )
 def test_ai_rejects_unsafe_endpoints_before_network(endpoint):
-    with pytest.raises(ValueError, match="HTTP|HTTPS"):
+    with pytest.raises(ValueError, match=r"HTTP|HTTPS"):
         process("raw", Config(ai_enabled="on", ai_model="model", ai_endpoint=endpoint))
 
 
 def test_ai_rejects_invalid_empty_and_oversized_completions():
     config = Config(ai_enabled="on", ai_model="model")
     for body in (b"{}", b"not-json", b"x" * (1024 * 1024 + 1)):
-        with pytest.raises(ValueError):
+        with pytest.raises(
+            ValueError, match=r"AI cleanup response exceeds 1 MB|AI endpoint returned"
+        ):
             process("raw", config, opener=lambda *a, body=body, **kw: BytesIO(body))
 
 
@@ -220,17 +222,21 @@ def test_context_formatting_requires_actual_context_and_preserves_explicit_overr
 
 
 @pytest.mark.parametrize(
-    "text,expected",
+    ("text", "expected"),
     [
         (
-            "Hello literal comma world literal question mark literal open paren yes "
-            "literal close paren literal quote done literal quote",
+            (
+                "Hello literal comma world literal question mark literal open paren yes "
+                "literal close paren literal quote done literal quote"
+            ),
             'Hello, world? (yes) "done"',
         ),
         ("Hello comma world question mark", "Hello comma world question mark"),
         (
-            "email literal at the rate example literal dot com literal slash help "
-            "literal underscore me",
+            (
+                "email literal at the rate example literal dot com literal slash help "
+                "literal underscore me"
+            ),
             "email@example.com/help_me",
         ),
         ("email literal at sign example literal dot com", "email@example.com"),
@@ -344,7 +350,7 @@ def test_saved_dictionary_is_not_replaced_and_rule_edits_take_effect():
 
 
 @pytest.mark.parametrize(
-    "text,expected",
+    ("text", "expected"),
     [
         ("slash compact", "/compact"),
         ("Use slash Compact", "Use /compact"),
@@ -352,10 +358,14 @@ def test_saved_dictionary_is_not_replaced_and_rule_edits_take_effect():
         ("Run / STATUS please", "Run /status please"),
         ("Do forward slash model", "Do /model"),
         (
-            "Use 1/2 and and/or. Open src slash services. Go to https slash slash example dot com. "
-            "Slash and burn.",
-            "Use 1/2 and and/or. Open src slash services. Go to https slash slash example dot com. "
-            "Slash and burn.",
+            (
+                "Use 1/2 and and/or. Open src slash services. Go to https slash slash example dot com. "
+                "Slash and burn."
+            ),
+            (
+                "Use 1/2 and and/or. Open src slash services. Go to https slash slash example dot com. "
+                "Slash and burn."
+            ),
         ),
         ("I saw slash compact", "I saw slash compact"),
         ("at the rate Paul", "@Paul"),
@@ -389,7 +399,7 @@ def test_relaxed_mentions_need_real_chat_context(metadata):
 
 
 @pytest.mark.parametrize(
-    "text,context,metadata,expected",
+    ("text", "context", "metadata", "expected"),
     [
         ("slash model", "", {"app_name": "Codex"}, "/Model"),
         ("slash model", "", {"app_name": "Notes"}, "/Model "),

@@ -1,9 +1,11 @@
+import shutil
+import subprocess
 import threading
 import wave
 
 import pytest
 
-from mouthkeys.audio import CaptureSession
+from mouthkeys.audio import CaptureSession, Recorder
 from mouthkeys.config import Config
 
 from .pipeline_support import FakeRecorder, SwitchRecorder, finish, make_controller
@@ -271,10 +273,6 @@ def test_release_hold_during_start_is_not_relatching_after_readiness():
 
 
 def test_real_synthetic_ffmpeg_switch_keeps_both_sources(monkeypatch, tmp_path):
-    import shutil
-    import subprocess
-
-    from mouthkeys.audio import Recorder
 
     if shutil.which("ffmpeg") is None:
         pytest.skip("FFmpeg is not installed")

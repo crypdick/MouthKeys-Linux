@@ -11,7 +11,7 @@ from mouthkeys.config import Config
 
 
 @pytest.mark.parametrize(
-    "prompt,transcript,expected",
+    ("prompt", "transcript", "expected"),
     [
         ("Rewrite ${transcript} please", "Hello", "Rewrite Hello please"),
         ("${transcript}\n${transcript}", "$1\\words", "$1\\words\n$1\\words"),

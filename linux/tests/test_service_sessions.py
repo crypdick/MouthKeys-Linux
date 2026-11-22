@@ -66,7 +66,7 @@ def test_private_execution_handoff_is_observed_without_database(monkeypatch):
 def test_invalid_execution_context_is_rejected_before_recording():
     Config(save_history="off").save()
     app = controller()
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="Invalid command execution event position"):
         app.command(
             "start",
             mode="command",

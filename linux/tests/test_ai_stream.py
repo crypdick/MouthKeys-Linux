@@ -35,7 +35,7 @@ def sse(*events):
 
 
 @pytest.mark.parametrize(
-    "provider,wire",
+    ("provider", "wire"),
     [
         (
             "compatible",
@@ -82,8 +82,10 @@ def sse(*events):
         ),
         (
             "ollama",
-            b'{"message":{"thinking":"private thought","content":"Hello "},"done":false}\n'
-            b'{"message":{"content":"world"},"done":true}\n',
+            (
+                b'{"message":{"thinking":"private thought","content":"Hello "},"done":false}\n'
+                b'{"message":{"content":"world"},"done":true}\n'
+            ),
         ),
     ],
 )
@@ -114,7 +116,7 @@ def test_partial_stream_eof_never_returns_transcript():
 
 
 @pytest.mark.parametrize(
-    "provider,event",
+    ("provider", "event"),
     [
         ("compatible", {"choices": [{"delta": {"content": "cut"}, "finish_reason": "length"}]}),
         ("anthropic", {"type": "message_delta", "delta": {"stop_reason": "max_tokens"}}),
@@ -182,7 +184,7 @@ def test_cancel_interrupts_blocked_stream_and_closes_transport():
 
 def test_stream_errors_and_oversized_payloads_do_not_echo_provider_content():
     wire = sse({"type": "error", "error": {"message": "private secret"}})
-    with pytest.raises(ValueError) as error:
+    with pytest.raises(ValueError, match="AI stream reported an error") as error:
         request_completion("Raw", config(), opener=lambda *a, **kw: io.BytesIO(wire))
     assert str(error.value) == "AI stream reported an error"
     with pytest.raises(ValueError, match="exceeds 1 MB"):
@@ -192,7 +194,7 @@ def test_stream_errors_and_oversized_payloads_do_not_echo_provider_content():
 
 
 @pytest.mark.parametrize(
-    "provider,event,answer,stop",
+    ("provider", "event", "answer", "stop"),
     [
         (
             "compatible",

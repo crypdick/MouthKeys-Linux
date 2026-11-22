@@ -7,7 +7,7 @@ from datetime import date, datetime, timedelta
 
 import pytest
 
-from mouthkeys.config import CHOICES, RANGES, Config
+from mouthkeys.config import CHOICES, RANGES, Config, config_path, private_dir
 from mouthkeys.dictionary import Dictionary
 from mouthkeys.operations import backup_export, backup_import, statistics
 from mouthkeys.storage import History
@@ -64,7 +64,7 @@ def test_history_records_ai_outcome_and_backup_preserves_legacy_unknowns(tmp_pat
 
 
 @pytest.mark.parametrize(
-    "field,value",
+    ("field", "value"),
     [
         ("was_ai_processed", 2),
         ("was_ai_processed", 1.0),
@@ -81,7 +81,7 @@ def test_backup_rejects_invalid_ai_outcomes_before_mutation(tmp_path, field, val
     data["history"][0][field] = value
     data["history"][0]["text"] = "must not be stored"
     path.write_text(json.dumps(data))
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=r"Invalid history AI (error|outcome)"):
         backup_import(history, path)
     assert history.get(item)["text"] == "original"
 
@@ -100,7 +100,7 @@ def test_search_paging_deletion_and_audio_only_cleanup():
     history.forget(third)
     with pytest.raises(ValueError, match="not found"):
         history.get(third)
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="badly formed hexadecimal UUID string"):
         history.recording("../../outside")
 
 
@@ -128,7 +128,9 @@ def test_backup_roundtrip_merges_without_deleting_audio_and_excludes_secrets(tmp
     broken = json.loads(path.read_text())
     broken["dictionary"] = {"bad": []}
     path.write_text(json.dumps(broken))
-    with pytest.raises(ValueError):
+    with pytest.raises(
+        ValueError, match="Dictionary requires replacements, punctuation, and actions lists"
+    ):
         backup_import(history, path)
     assert len(history.all_rows()) == 2
 
@@ -147,20 +149,19 @@ def test_stats_streak_skips_weekends_only_if_configured():
 
 @pytest.mark.parametrize("key", RANGES)
 def test_numeric_config_ranges_apply_to_all_entrypoints(key):
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=f"{key} must be between"):
         replace(Config(), **{key: RANGES[key][1] + 1}).validate()
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=f"{key} must be between"):
         replace(Config(), **{key: True}).validate()
 
 
 @pytest.mark.parametrize("key", CHOICES)
 def test_enum_configuration_rejects_unknown_values(key):
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=f"{key} must be"):
         replace(Config(), **{key: "unknown-choice"}).validate()
 
 
 def test_legacy_config_loads_new_defaults(tmp_path):
-    from mouthkeys.config import config_path, private_dir
 
     private_dir(config_path().parent)
     config_path().write_text('{"model":"small.en","language":"es"}')
@@ -172,7 +173,7 @@ def test_legacy_config_loads_new_defaults(tmp_path):
 
 
 @pytest.mark.parametrize(
-    "field,value",
+    ("field", "value"),
     [
         ("created", float("nan")),
         ("created", float("inf")),
@@ -194,7 +195,9 @@ def test_invalid_backup_numbers_rejected_before_mutation(tmp_path, field, value)
     data["history"][0]["text"] = "must not replace the transcript"
     data["config"]["spoken_send"] = "on"
     path.write_text(json.dumps(data))
-    with pytest.raises(ValueError):
+    with pytest.raises(
+        ValueError, match=r"History timestamp is out of range|Invalid history (duration|fields)"
+    ):
         backup_import(history, path)
     assert Config.load().spoken_send == "off"
     assert history.get(item)["text"] == "hello world"

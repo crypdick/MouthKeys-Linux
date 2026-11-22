@@ -63,7 +63,10 @@ def test_competing_near_identical_phrases_are_not_auto_corrected():
 
 def test_wrong_silence_long_and_nonfinite_audio_rejected():
     for samples in (np.zeros(16000), np.ones(160001), np.full(16000, np.nan), np.ones(100)):
-        with pytest.raises(ValueError):
+        with pytest.raises(
+            ValueError,
+            match=r"Pronunciation phrase must contain|Pronunciation sample contains no audible speech",
+        ):
             PronunciationStore.enroll("phrase", samples)
     PronunciationStore.enroll("phrase", utterance())
     with pytest.raises(ValueError, match="differs"):
@@ -74,7 +77,7 @@ def test_corrupt_feature_shapes_are_rejected():
     PronunciationStore.enroll("phrase", utterance())
     profiles = PronunciationStore.load()
     profiles[0]["samples"][0]["features"] = [[float("nan")] * 12]
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="Invalid pronunciation feature dimensions or values"):
         PronunciationStore.save(profiles)
 
 

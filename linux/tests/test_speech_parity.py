@@ -5,10 +5,12 @@ from types import SimpleNamespace
 
 import pytest
 
+from mouthkeys import native_asr
 from mouthkeys.config import Config
 from mouthkeys.dictionary import Dictionary
 from mouthkeys.engines import model_catalog
-from mouthkeys.native_asr import NEMO_MODELS, uses_native_streaming
+from mouthkeys.models_ui import ModelBrowser
+from mouthkeys.native_asr import NEMO_MODELS, supports_native_streaming, uses_native_streaming
 from mouthkeys.nemo_asr import NemoBackend
 from mouthkeys.transcribe import Transcriber
 from mouthkeys.vocabulary import VocabularyStore, context_prompt
@@ -77,7 +79,7 @@ def test_native_tdt_catalog_has_real_graphs_word_times_and_offline_encoder(model
 
 
 @pytest.mark.parametrize(
-    "engine,model",
+    ("engine", "model"),
     [
         ("nemo", "nvidia/parakeet-tdt-0.6b-v3"),
         ("transformers", "nvidia/nemotron-speech-streaming-en-0.6b"),
@@ -118,7 +120,6 @@ def test_offline_native_preview_preserves_word_times_without_cache_streaming(
 
 
 def test_native_tdt_loader_ignores_stream_only_precision_and_latency(monkeypatch, tmp_path):
-    from mouthkeys import native_asr
 
     artifact = tmp_path / NEMO_MODELS["nvidia/parakeet-tdt-0.6b-v2"]["filename"]
     artifact.write_bytes(b"fake archive")
@@ -160,9 +161,7 @@ def test_native_tdt_loader_ignores_stream_only_precision_and_latency(monkeypatch
 
 def test_model_browser_exposes_real_capabilities_and_unknown_measurements(monkeypatch):
     pytest.importorskip("PySide6")
-    from PySide6.QtWidgets import QComboBox, QLineEdit, QWidget
-
-    from mouthkeys.models_ui import ModelBrowser
+    from PySide6.QtWidgets import QComboBox, QLineEdit, QWidget  # noqa: PLC0415 - optional Qt test
 
     window = QWidget()
     engine = QComboBox()
@@ -191,7 +190,6 @@ def test_model_browser_exposes_real_capabilities_and_unknown_measurements(monkey
 
 
 def test_custom_native_model_capability_checks_actual_encoder_context():
-    from mouthkeys.native_asr import supports_native_streaming
 
     def model(context):
         return SimpleNamespace(

@@ -1,9 +1,13 @@
+import struct
 import wave
 from dataclasses import replace
 from types import SimpleNamespace
 
+import faster_whisper
+import numpy as np
 import pytest
 
+from mouthkeys.audio import read_audio_from
 from mouthkeys.config import Config
 from mouthkeys.transcribe import Transcriber
 
@@ -22,7 +26,6 @@ def segment(start, end, text):
 
 @pytest.fixture
 def engine(monkeypatch):
-    import faster_whisper
 
     class Model:
         def __init__(self):
@@ -230,11 +233,6 @@ def test_standalone_stereo_file_keeps_decoder_format_support(engine, tmp_path):
 
 
 def test_unfinished_wav_reads_from_committed_frame(tmp_path):
-    import struct
-
-    import numpy as np
-
-    from mouthkeys.audio import read_audio_from
 
     path = tmp_path / "live.wav"
     audio(path, 3)

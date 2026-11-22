@@ -12,7 +12,7 @@ from .pipeline_support import FakeDelivery, FakeRecorder, FakeTranscriber, finis
 
 
 @pytest.mark.parametrize(
-    "command,policy,expected",
+    ("command", "policy", "expected"),
     [
         ("ls -la", "on", True),
         ("rm -rf example", "off", False),
@@ -58,7 +58,7 @@ def automatic(monkeypatch, *, policy="off", continuation="on", history="on", com
 
 
 @pytest.mark.parametrize(
-    "policy,command,runs",
+    ("policy", "command", "runs"),
     [("on", "ls", 0), ("destructive", "rm a", 0), ("destructive", "ls", 1), ("off", "rm a", 1)],
 )
 def test_voice_automatic_policy_and_single_step_receipt(monkeypatch, policy, command, runs):
@@ -95,7 +95,7 @@ def test_voice_automatic_continuation_frozen_provider_receipts_and_step_bound(mo
 
 @pytest.mark.parametrize("private", [False, True])
 def test_execution_receipt_survives_continuation_failure(monkeypatch, private):
-    app, proposals, executed = automatic(monkeypatch, history="off" if private else "on")
+    app, _proposals, executed = automatic(monkeypatch, history="off" if private else "on")
 
     def completion(text, config, **kwargs):
         if executed:
@@ -120,7 +120,7 @@ def test_execution_receipt_survives_continuation_failure(monkeypatch, private):
 
 
 def test_cancelled_automatic_execution_still_keeps_receipt(monkeypatch):
-    app, _, executed = automatic(monkeypatch)
+    app, _, _executed = automatic(monkeypatch)
 
     def execute(command, **kwargs):
         app.command("cancel")

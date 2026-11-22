@@ -19,7 +19,7 @@ def opener(payload, calls):
 
 
 @pytest.mark.parametrize(
-    "provider,endpoint,payload,expected,path",
+    ("provider", "endpoint", "payload", "expected", "path"),
     [
         (
             "compatible",
@@ -139,7 +139,7 @@ def test_discovery_errors_do_not_echo_secrets():
 
 
 @pytest.mark.parametrize(
-    "parameter,value,expected",
+    ("parameter", "value", "expected"),
     [
         ("reasoning_effort", "high", "high"),
         ("enable_thinking", "false", False),
@@ -163,7 +163,7 @@ def test_reasoning_parameters_support_controlled_scalars_without_overwriting_req
 
 
 @pytest.mark.parametrize(
-    "parameter,value",
+    ("parameter", "value"),
     [
         ("model", "other"),
         ("messages", "[]"),
@@ -174,7 +174,9 @@ def test_reasoning_parameters_support_controlled_scalars_without_overwriting_req
     ],
 )
 def test_reserved_parameters_and_non_scalar_values_rejected(parameter, value):
-    with pytest.raises(ValueError):
+    with pytest.raises(
+        ValueError, match=r"Choose a reasoning parameter|Reasoning parameter|Reasoning value"
+    ):
         ai_providers.validate_reasoning(
             SimpleNamespace(ai_reasoning_parameter=parameter, ai_reasoning_value=value)
         )

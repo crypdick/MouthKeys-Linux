@@ -4,6 +4,7 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
+from faster_whisper import audio
 from PySide6.QtCore import QByteArray, QMimeData, QPointF, QProcess, Qt, QUrl
 from PySide6.QtGui import QCloseEvent, QDragEnterEvent, QDropEvent
 from PySide6.QtWidgets import QApplication, QFileDialog, QMessageBox, QPushButton
@@ -24,7 +25,6 @@ def result():
 
 
 def test_file_progress_counts_real_turns_and_uncovered_chunks(monkeypatch):
-    from faster_whisper import audio
 
     events = []
 
@@ -66,7 +66,6 @@ def test_file_progress_counts_real_turns_and_uncovered_chunks(monkeypatch):
 
 
 def test_whole_file_progress_stays_indeterminate_while_backend_blocks(monkeypatch):
-    from faster_whisper import audio
 
     monkeypatch.setattr(audio, "decode_audio", lambda *args, **kwargs: np.zeros(16000))
     events = []
@@ -135,20 +134,20 @@ class FakeFileProcess(QProcess):
         self.stdout = json.dumps(result()).encode()
         self.killed = False
 
-    def setProgram(self, program):
+    def setProgram(self, program):  # noqa: N802 - Qt interface
         self.program = program
 
-    def setArguments(self, arguments):
+    def setArguments(self, arguments):  # noqa: N802 - Qt interface
         self.arguments = arguments
 
     def start(self):
         pass
 
-    def readAllStandardError(self):
+    def readAllStandardError(self):  # noqa: N802 - Qt interface
         data, self.stderr = self.stderr, b""
         return QByteArray(data)
 
-    def readAllStandardOutput(self):
+    def readAllStandardOutput(self):  # noqa: N802 - Qt interface
         return QByteArray(self.stdout)
 
     def errorString(self):  # noqa: N802 - Qt override

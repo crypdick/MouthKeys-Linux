@@ -74,9 +74,9 @@ def main(argv=None):
             assert words, "No real word timing returned"
         forced_words = []
         if args.force_align:
-            from faster_whisper.audio import decode_audio
+            from faster_whisper.audio import decode_audio  # noqa: PLC0415 - load only requested smoke operations
 
-            from mouthkeys.forced_alignment import WhisperForcedAligner
+            from mouthkeys.forced_alignment import WhisperForcedAligner  # noqa: PLC0415 - load only requested smoke operations
 
             aligner = WhisperForcedAligner()
             try:
@@ -113,8 +113,8 @@ def main(argv=None):
                 align_words(final, transcriber.words, duration=3 * (duration + 0.5))
         stages = []
         if args.file_workflow:
-            from mouthkeys.file_history import FileHistory
-            from mouthkeys.file_transcription import export_result, transcribe_file
+            from mouthkeys.file_history import FileHistory  # noqa: PLC0415 - load only requested smoke operations
+            from mouthkeys.file_transcription import export_result, transcribe_file  # noqa: PLC0415 - load only requested smoke operations
 
             result = transcribe_file(
                 fixture, config, transcriber=transcriber, on_progress=stages.append
@@ -152,7 +152,7 @@ def main(argv=None):
             ),
         }
         if args.report:
-            from mouthkeys.operations import write_private
+            from mouthkeys.operations import write_private  # noqa: PLC0415 - load only requested smoke operations
 
             write_private(args.report, json.dumps(report, indent=2).encode())
         print(json.dumps(report))

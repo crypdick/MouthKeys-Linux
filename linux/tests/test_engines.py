@@ -4,8 +4,11 @@ import wave
 from dataclasses import replace
 from types import ModuleType, SimpleNamespace
 
+import av
+import faster_whisper.utils
 import numpy as np
 import pytest
+from faster_whisper import audio
 
 from mouthkeys import engines, file_transcription
 from mouthkeys.config import Config
@@ -112,7 +115,6 @@ def test_model_delete_only_selected_managed_model():
 
 
 def test_file_transcription_exports_segments_and_unicode(monkeypatch, tmp_path):
-    from faster_whisper import audio
 
     monkeypatch.setattr(audio, "decode_audio", lambda *a, **kw: np.zeros(16000 * 3))
     model = SimpleNamespace(
@@ -132,7 +134,6 @@ def test_file_transcription_exports_segments_and_unicode(monkeypatch, tmp_path):
 
 
 def test_speaker_labels_use_overlap_and_preserve_unmatched(monkeypatch):
-    from faster_whisper import audio
 
     monkeypatch.setattr(audio, "decode_audio", lambda *a, **kw: np.zeros(16000 * 5))
     turns = [
@@ -201,7 +202,6 @@ def test_sherpa_local_paths_and_speaker_count(monkeypatch):
 
 
 def fake_audio_decoder(monkeypatch, input_frames, resampled):
-    import av
 
     calls = []
 
@@ -306,7 +306,7 @@ def test_bounded_decoder_real_stereo_resampling_without_desktop(tmp_path):
     result = file_transcription._decode_bounded(path, 1)
     assert result.shape == (16000,)
     assert not np.any(result)
-    with pytest.raises(ValueError, match="exceeds 0.5 seconds"):
+    with pytest.raises(ValueError, match=r"exceeds 0\.5 seconds"):
         file_transcription._decode_bounded(path, 0.5)
 
 
@@ -355,7 +355,7 @@ def test_onnx_cancelled_redownload_cannot_keep_ready_marker(monkeypatch):
 
 
 def test_whisper_runtime_forwards_requested_revision(monkeypatch):
-    import faster_whisper
+    import faster_whisper  # noqa: PLC0415 - local import binding
 
     calls = []
     monkeypatch.setattr(engines, "resolve_whisper", lambda config: config.model)
@@ -366,19 +366,18 @@ def test_whisper_runtime_forwards_requested_revision(monkeypatch):
 
 
 def test_whisper_missing_tokenizer_cannot_reach_library_fallback(monkeypatch, tmp_path):
-    import faster_whisper
+    import faster_whisper  # noqa: PLC0415 - local import binding
 
     for name in ("model.bin", "config.json", "vocabulary.txt"):
         (tmp_path / name).write_text("present")
     monkeypatch.setattr(
         faster_whisper, "WhisperModel", lambda *a, **kw: pytest.fail("loader called")
     )
-    with pytest.raises(RuntimeError, match="tokenizer.json"):
+    with pytest.raises(RuntimeError, match=r"tokenizer\.json"):
         Transcriber().load(replace(Config(), model=str(tmp_path)))
 
 
 def test_whisper_resolver_queries_cache_only(monkeypatch):
-    import faster_whisper.utils
 
     calls = []
 

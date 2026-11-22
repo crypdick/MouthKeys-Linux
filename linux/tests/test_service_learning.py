@@ -71,7 +71,7 @@ def test_confirmed_insertion_starts_read_only_learning_and_review_commands(monke
 
 
 @pytest.mark.parametrize(
-    "result,enabled", [("paste_requested", "on"), ("copied", "on"), ("pasted", "off")]
+    ("result", "enabled"), [("paste_requested", "on"), ("copied", "on"), ("pasted", "off")]
 )
 def test_unconfirmed_clipboard_and_opt_out_never_observe_fields(monkeypatch, result, enabled):
     Config(automatic_learning=enabled).save()

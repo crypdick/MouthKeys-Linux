@@ -7,11 +7,11 @@ from dataclasses import replace
 from typing import Any, cast
 
 from . import __version__
-from .audio import CaptureSession, CaptureTeardownError
+from .audio import CaptureSession, CaptureTeardownError, Recording
 from .config import Config, runtime_dir
 from .delivery import Delivery, Target
 from .desktop import MediaSession, choose_source, play_sound
-from .microphone import MicrophoneSelection, Recording, SwitchOutcome, selection
+from .microphone import MicrophoneSelection, SwitchOutcome, selection
 from .pronunciation import PronunciationStore
 from .recording_assistant import RecordingAssistant
 from .recording_cleanup import cleanup_transcript

@@ -1,183 +1,34 @@
-import json
+"""Record and read live PCM without invalidating committed preview frames."""
+
 import math
 import os
-import signal
-import subprocess
 import tempfile
 import threading
-import time
 import wave
+from collections.abc import Callable, Iterator
+from contextlib import ExitStack, contextmanager
 from dataclasses import replace
 from pathlib import Path
+from typing import Protocol, runtime_checkable
 
 import numpy as np
 from numpy.typing import NDArray
 
+from .capture_recorder import Recorder
 from .config import Config, private_dir, runtime_dir
-from .processes import python_command
 
 
-def bluetooth_capture_ready(source):
-    """PipeWire's Bluetooth loopback can run before its real microphone exists."""
-    if source == "default":
-        try:
-            source = subprocess.run(
-                ["pactl", "get-default-source"],  # noqa: S607
-                capture_output=True,
-                text=True,
-                check=True,
-                timeout=0.5,
-            ).stdout.strip()
-        except (OSError, subprocess.SubprocessError):
-            return True  # No source discovery: retain normal PulseAudio readiness.
-    if not source.startswith("bluez_input."):
-        return True
-    try:
-        result = subprocess.run(
-            ["pactl", "-f", "json", "list", "sources"],  # noqa: S607
-            capture_output=True,
-            text=True,
-            check=True,
-            timeout=0.5,
-        )
-        sources = json.loads(result.stdout)
-        selected_source = next((s for s in sources if s.get("name") == source), None)
-        if selected_source is None:
-            return False
-        if selected_source.get("properties", {}).get("bluez5.loopback") not in (True, "true"):
-            return True  # Native PulseAudio capture does not need a PipeWire graph.
-        result = subprocess.run(
-            ["pw-dump", "Node"],  # noqa: S607
-            capture_output=True,
-            text=True,
-            check=True,
-            timeout=0.5,
-        )
-        nodes = [node.get("info", {}) for node in json.loads(result.stdout)]
-    except (OSError, subprocess.SubprocessError, ValueError) as exc:
-        raise RuntimeError("Cannot verify Bluetooth microphone readiness with pw-dump") from exc
-    selected = next((n for n in nodes if n.get("props", {}).get("node.name") == source), None)
-    if selected is None:
-        return False
-    props = selected.get("props", {})
-    if props.get("bluez5.loopback") not in (True, "true"):
-        return True
-    device = props.get("device.id")
-    return device is not None and any(
-        str(n.get("props", {}).get("device.id")) == str(device)
-        and n.get("props", {}).get("bluez5.loopback-target") in (True, "true")
-        and n.get("state") == "running"
-        for n in nodes
-    )
+@runtime_checkable
+class Recording(Protocol):
+    def stop(self) -> None: ...
 
-
-class Recorder:
-    def __init__(self, config: Config, path: Path, *, timeout=5, cancelled=None):
-        self.errors = tempfile.TemporaryFile()
-        self.last_error = ""
-        self.process = None
-        try:
-            self.process = subprocess.Popen(  # noqa: S603
-                [
-                    *python_command("mouthkeys.capture"),
-                    "ffmpeg",
-                    "-hide_banner",
-                    "-loglevel",
-                    "error",
-                    "-nostdin",
-                    "-y",
-                    "-f",
-                    "pulse",
-                    "-sample_rate",
-                    "16000",
-                    "-channels",
-                    "1",
-                    "-fragment_size",
-                    "640",  # 20 ms of mono 16 kHz PCM, before the input opens.
-                    "-probesize",
-                    "32",  # Pulse already declares PCM; avoid buffering seconds to probe it.
-                    "-i",
-                    config.audio_source,
-                    "-t",
-                    str(config.max_seconds),
-                    "-ac",
-                    "1",
-                    "-ar",
-                    "16000",
-                    "-c:a",
-                    "pcm_s16le",
-                    "-flush_packets",
-                    "1",
-                    str(path),
-                ],
-                # EOF is a lifeline: even SIGKILL of the daemon closes this pipe.
-                stdin=subprocess.PIPE,
-                stdout=subprocess.DEVNULL,
-                stderr=self.errors,
-                start_new_session=True,
-            )
-            deadline = time.monotonic() + timeout
-            while True:
-                if cancelled and cancelled():
-                    raise RuntimeError("Microphone start cancelled")
-                if self.process.poll() is not None:
-                    raise RuntimeError(self.error() or "Microphone capture failed")
-                try:
-                    with wave.open(str(path), "rb") as wav:
-                        samples_ready = len(wav.readframes(320)) >= 640
-                    if samples_ready and bluetooth_capture_ready(config.audio_source):
-                        break  # Silence is valid only after the physical input is ready.
-                except (OSError, EOFError, wave.Error):
-                    pass  # FFmpeg may still be opening the source or writing the WAV header.
-                if time.monotonic() >= deadline:
-                    raise RuntimeError(
-                        "Microphone did not produce audio or become ready "
-                        f"within {timeout:g} seconds"
-                    )
-                time.sleep(0.02)
-        except BaseException:
-            if self.process is not None:
-                self.process.stdin.close()
-                try:
-                    self.process.wait(timeout=3)
-                except subprocess.TimeoutExpired:
-                    os.killpg(self.process.pid, signal.SIGKILL)
-                    self.process.wait(timeout=1)
-            self.errors.close()
-            raise
-
-    def error(self):
-        if self.errors.closed:
-            return self.last_error
-        self.errors.seek(0)
-        self.last_error = self.errors.read(4096).decode(errors="replace").strip()
-        return self.last_error
-
-    def finished(self):
-        return self.process.poll() is not None
-
-    def stop(self):
-        self.process.stdin.close()
-        try:
-            code = self.process.wait(timeout=4)
-        except subprocess.TimeoutExpired:
-            os.killpg(self.process.pid, signal.SIGKILL)
-            self.process.wait(timeout=3)
-            raise RuntimeError(
-                "Microphone did not stop; temporary audio will be discarded"
-            ) from None
-        finally:
-            error = self.error()
-            self.errors.close()
-        # FFmpeg returns 255 after a clean SIGINT, and 0 at the duration limit.
-        if code not in (0, 255):
-            raise RuntimeError(error or f"Microphone capture exited with status {code}")
+    def finished(self) -> bool: ...
 
 
 class CaptureTeardownError(RuntimeError):
     """A source transition must not open another capture after unsafe teardown."""
 
-    def __init__(self, source, error):
+    def __init__(self, source: str, error: Exception) -> None:
         self.source = source
         super().__init__(f"Cannot finish microphone {source}: {error}")
 
@@ -191,50 +42,57 @@ class CaptureSession:
     stop or the next daemon launch. Canonical audio is temporary too.
     """
 
-    def __init__(self, config, path, *, recorder=Recorder, cancel_event=None, timeout=5):
+    def __init__(
+        self,
+        config: Config,
+        path: str | Path,
+        *,
+        recorder: Callable[..., Recording] = Recorder,
+        cancel_event: threading.Event | None = None,
+        timeout: float = 5,
+    ) -> None:
         self.path = Path(path)
         self.factory = recorder
         self.cancel_event = cancel_event
         self.stopping = threading.Event()
         self.lock = threading.RLock()
-        self.capture = None
-        self.segment = None
+        self.capture: Recording | None = None
+        self.segment: Path | None = None
         self.frames = 0
-        self.failure = None
-        self.writer = None
-        self.output = None
+        self.failure: Exception | None = None
+        self._files = ExitStack()
         self.closed = False
         self.config = config
         try:
             descriptor = os.open(self.path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            self.output = self._files.enter_context(os.fdopen(descriptor, "wb"))
             os.fchmod(descriptor, 0o600)
-            self.output = os.fdopen(descriptor, "wb")
-            self.writer = wave.open(self.output, "wb")
+            self.writer = self._files.enter_context(wave.open(self.output, "wb"))
             self.writer.setparams((1, 2, 16000, 0, "NONE", "not compressed"))
             self.writer.writeframes(b"")
             self.output.flush()
             self._open(config, timeout)
+            self.thread = threading.Thread(target=self._relay, daemon=True)
+            self.thread.start()
         except BaseException:
+            self.stopping.set()
             self._close()
             raise
-        self.thread = threading.Thread(target=self._relay, daemon=True)
-        self.thread.start()
 
-    def _cancelled(self):
+    def _cancelled(self) -> bool:
         return self.stopping.is_set() or bool(self.cancel_event and self.cancel_event.is_set())
 
-    def _open(self, config, timeout):
+    def _open(self, config: Config, timeout: float) -> None:
         descriptor, name = tempfile.mkstemp(
             prefix=f"{self.path.stem}-capture-",
             suffix=".wav",
             dir=private_dir(runtime_dir() / "private-recordings"),
         )
         os.close(descriptor)
-        self.segment, self.frames = Path(name), 0
+        segment = Path(name)
+        self.segment, self.frames = segment, 0
         try:
-            self.capture = self.factory(
-                config, self.segment, timeout=timeout, cancelled=self._cancelled
-            )
+            self.capture = self.factory(config, segment, timeout=timeout, cancelled=self._cancelled)
             self.config = config
             self._drain()
         except BaseException:
@@ -243,18 +101,14 @@ class CaptureSession:
                 if capture:
                     capture.stop()
             finally:
-                self.segment.unlink(missing_ok=True)
+                segment.unlink(missing_ok=True)
                 self.segment = None
             raise
 
-    def _drain(self):
+    def _drain(self) -> None:
         if self.segment is None:
             return
-        with self.segment.open("rb") as stream, wave.open(stream, "rb") as wav:
-            if (wav.getnchannels(), wav.getsampwidth(), wav.getframerate()) != (1, 2, 16000):
-                raise ValueError("Expected mono 16 kHz PCM capture")
-            # FFmpeg's live WAV header has an unfinalized data length.
-            available = max(0, (self.segment.stat().st_size - stream.tell()) // 2)
+        with _capture_wav(self.segment) as (wav, available):
             wav.setpos(self.frames)
             while self.frames < available:
                 raw = wav.readframes(min(16000, available - self.frames))
@@ -264,7 +118,7 @@ class CaptureSession:
                 self.frames += len(raw) // 2
             self.output.flush()
 
-    def _end_segment(self, *, tolerate_ended_failure=False):
+    def _end_segment(self, *, tolerate_ended_failure: bool = False) -> Exception | None:
         capture = self.capture
         stop_error = None
         if capture:
@@ -293,7 +147,7 @@ class CaptureSession:
             raise stop_error
         return stop_error
 
-    def _relay(self):
+    def _relay(self) -> None:
         while not self.stopping.wait(0.02):
             try:
                 with self.lock:
@@ -303,7 +157,7 @@ class CaptureSession:
                 self.failure = exc
                 self.stopping.set()
 
-    def switch_source(self, source, *, timeout=5):
+    def switch_source(self, source: str, *, timeout: float = 5) -> dict[str, str] | None:
         with self.lock:
             if self._cancelled():
                 raise RuntimeError("Recording is stopping")
@@ -321,10 +175,10 @@ class CaptureSession:
                 return {"failed_source": previous_source, "error": str(stop_error)}
             return None
 
-    def finished(self):
+    def finished(self) -> bool:
         return self.failure is not None or (self.capture is not None and self.capture.finished())
 
-    def _close(self):
+    def _close(self) -> None:
         if self.closed:
             return
         try:
@@ -332,25 +186,19 @@ class CaptureSession:
         finally:
             if self.capture is None:
                 try:
-                    if self.writer:
-                        self.writer.close()
+                    self._files.close()
                 finally:
-                    self.writer = None
-                    if self.output:
-                        self.output.close()
-                        self.output = None
                     self.closed = True
 
-    def stop(self):
+    def stop(self) -> None:
         self.stopping.set()
         try:
             with self.lock:
                 self._close()
         finally:
-            if hasattr(self, "thread"):
-                self.thread.join(timeout=1)
-                if self.thread.is_alive():
-                    raise RuntimeError("Capture relay did not stop")
+            self.thread.join(timeout=1)
+            if self.thread.is_alive():
+                raise RuntimeError("Capture relay did not stop")
         if self.failure:
             raise RuntimeError(f"Capture relay failed: {self.failure}") from self.failure
 
@@ -370,19 +218,29 @@ def is_short_silence(path: Path) -> bool:
     return bool(len(samples)) and int(np.max(np.abs(samples.astype(np.int32)))) <= 1
 
 
-def _read_live_audio(path: Path, seconds: float) -> tuple[NDArray[np.float32], int]:
-    """Read bounded samples and their frame cursor before the WAV is finalized."""
+@contextmanager
+def _capture_wav(path: Path) -> Iterator[tuple[wave.Wave_read, int]]:
     with path.open("rb") as source, wave.open(source, "rb") as wav:
         if (wav.getnchannels(), wav.getsampwidth(), wav.getframerate()) != (1, 2, 16000):
             raise ValueError("Expected mono 16 kHz PCM")
-        frames = max(0, (path.stat().st_size - source.tell()) // 2)
-        wav.setpos(max(0, frames - int(seconds * 16000)))
-        raw = wav.readframes(int(seconds * 16000))
-    samples = np.frombuffer(raw[: len(raw) // 2 * 2], dtype="<i2").astype(np.float32) / 32768.0
-    return samples, frames
+        # Live headers can overstate data length; finalized files can have trailing chunks.
+        available = max(0, (os.fstat(source.fileno()).st_size - source.tell()) // 2)
+        yield wav, min(wav.getnframes(), available)
 
 
-def read_live_audio(path: Path, seconds=20):
+def _normalized_pcm(raw: bytes) -> NDArray[np.float32]:
+    return np.frombuffer(raw[: len(raw) // 2 * 2], dtype="<i2").astype(np.float32) / 32768.0
+
+
+def _read_live_audio(path: Path, seconds: float) -> tuple[NDArray[np.float32], int]:
+    """Read bounded samples and their frame cursor before the WAV is finalized."""
+    count = int(seconds * 16000)
+    with _capture_wav(path) as (wav, frames):
+        wav.setpos(max(0, frames - count))
+        return _normalized_pcm(wav.readframes(count)), frames
+
+
+def read_live_audio(path: Path, seconds: float = 20) -> NDArray[np.float32]:
     return _read_live_audio(path, seconds)[0]
 
 
@@ -390,18 +248,14 @@ def read_audio_from(
     path: Path, start_frame: int = 0, seconds: float | None = None
 ) -> NDArray[np.float32]:
     """Read forward from a committed PCM frame, including an unfinished WAV."""
-    with path.open("rb") as source, wave.open(source, "rb") as wav:
-        if (wav.getnchannels(), wav.getsampwidth(), wav.getframerate()) != (1, 2, 16000):
-            raise ValueError("Expected mono 16 kHz PCM")
-        frames = min(wav.getnframes(), max(0, (path.stat().st_size - source.tell()) // 2))
+    with _capture_wav(path) as (wav, frames):
         if start_frame > frames:
             raise ValueError("Recording shrank after transcription started")
         wav.setpos(start_frame)
         count = frames - start_frame
         if seconds is not None:
             count = min(count, int(seconds * 16000))
-        raw = wav.readframes(count)
-    return np.frombuffer(raw[: len(raw) // 2 * 2], dtype="<i2").astype(np.float32) / 32768.0
+        return _normalized_pcm(wav.readframes(count))
 
 
 def live_meter(path: Path) -> dict[str, int | float]:

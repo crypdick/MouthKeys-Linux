@@ -33,7 +33,7 @@ public_modules = [
   "mouthkeys",
   "mouthkeys.api_dictionary", "mouthkeys.ai_providers", "mouthkeys.ai_stream", "mouthkeys.ai_stream_events", "mouthkeys.assistance", "mouthkeys.command_preview",
   "mouthkeys.assistant_chats", "mouthkeys.assistant_editor", "mouthkeys.assistant_history", "mouthkeys.assistant_ui", "mouthkeys.audio",
-  "mouthkeys.backup_ui", "mouthkeys.benchmark", "mouthkeys.benchmark_reports", "mouthkeys.cli", "mouthkeys.config", "mouthkeys.control", "mouthkeys.daemon", "mouthkeys.credentials",
+  "mouthkeys.backup_ui", "mouthkeys.benchmark", "mouthkeys.benchmark_reports", "mouthkeys.capture_recorder", "mouthkeys.cli", "mouthkeys.config", "mouthkeys.control", "mouthkeys.daemon", "mouthkeys.credentials",
   "mouthkeys.data_lock", "mouthkeys.delivery", "mouthkeys.desktop_entry", "mouthkeys.desktop_input", "mouthkeys.dictionary", "mouthkeys.dictionary_transfer", "mouthkeys.dictionary_ui",
   "mouthkeys.engines", "mouthkeys.file_history", "mouthkeys.file_speakers", "mouthkeys.file_transcription", "mouthkeys.file_transcription_ui",
   "mouthkeys.forced_alignment", "mouthkeys.formatting", "mouthkeys.gui", "mouthkeys.gui_launch", "mouthkeys.help_ui", "mouthkeys.history_ui", "mouthkeys.hotkeys",
@@ -77,6 +77,12 @@ name = "capture"
 root = "mouthkeys.capture"
 role = "desktop"
 public_modules = ["mouthkeys.capture"]
+
+[[packages]]
+name = "capture_readiness"
+root = "mouthkeys.capture_readiness"
+role = "desktop"
+public_modules = ["mouthkeys.capture_readiness"]
 
 [[packages]]
 name = "desktop"

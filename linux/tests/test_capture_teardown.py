@@ -88,8 +88,8 @@ def test_unconfirmed_recorder_shutdown_blocks_new_capture_until_retry(monkeypatc
     def cannot_confirm_kill(*args):
         raise PermissionError("Synthetic capture shutdown not confirmed")
 
-    monkeypatch.setattr("mouthkeys.audio.subprocess.Popen", Process)
-    monkeypatch.setattr("mouthkeys.audio.os.killpg", cannot_confirm_kill)
+    monkeypatch.setattr("mouthkeys.capture_recorder.subprocess.Popen", Process)
+    monkeypatch.setattr("mouthkeys.capture_recorder.os.killpg", cannot_confirm_kill)
     Config(audio_source="old").save()
     app = make_controller(CaptureSession)
     app.command("start")

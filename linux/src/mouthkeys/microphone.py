@@ -12,7 +12,7 @@ from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, replace
 from typing import Protocol, runtime_checkable
 
-from .audio import CaptureTeardownError
+from .audio import CaptureTeardownError, Recording
 from .config import Config
 from .desktop import choose_source, source_candidates
 
@@ -20,12 +20,6 @@ RETRY_SECONDS = 8
 MAX_ATTEMPTS = 16
 MAX_QUARANTINE = 64
 QUARANTINE_SECONDS = 60
-
-
-@runtime_checkable
-class Recording(Protocol):
-    def stop(self) -> None: ...
-    def finished(self) -> bool: ...
 
 
 @runtime_checkable

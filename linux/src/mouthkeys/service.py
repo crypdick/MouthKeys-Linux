@@ -3,58 +3,30 @@ import json
 import threading
 import time
 import uuid
-import wave
 from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import cast
 
-from . import __version__, desktop_input
-from .audio import CaptureSession, CaptureTeardownError, check_audio
+from . import __version__
+from .audio import CaptureSession, CaptureTeardownError, check_audio, is_short_silence
 from .config import Config, private_dir, runtime_dir
 from .control import MAX_MESSAGE
 from .delivery import Delivery
 from .desktop import MediaSession, choose_source, play_sound
 from .formatting import enabled, format_text, parse_send
 from .microphone import MicrophoneSelection, Recording, SwitchOutcome, selection
-from .postprocess import process
 from .pronunciation import PronunciationStore
+from .recording_cleanup import cleanup_transcript
+from .recording_delivery import DeliveryRequest, RecordingDelivery
 from .recording_destination import snapshot_for_stop
+from .recording_job import DictationJob, recording_input
 from .recording_learning import RecordingLearning
 from .recording_preview import PreviewWork, RecordingPreview, reset_owned_stream
 from .storage import History
 from .transcribe import Transcriber
 
 FOCUS_TIMEOUT = 4
-
-
-@dataclass
-class DictationJob:
-    item_id: str
-    config: Config
-    predecessors: tuple[threading.Event, ...]
-    audio_path: Path
-    mode: str = "dictation"
-    selected_text: str = ""
-    label: str = ""
-    done: threading.Event = field(default_factory=threading.Event)
-    cancel_event: threading.Event = field(default_factory=threading.Event)
-    held_activation: bool = False
-    cancelled: bool = False
-    duration: float = 0
-    phase: str = "recording"
-    send_pending: bool = False
-    send_dispatched: bool = False
-    context: str | None = None
-    suppress_send: bool = False
-    metadata: dict = field(default_factory=dict)
-    prompt_override: str | None = None
-    profiles: list = field(default_factory=list)
-    routes: list = field(default_factory=list)
-    start_target: object = None
-    assistant_session_id: str | None = None
-    assistant_memory_session: dict | None = None
-    edit_consumed: bool = False
 
 
 @dataclass
@@ -72,33 +44,6 @@ class FocusGate:
         if self.deadline is not None and time.monotonic() >= self.deadline:
             self.valid = False
         self.ready.set()
-
-
-def _recording_input(data: Mapping[str, object]) -> tuple[str, str, str]:
-    mode = data.get("mode", "dictation")
-    if not isinstance(mode, str) or mode not in (
-        "dictation",
-        "command",
-        "edit",
-        "training",
-        "pronunciation",
-    ):
-        raise ValueError("Unknown recording mode")
-    selected = data.get("selected_text", "")
-    if not isinstance(selected, str) or len(selected) > 100000:
-        raise ValueError("Selected text exceeds 100000 characters")
-    label = data.get("label", "")
-    if mode != "pronunciation":
-        return mode, selected, ""
-    if (
-        not isinstance(label, str)
-        or not label.strip()
-        or len(label) > 128
-        or len(label.split()) > 5
-        or not label.isprintable()
-    ):
-        raise ValueError("Pronunciation label must contain 1–5 words, up to 128 characters")
-    return mode, selected, label.strip()
 
 
 class Controller:
@@ -131,7 +76,6 @@ class Controller:
         self.recorded_seconds = 0
         self.ai_warning = ""
         self.last_text = ""
-        self.send_pending = False
         self.job = None
         self.jobs = []
         self.assistant_proposal = None
@@ -139,6 +83,9 @@ class Controller:
         self.assistant_memory = {}
         self.learning = RecordingLearning(
             self.lock, self._owns_learning, lambda: self.interrupted, self.report_error
+        )
+        self.recording_delivery = RecordingDelivery(
+            self.delivery, self.lock, self.learning, lambda: self.interrupted
         )
 
     def report_error(self, message: str, kind: str = "error") -> None:
@@ -393,7 +340,7 @@ class Controller:
             from .profiles import load_profiles
             from .routing import load_routes
 
-            mode, selected_text, label = _recording_input(data)
+            mode, selected_text, label = recording_input(data)
             config = Config.load()
             assistant_context = None
             assistant_executions = None
@@ -1009,10 +956,8 @@ class Controller:
         alignment = None
         pronunciation_warning = ""
         ai_warning = ""
-        ai_processed = False
         assistant_requested = False
         assistant_error = ""
-        send_warning = ""
         config = job.config
         path = job.audio_path
         try:
@@ -1027,7 +972,7 @@ class Controller:
                 if not job.cancelled:
                     self._job_status(job, "transcribing", "Transcribing")
             check_audio(path)
-            if enabled(config, "skip_silent_recordings") and _short_silence(path):
+            if enabled(config, "skip_silent_recordings") and is_short_silence(path):
                 self._update(job, "cancelled")
                 path.unlink(missing_ok=True)
                 self._job_status(job, "idle", "Silent recording skipped")
@@ -1189,26 +1134,11 @@ class Controller:
                 app_id=job.metadata.get("app_id", job.metadata.get("app", "")),
                 window_title=job.metadata.get("window", ""),
             )
-            if enabled(config, "ai_enabled") and text:
-                try:
-                    if config.ai_streaming == "on":
-                        streamed = []
-
-                        def delta(piece):
-                            with self.lock:
-                                if self.job is job and not job.cancelled and not self.interrupted:
-                                    streamed.append(piece)
-                                    self.preview_text = "".join(streamed)
-
-                        text = process(text, config, on_delta=delta, cancel_event=job.cancel_event)
-                    else:
-                        text = process(text, config)
-                    ai_processed = True
-                # The job or IPC response reports the failure; avoid duplicating private data in logs.
-                except Exception as exc:  # allow: exception-handling  # noqa: BLE001
-                    ai_warning = f"AI cleanup failed ({exc}); using original transcription"
-                    if self.job is job:
-                        self.report_error(ai_warning, kind="ai")
+            cleanup = cleanup_transcript(
+                text, config, job.cancel_event, lambda partial: self._publish_cleanup(job, partial)
+            )
+            text = cleanup.text
+            ai_warning = cleanup.warning or ai_warning
             with self.lock:
                 if self.interrupted:
                     return
@@ -1218,6 +1148,8 @@ class Controller:
                     self._job_status(job, "idle", "Cancelled")
                     return
                 if self.job is job:
+                    if cleanup.warning:
+                        self.report_error(ai_warning, kind="ai")
                     self.preview_text = text
                     self.dictation_delivery = True
                 if text:
@@ -1226,71 +1158,19 @@ class Controller:
                     job,
                     "transcribed",
                     text,
-                    was_ai_processed=ai_processed,
+                    was_ai_processed=cleanup.applied,
                     ai_processing_error=ai_warning,
-                    ai_processing_model=config.ai_model if ai_processed else "",
+                    ai_processing_model=config.ai_model if cleanup.applied else "",
                 )
                 self._job_status(job, "delivering", "Delivering transcript")
-            result = self.delivery.deliver(text, config, target) if text else "transcribed"
-            paste_warning = None
-            if result == "copied" and auto_paste_expected:
-                paste_warning = desktop_input.automatic_delivery_warning(config)
-                if not paste_warning:
-                    if not target:
-                        paste_warning = "No destination was captured."
-                    elif config.destination_guard == "field" and not isinstance(target, dict):
-                        paste_warning = (
-                            "Could not identify the focused field. "
-                            "Choose “Field first, window fallback” in Text delivery."
-                        )
-                    else:
-                        paste_warning = "Could not verify the original destination was unchanged."
-            if plan.should_send and text and result == "copied":
-                send_warning = "Spoken Send skipped: text copied; insertion destination unavailable"
-            if result == "pasted" and enabled(config, "automatic_learning"):
-                self.learning.start(
-                    job.item_id, job.config, text, getattr(self.delivery, "last_verified", None)
-                )
-            if plan.should_send and (
-                not text or result in ("paste_requested", "insert_requested", "pasted")
-            ):
-                job.send_pending = True
-                if self.job is job:
-                    self.send_pending = True
-                try:
-                    time.sleep(0.5)
-
-                    def reserve_send():
-                        with self.lock:
-                            if self.interrupted or job.cancelled or job.suppress_send:
-                                return False
-                            job.send_dispatched = True
-                            return True
-
-                    with self.lock:
-                        send = not self.interrupted and not job.cancelled and not job.suppress_send
-                    if send:
-                        if getattr(self.delivery, "send_key_guarded", False):
-                            sent = self.delivery.send_key(
-                                config,
-                                target,
-                                before_send=reserve_send,
-                                allow_without_insert=not bool(text),
-                            )
-                        else:
-                            sent = (
-                                self.delivery.send_key(config, target) if reserve_send() else False
-                            )
-                        if not sent:
-                            send_warning = "Spoken Send skipped: destination could not be verified"
-                        elif not text:
-                            result = "send_requested"
-                    elif job.suppress_send:
-                        send_warning = "Spoken Send skipped: a newer recording started"
-                finally:
-                    job.send_pending = False
-                    if self.job is job:
-                        self.send_pending = False
+            outcome = self.recording_delivery.deliver(
+                job, DeliveryRequest(text, config, target, auto_paste_expected, plan.should_send)
+            )
+            result, paste_warning, send_warning = (
+                outcome.status,
+                outcome.paste_warning,
+                outcome.send_warning,
+            )
             with self.lock:
                 if self.interrupted:
                     return
@@ -1361,6 +1241,11 @@ class Controller:
                         self.phase = "idle"
                     job.done.set()
 
+    def _publish_cleanup(self, job: DictationJob, text: str) -> None:
+        with self.lock:
+            if self.job is job and not job.cancelled and not self.interrupted:
+                self.preview_text = text
+
     def _publish_preview(self, text: str) -> None:
         self.preview_text = text
 
@@ -1398,14 +1283,3 @@ class Controller:
                 if spoken:
                     raise
                 return
-
-
-def _short_silence(path):
-    """Only skip up to four seconds of near-zero PCM, never ordinary quiet speech."""
-    import numpy as np
-
-    with wave.open(str(path), "rb") as source:
-        if source.getnframes() > source.getframerate() * 4 or source.getsampwidth() != 2:
-            return False
-        samples = np.frombuffer(source.readframes(source.getnframes()), dtype="<i2")
-    return bool(len(samples)) and int(np.max(np.abs(samples.astype(np.int32)))) <= 1

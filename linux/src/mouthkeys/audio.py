@@ -355,10 +355,19 @@ class CaptureSession:
             raise RuntimeError(f"Capture relay failed: {self.failure}") from self.failure
 
 
-def check_audio(path: Path):
+def check_audio(path: Path) -> None:
     with wave.open(str(path), "rb") as wav:
         if wav.getnframes() < 1600:
             raise ValueError("Recording is too short; speak for at least a moment")
+
+
+def is_short_silence(path: Path) -> bool:
+    """Only skip up to four seconds of near-zero PCM, never ordinary quiet speech."""
+    with wave.open(str(path), "rb") as source:
+        if source.getnframes() > source.getframerate() * 4 or source.getsampwidth() != 2:
+            return False
+        samples = np.frombuffer(source.readframes(source.getnframes()), dtype="<i2")
+    return bool(len(samples)) and int(np.max(np.abs(samples.astype(np.int32)))) <= 1
 
 
 def _read_live_audio(path: Path, seconds: float) -> tuple[NDArray[np.float32], int]:

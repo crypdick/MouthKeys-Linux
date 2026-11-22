@@ -138,7 +138,8 @@ def test_recording_freezes_prompt_profile_before_later_edits(monkeypatch):
     app = controller("Original words")
     observed = []
     monkeypatch.setattr(
-        "mouthkeys.service.process", lambda text, config: observed.append(config.ai_model) or text
+        "mouthkeys.recording_cleanup.process",
+        lambda text, config, **_: observed.append(config.ai_model) or text,
     )
     app.command("start")
     edited = load_profiles()

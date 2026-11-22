@@ -44,7 +44,9 @@ def test_profile_template_is_rendered_once_and_keeps_draft_immutable(monkeypatch
     calls = []
     cancel = threading.Event()
     delta = lambda text: None  # noqa: E731
-    opener = object()
+
+    def opener(*_args, **_kwargs):
+        pytest.fail("The fake request should not open a connection")
 
     def request(text, effective, **options):
         calls.append((text, effective, options))

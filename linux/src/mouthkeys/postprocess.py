@@ -1,9 +1,13 @@
 """Explicit opt-in AI cleanup with provider and prompt-profile routing."""
 
+from collections.abc import Callable
 from dataclasses import replace
 from pathlib import Path
+from threading import Event
+from typing import BinaryIO
 
 from .ai_providers import request_completion
+from .config import Config
 
 # Adapted from SettingsStore.baseDictationPromptText at upstream d50ad008.
 BASE_DICTATION_PROMPT = (
@@ -29,7 +33,14 @@ def render_dictation_user_message(prompt_text, transcript):
     return prompt_text + "\n\n" + transcript
 
 
-def process(text, config, *, opener=None, on_delta=None, cancel_event=None):
+def process(
+    text: str,
+    config: Config,
+    *,
+    opener: Callable[..., BinaryIO] | None = None,
+    on_delta: Callable[[str], None] | None = None,
+    cancel_event: Event | None = None,
+) -> str:
     if config.ai_enabled != "on":
         return text
     text = text.strip()
@@ -39,10 +50,11 @@ def process(text, config, *, opener=None, on_delta=None, cancel_event=None):
 
     config = resolve_profile(config)
     message = render_dictation_user_message(dictation_prompt(config), text)
-    return request_completion(
+    result: str = request_completion(
         message,
         replace(config, ai_prompt=""),
         opener=opener,
         on_delta=on_delta,
         cancel_event=cancel_event,
     )
+    return result

@@ -68,7 +68,7 @@
 2	src/mouthkeys/audio.py	no-untyped-call	Call to untyped function "_open" in typed context
 1	src/mouthkeys/audio.py	no-untyped-call	Call to untyped function "bluetooth_capture_ready" in typed context
 2	src/mouthkeys/audio.py	no-untyped-call	Call to untyped function "error" in typed context
-12	src/mouthkeys/audio.py	no-untyped-def	Function is missing a return type annotation
+11	src/mouthkeys/audio.py	no-untyped-def	Function is missing a return type annotation
 6	src/mouthkeys/audio.py	no-untyped-def	Function is missing a type annotation
 3	src/mouthkeys/audio.py	no-untyped-def	Function is missing a type annotation for one or more parameters
 1	src/mouthkeys/audio.py	union-attr	Item "None" of "BufferedWriter[_BufferedWriterStream] | None" has no attribute "flush"
@@ -217,7 +217,6 @@
 1	src/mouthkeys/local_api.py	no-untyped-call	Call to untyped function "history_item" in typed context
 1	src/mouthkeys/local_api.py	no-untyped-call	Call to untyped function "merge_replacements" in typed context
 2	src/mouthkeys/local_api.py	no-untyped-call	Call to untyped function "phrase_key" in typed context
-1	src/mouthkeys/local_api.py	no-untyped-call	Call to untyped function "process" in typed context
 2	src/mouthkeys/local_api.py	no-untyped-call	Call to untyped function "replacement_entries" in typed context
 2	src/mouthkeys/local_api.py	no-untyped-call	Call to untyped function "replacement_id" in typed context
 1	src/mouthkeys/local_api.py	no-untyped-call	Call to untyped function "resolve_profile" in typed context
@@ -311,7 +310,7 @@
 1	src/mouthkeys/postprocess.py	no-untyped-call	Call to untyped function "render_dictation_user_message" in typed context
 1	src/mouthkeys/postprocess.py	no-untyped-call	Call to untyped function "request_completion" in typed context
 1	src/mouthkeys/postprocess.py	no-untyped-call	Call to untyped function "resolve_profile" in typed context
-3	src/mouthkeys/postprocess.py	no-untyped-def	Function is missing a type annotation
+2	src/mouthkeys/postprocess.py	no-untyped-def	Function is missing a type annotation
 1	src/mouthkeys/profiles.py	no-untyped-call	Call to untyped function "models_endpoint" in typed context
 1	src/mouthkeys/profiles.py	no-untyped-call	Call to untyped function "validate_reasoning" in typed context
 1	src/mouthkeys/profiles.py	no-untyped-def	Function is missing a type annotation
@@ -352,7 +351,6 @@
 1	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "_new_job" in typed context
 8	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "_pending_jobs" in typed context
 1	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "_propose_assistant" in typed context
-1	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "_short_silence" in typed context
 20	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "_update" in typed context
 1	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "_wait_for_predecessors" in typed context
 2	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "context_messages" in typed context
@@ -363,24 +361,20 @@
 1	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "format_text" in typed context
 1	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "handle_action" in typed context
 1	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "pending_executions" in typed context
-2	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "process" in typed context
 3	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "proposal_size" in typed context
 1	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "propose" in typed context
 1	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "record_execution" in typed context
 1	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "record_private_execution" in typed context
 1	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "requires_confirmation" in typed context
-1	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "reserve_send" in typed context
 2	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "select_prompt" in typed context
 1	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "stream" in typed context
 1	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "validate_executions" in typed context
 1	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "validate_history" in typed context
-5	src/mouthkeys/service.py	no-untyped-def	Function is missing a return type annotation
-16	src/mouthkeys/service.py	no-untyped-def	Function is missing a type annotation
+4	src/mouthkeys/service.py	no-untyped-def	Function is missing a return type annotation
+14	src/mouthkeys/service.py	no-untyped-def	Function is missing a type annotation
 1	src/mouthkeys/service.py	operator	Unsupported operand types for - ("float" and "None")
-2	src/mouthkeys/service.py	type-arg	Missing type arguments for generic type "dict"
-2	src/mouthkeys/service.py	type-arg	Missing type arguments for generic type "list"
 3	src/mouthkeys/service.py	union-attr	Item "None" of "Any | None" has no attribute "cancel_event"
-2	src/mouthkeys/service.py	union-attr	Item "None" of "Any | None" has no attribute "cancelled"
+1	src/mouthkeys/service.py	union-attr	Item "None" of "Any | None" has no attribute "cancelled"
 2	src/mouthkeys/service.py	union-attr	Item "None" of "Any | None" has no attribute "duration"
 1	src/mouthkeys/service.py	union-attr	Item "None" of "Any | None" has no attribute "finished"
 2	src/mouthkeys/service.py	union-attr	Item "None" of "Any | None" has no attribute "item_id"

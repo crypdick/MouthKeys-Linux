@@ -63,9 +63,9 @@ def test_cancel_send_countdown_leaves_inserted_text_without_return():
     app.command("start")
     app.command("stop")
     deadline = time.monotonic() + 2
-    while not app.send_pending and time.monotonic() < deadline:
+    while not app.job.send_pending and time.monotonic() < deadline:
         time.sleep(0.01)
-    assert app.send_pending
+    assert app.job.send_pending
     app.command("cancel")
     finish(app)
     assert not sent
@@ -76,10 +76,10 @@ def test_ai_failure_falls_back_to_formatted_transcript_without_losing_raw(monkey
     Config(ai_enabled="on", ai_model="model", lowercase_first="on").save()
     app = controller()
 
-    def fail(*_):
+    def fail(*_, **_kwargs):
         raise RuntimeError("offline")
 
-    monkeypatch.setattr("mouthkeys.service.process", fail)
+    monkeypatch.setattr("mouthkeys.recording_cleanup.process", fail)
     app.command("start")
     app.command("stop")
     finish(app)
@@ -95,7 +95,7 @@ def test_ai_failure_falls_back_to_formatted_transcript_without_losing_raw(monkey
 def test_ai_history_records_actual_success_even_when_text_unchanged(monkeypatch):
     Config(ai_enabled="on", ai_model="model").save()
     app = controller("Unchanged")
-    monkeypatch.setattr("mouthkeys.service.process", lambda text, config: text)
+    monkeypatch.setattr("mouthkeys.recording_cleanup.process", lambda text, config, **_: text)
     app.command("start")
     app.command("stop")
     finish(app)
@@ -131,12 +131,12 @@ def test_cancelled_ai_result_does_not_leave_success_or_raw_transcript(monkeypatc
     app = controller("Unchanged")
     entered, release = threading.Event(), threading.Event()
 
-    def process(text, config):
+    def process(text, config, **_kwargs):
         entered.set()
         assert release.wait(2)
         return text
 
-    monkeypatch.setattr("mouthkeys.service.process", process)
+    monkeypatch.setattr("mouthkeys.recording_cleanup.process", process)
     app.command("start")
     app.command("stop")
     try:
@@ -156,13 +156,13 @@ def test_cancel_during_ai_suppresses_delivery(monkeypatch):
     app = controller()
     entered, release = threading.Event(), threading.Event()
 
-    def processing(text, config):
+    def processing(text, config, **_kwargs):
         assert app.history.rows()[0]["raw_text"] == text
         entered.set()
         assert release.wait(2)
         return "Edited"
 
-    monkeypatch.setattr("mouthkeys.service.process", processing)
+    monkeypatch.setattr("mouthkeys.recording_cleanup.process", processing)
     app.command("start")
     app.command("stop")
     assert entered.wait(2)
@@ -172,6 +172,41 @@ def test_cancel_during_ai_suppresses_delivery(monkeypatch):
     assert not app.delivery.calls
     assert app.history.rows()[0]["status"] == "cancelled"
     assert app.history.rows()[0]["raw_text"] == ""
+
+
+def test_non_streaming_cleanup_receives_job_cancellation_event(monkeypatch):
+    Config(ai_enabled="on", ai_model="model", ai_streaming="off").save()
+    app = controller()
+    entered, unblock_old_adapter = threading.Event(), threading.Event()
+    events = []
+
+    def processing(text, _config, *, cancel_event=None, on_delta=None):
+        assert on_delta is None
+        events.append(cancel_event)
+        entered.set()
+        if cancel_event is None:
+            assert unblock_old_adapter.wait(3)
+        else:
+            assert cancel_event.wait(2)
+        raise RuntimeError("Provider result arrived after cancellation")
+
+    monkeypatch.setattr("mouthkeys.recording_cleanup.process", processing)
+    app.command("start")
+    app.command("stop")
+    job = app.job
+    try:
+        assert entered.wait(2)
+        app.command("cancel")
+        assert events == [job.cancel_event]
+        assert job.done.wait(2), "Cleanup did not observe cancellation"
+    finally:
+        unblock_old_adapter.set()
+        finish(app)
+    assert app.status()["notice"] is None
+    row = app.history.rows()[0]
+    assert row["status"] == "cancelled"
+    assert row["raw_text"] == ""
+    assert not app.delivery.calls
 
 
 def test_privacy_opt_out_never_writes_transcript_history():
@@ -286,9 +321,9 @@ def test_new_recording_suppresses_older_pending_spoken_send():
     app.command("stop")
     old_worker = app.worker
     deadline = time.monotonic() + 2
-    while not app.send_pending and time.monotonic() < deadline:
+    while not app.job.send_pending and time.monotonic() < deadline:
         time.sleep(0.005)
-    assert app.send_pending
+    assert app.job.send_pending
     app.command("start")
     app.command("cancel")
     finish(app)

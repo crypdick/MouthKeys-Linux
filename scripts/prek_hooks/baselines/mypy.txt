@@ -51,7 +51,6 @@
 1	src/mouthkeys/audio.py	union-attr	Item "None" of "Popen[bytes] | None" has no attribute "stdin"
 2	src/mouthkeys/audio.py	union-attr	Item "None" of "Popen[bytes] | None" has no attribute "wait"
 1	src/mouthkeys/audio.py	union-attr	Item "None" of "Wave_write | None" has no attribute "writeframes"
-1	src/mouthkeys/benchmark.py	no-untyped-call	Call to untyped function "isolate_network" in typed context
 1	src/mouthkeys/benchmark.py	no-untyped-call	Call to untyped function "onnx_path" in typed context
 1	src/mouthkeys/benchmark.py	no-untyped-call	Call to untyped function "resolve_whisper" in typed context
 1	src/mouthkeys/benchmark.py	no-untyped-call	Call to untyped function "transcribe_file" in typed context
@@ -161,23 +160,6 @@
 4	src/mouthkeys/models_ui.py	no-untyped-def	Function is missing a type annotation
 4	src/mouthkeys/models_ui.py	union-attr	Item "None" of "QTableWidgetItem | None" has no attribute "data"
 1	src/mouthkeys/models_ui.py	union-attr	Item "None" of "QTableWidgetItem | None" has no attribute "setText"
-1	src/mouthkeys/native_worker.py	arg-type	Argument 1 to "append" of "list" has incompatible type "memoryview[int]"; expected "bytes"
-4	src/mouthkeys/native_worker.py	no-untyped-call	Call to untyped function "_call" in typed context
-3	src/mouthkeys/native_worker.py	no-untyped-call	Call to untyped function "_read_exact" in typed context
-3	src/mouthkeys/native_worker.py	no-untyped-call	Call to untyped function "_read_message" in typed context
-2	src/mouthkeys/native_worker.py	no-untyped-call	Call to untyped function "_response" in typed context
-2	src/mouthkeys/native_worker.py	no-untyped-call	Call to untyped function "_segment" of "NativeWorkerBackend" in typed context
-5	src/mouthkeys/native_worker.py	no-untyped-call	Call to untyped function "_write_message" in typed context
-2	src/mouthkeys/native_worker.py	no-untyped-call	Call to untyped function "alive" in typed context
-3	src/mouthkeys/native_worker.py	no-untyped-call	Call to untyped function "asr_config" in typed context
-6	src/mouthkeys/native_worker.py	no-untyped-call	Call to untyped function "close" in typed context
-1	src/mouthkeys/native_worker.py	no-untyped-call	Call to untyped function "isolate_network" in typed context
-1	src/mouthkeys/native_worker.py	no-untyped-call	Call to untyped function "worker_main" in typed context
-7	src/mouthkeys/native_worker.py	no-untyped-def	Function is missing a return type annotation
-11	src/mouthkeys/native_worker.py	no-untyped-def	Function is missing a type annotation
-1	src/mouthkeys/native_worker.py	union-attr	Item "TransformersBackend" of "NemoBackend | TransformersBackend" has no attribute "stream"
-1	src/mouthkeys/native_worker.py	var-annotated	Need type annotation for "_WORKERS"
-1	src/mouthkeys/native_worker.py	var-annotated	Need type annotation for "output" (hint: "output: list[<type>] = ...")
 2	src/mouthkeys/onboarding.py	attr-defined	"Callable[[], QWidget]" has no attribute "fields"
 1	src/mouthkeys/onboarding.py	attr-defined	"Callable[[], QWidget]" has no attribute "nav"
 1	src/mouthkeys/onboarding.py	attr-defined	"Callable[[], QWidget]" has no attribute "send"
@@ -251,7 +233,6 @@
 1	src/mouthkeys/setup_languages.py	no-untyped-call	Call to untyped function "languages" in typed context
 1	src/mouthkeys/setup_languages.py	no-untyped-def	Function is missing a return type annotation
 2	src/mouthkeys/setup_languages.py	no-untyped-def	Function is missing a type annotation
-1	src/mouthkeys/transcribe.py	no-untyped-call	Call to untyped function "NativeWorkerBackend" in typed context
 1	src/mouthkeys/transcribe.py	no-untyped-call	Call to untyped function "WhisperForcedAligner" in typed context
 1	src/mouthkeys/transcribe.py	no-untyped-call	Call to untyped function "download_onnx" in typed context
 1	src/mouthkeys/transcribe.py	no-untyped-call	Call to untyped function "load_onnx" in typed context

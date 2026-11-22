@@ -318,44 +318,7 @@
 4	src/mouthkeys/models_ui.py	PLC0415	`import` should be at the top-level of a file
 4	src/mouthkeys/native_asr.py	PLC0415	`import` should be at the top-level of a file
 1	src/mouthkeys/native_asr.py	TRY004	Prefer `TypeError` exception for invalid type
-1	src/mouthkeys/native_worker.py	ANN001	Missing type annotation for function argument `allow_audio`
-4	src/mouthkeys/native_worker.py	ANN001	Missing type annotation for function argument `config`
-1	src/mouthkeys/native_worker.py	ANN001	Missing type annotation for function argument `deadline`
-1	src/mouthkeys/native_worker.py	ANN001	Missing type annotation for function argument `final`
-1	src/mouthkeys/native_worker.py	ANN001	Missing type annotation for function argument `item`
-1	src/mouthkeys/native_worker.py	ANN001	Missing type annotation for function argument `length`
-1	src/mouthkeys/native_worker.py	ANN001	Missing type annotation for function argument `request`
-4	src/mouthkeys/native_worker.py	ANN001	Missing type annotation for function argument `samples`
-1	src/mouthkeys/native_worker.py	ANN001	Missing type annotation for function argument `session_key`
-3	src/mouthkeys/native_worker.py	ANN001	Missing type annotation for function argument `stream`
-2	src/mouthkeys/native_worker.py	ANN001	Missing type annotation for function argument `timeout`
-1	src/mouthkeys/native_worker.py	ANN001	Missing type annotation for function argument `value`
-1	src/mouthkeys/native_worker.py	ANN002	Missing type annotation for `*args`
-1	src/mouthkeys/native_worker.py	ANN003	Missing type annotation for `**kwargs`
-1	src/mouthkeys/native_worker.py	ANN201	Missing return type annotation for public function `alive`
-1	src/mouthkeys/native_worker.py	ANN201	Missing return type annotation for public function `asr_config`
-1	src/mouthkeys/native_worker.py	ANN201	Missing return type annotation for public function `close_workers`
-1	src/mouthkeys/native_worker.py	ANN201	Missing return type annotation for public function `close`
-1	src/mouthkeys/native_worker.py	ANN201	Missing return type annotation for public function `isolate_network`
-1	src/mouthkeys/native_worker.py	ANN201	Missing return type annotation for public function `reset_stream`
-1	src/mouthkeys/native_worker.py	ANN201	Missing return type annotation for public function `segments`
-1	src/mouthkeys/native_worker.py	ANN201	Missing return type annotation for public function `stream`
-1	src/mouthkeys/native_worker.py	ANN201	Missing return type annotation for public function `worker_main`
-1	src/mouthkeys/native_worker.py	ANN202	Missing return type annotation for private function `_call`
-1	src/mouthkeys/native_worker.py	ANN202	Missing return type annotation for private function `_read_exact`
-1	src/mouthkeys/native_worker.py	ANN202	Missing return type annotation for private function `_read_message`
-1	src/mouthkeys/native_worker.py	ANN202	Missing return type annotation for private function `_response`
-1	src/mouthkeys/native_worker.py	ANN202	Missing return type annotation for private function `_write_message`
-1	src/mouthkeys/native_worker.py	ANN202	Missing return type annotation for private function `no_dns`
-1	src/mouthkeys/native_worker.py	ANN204	Missing return type annotation for special method `__del__`
-1	src/mouthkeys/native_worker.py	ANN204	Missing return type annotation for special method `__init__`
-1	src/mouthkeys/native_worker.py	ANN205	Missing return type annotation for staticmethod `_segment`
-1	src/mouthkeys/native_worker.py	ARG001	Unused function argument: `args`
-1	src/mouthkeys/native_worker.py	ARG001	Unused function argument: `kwargs`
-4	src/mouthkeys/native_worker.py	PLC0415	`import` should be at the top-level of a file
-1	src/mouthkeys/native_worker.py	SIM105	Use `contextlib.suppress(Exception)` instead of `try`-`except`-`pass`
-1	src/mouthkeys/native_worker.py	SIM105	Use `contextlib.suppress(ProcessLookupError)` instead of `try`-`except`-`pass`
-1	src/mouthkeys/native_worker.py	TRY004	Prefer `TypeError` exception for invalid type
+2	src/mouthkeys/native_worker.py	PLC0415	`import` should be at the top-level of a file
 1	src/mouthkeys/onboarding.py	ANN001	Missing type annotation for function argument `query`
 1	src/mouthkeys/onboarding.py	ANN001	Missing type annotation for function argument `response`
 1	src/mouthkeys/onboarding.py	ANN001	Missing type annotation for function argument `status`
@@ -564,7 +527,6 @@
 2	tests/test_mode_routing.py	PLC0415	`import` should be at the top-level of a file
 1	tests/test_mode_routing.py	PT011	`pytest.raises(ValueError)` is too broad, set the `match` parameter or use a more specific exception
 5	tests/test_native_asr.py	PLC0415	`import` should be at the top-level of a file
-5	tests/test_native_worker.py	PLC0415	`import` should be at the top-level of a file
 1	tests/test_pipeline.py	PLC0415	`import` should be at the top-level of a file
 1	tests/test_pipeline.py	PT006	Wrong type passed to first argument of `pytest.mark.parametrize`; expected `tuple`
 1	tests/test_pipeline.py	PT011	`pytest.raises(ValueError)` is too broad, set the `match` parameter or use a more specific exception

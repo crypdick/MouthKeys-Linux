@@ -106,8 +106,8 @@ reply before stopping the server.
   writing to it. `backup` validates a restore plan before applying it. `upstream_backup` converts
   upstream dictionaries and prompt drafts; `upstream_backup_sections` parses settings and
   transcript records without writing state. `private_files` atomically replaces private files.
-  `word_alignment`
-  parses timed tokens into character-aware spans; character offsets are not time values.
+  `forced_alignment` adds optional cached Whisper timings only to validated ASR segments.
+  `word_alignment` anchors timed tokens to character spans; character offsets are not time values.
 
 [Import policy](../architecture.toml) keeps primitives independent and prevents the desktop
 adapters it owns from importing application orchestration or sibling adapters. Application code

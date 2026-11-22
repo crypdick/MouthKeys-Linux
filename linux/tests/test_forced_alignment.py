@@ -1,9 +1,13 @@
 from dataclasses import replace
 from types import SimpleNamespace
 
+import faster_whisper
+import faster_whisper.audio
 import numpy as np
 import pytest
+from faster_whisper import tokenizer
 
+from mouthkeys import engines, forced_alignment
 from mouthkeys.config import Config
 from mouthkeys.forced_alignment import MAX_SEGMENTS, WhisperForcedAligner
 from mouthkeys.transcribe import Transcriber
@@ -16,8 +20,6 @@ def config(**kwargs):
 
 @pytest.fixture
 def aligner(monkeypatch):
-    from faster_whisper import tokenizer
-
     class Tokenizer:
         eot = 1000
 
@@ -124,8 +126,6 @@ def test_long_segment_is_not_arbitrarily_partitioned(monkeypatch):
 
 
 def test_alignment_work_and_inter_call_deadline_are_bounded(monkeypatch, aligner):
-    from mouthkeys import forced_alignment
-
     value, _, _ = aligner
     monkeypatch.setattr(forced_alignment, "time", SimpleNamespace(monotonic=lambda: 0))
     calls = []
@@ -154,10 +154,6 @@ def test_auto_language_is_measured_or_abstained_not_guessed(aligner):
 
 
 def test_second_model_is_explicit_cpu_int8_and_local_only(monkeypatch):
-    import faster_whisper
-
-    from mouthkeys import engines
-
     calls = []
 
     def resolve(selected):
@@ -190,8 +186,6 @@ def test_second_model_is_explicit_cpu_int8_and_local_only(monkeypatch):
 def test_transcriber_propagates_forced_words_and_aligner_choice_invalidates_preview(
     monkeypatch, aligner
 ):
-    import faster_whisper.audio
-
     value, _, _ = aligner
     transcriber = Transcriber()
     primary = SimpleNamespace(
@@ -212,10 +206,6 @@ def test_transcriber_propagates_forced_words_and_aligner_choice_invalidates_prev
 
 
 def test_disabling_matching_releases_secondary_model_without_reloading_primary(monkeypatch):
-    import faster_whisper
-
-    from mouthkeys import engines
-
     primary = object()
     monkeypatch.setattr(engines, "resolve_whisper", lambda config: "existing-primary-model")
     monkeypatch.setattr(faster_whisper, "WhisperModel", lambda *a, **kw: primary)
@@ -247,8 +237,6 @@ def test_zero_duration_punctuation_is_preserved_without_inventing_extent(aligner
 def test_control_tokens_and_long_transcripts_are_rejected_before_encoder_work(
     monkeypatch, aligner, tokens
 ):
-    from faster_whisper import tokenizer
-
     value, model, _ = aligner
     monkeypatch.setattr(tokenizer.Tokenizer, "encode", lambda *a: tokens)
     model.encode = lambda *a: pytest.fail("Invalid forced transcript was encoded")
@@ -277,3 +265,66 @@ def test_repeated_alignment_warnings_do_not_accumulate_during_preview():
     for _ in range(4):
         transcriber._align_segments(np.zeros(16000), config(), [])
     assert transcriber.alignment_warning == "first; second"
+
+
+def test_unrepresentable_segment_time_leaves_primary_text_unchanged(monkeypatch):
+    value = WhisperForcedAligner()
+    monkeypatch.setattr(value, "_load", lambda _: pytest.fail("Loaded aligner for invalid timing"))
+    segment = SimpleNamespace(start=10**400, end=10**400 + 1, text="Hello")
+    original = [segment]
+    result, warning = value.align(np.zeros(16000), original, config())
+    assert result == original
+    assert "30-second context" in warning
+
+
+def test_numeric_word_payload_is_not_coerced_to_real_word_timing(aligner):
+    value, model, _ = aligner
+    model.find_alignment = lambda *_: [[{"word": 42, "start": 0.1, "end": 0.4, "probability": 0.9}]]
+    segment = SimpleNamespace(start=0, end=1, text="42")
+    result, warning = value.align(np.zeros(16000), [segment], config())
+    assert result == [segment]
+    assert "ASR text retained" in warning
+
+
+def test_aligners_without_multilingual_support_accept_only_english(aligner):
+    value, model, calls = aligner
+    model.model.is_multilingual = False
+    words = value._words(np.zeros(16000), "Hello", config(language="auto"))
+    assert words[0]["word"] == "Hello"
+    assert len(calls) == 1
+    with pytest.raises(ValueError, match="does not support selected language"):
+        value._words(np.zeros(16000), "Bonjour", config(language="fr-FR"))
+    assert len(calls) == 1
+
+
+@pytest.mark.parametrize("choice", ["en", "malformed|>", "<|en", None])
+def test_unrecognized_language_token_does_not_align(aligner, choice):
+    value, model, calls = aligner
+    model.model.detect_language = lambda _: [[(choice, 0.99)]]
+    with pytest.raises(ValueError, match="language is uncertain"):
+        value._words(np.zeros(16000), "Hello", config(language="auto"))
+    assert calls == []
+
+
+def test_nonfinite_detected_language_confidence_abstains(aligner):
+    value, model, calls = aligner
+    model.model.detect_language = lambda _: [[("<|en|>", float("nan"))]]
+    with pytest.raises(ValueError, match="language is uncertain"):
+        value._words(np.zeros(16000), "Hello", config(language="auto"))
+    assert calls == []
+
+
+@pytest.mark.parametrize(
+    ("short_features", "failure"),
+    [(True, "exceeds Whisper alignment context"), (False, "no complete word metadata")],
+)
+def test_missing_features_or_alignment_are_rejected(aligner, short_features, failure):
+    value, model, calls = aligner
+    if short_features:
+        audio = np.zeros(0)
+    else:
+        audio = np.zeros(16000)
+        model.find_alignment = lambda *_: [[]]
+    with pytest.raises(ValueError, match=failure):
+        value._words(audio, "Hello", config())
+    assert calls == []

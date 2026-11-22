@@ -8,9 +8,12 @@ https://docs.ollama.com/api/tags
 """
 
 import urllib.parse
+from collections.abc import Callable
 from dataclasses import replace
+from typing import BinaryIO
 
 from .ai_providers import _completion, _request_payload, endpoint_url, request_json
+from .config import Config
 from .profiles import resolve_profile
 
 
@@ -58,7 +61,7 @@ def _with_query(endpoint, **values):
     return urllib.parse.urlunsplit(parsed._replace(query=urllib.parse.urlencode(query)))
 
 
-def list_models(config, *, opener=None):
+def list_models(config: Config, *, opener: Callable[..., BinaryIO] | None = None) -> list[str]:
     """List server-visible models on explicit request, at most 1000 IDs/ten pages."""
     config = resolve_profile(config)
     endpoint = models_endpoint(config)
@@ -115,7 +118,9 @@ def list_models(config, *, opener=None):
     raise ValueError("Model discovery exceeds ten pages")
 
 
-def verify(config, *, opener=None):
+def verify(
+    config: Config, *, opener: Callable[..., BinaryIO] | None = None
+) -> dict[str, str | bool]:
     """Explicit tiny completion checks credentials, selected model, and protocol.
 
     Only a fixed test prompt leaves the process. Provider content is discarded; the

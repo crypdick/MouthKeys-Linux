@@ -188,22 +188,12 @@
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "LearningPage" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "MicrophonePage" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "ModelBrowser" in typed context
-1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "RegionalFillerBanner" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "SetupPage" in typed context
-1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "Window" in typed context
-2	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "apply_theme" in typed context
-1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "create_tray" in typed context
-1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "list_models" in typed context
-1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "poll" in typed context
 2	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "preview_sound" in typed context
-2	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "provider_action" in typed context
-2	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "refresh" in typed context
-2	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "refresh_regional_offers" in typed context
-3	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "save" in typed context
+2	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "save" in typed context
 3	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "update_status" in typed context
-1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "verify" in typed context
-10	src/mouthkeys/gui.py	no-untyped-def	Function is missing a return type annotation
-5	src/mouthkeys/gui.py	no-untyped-def	Function is missing a type annotation
+4	src/mouthkeys/gui.py	no-untyped-def	Function is missing a return type annotation
+2	src/mouthkeys/gui.py	no-untyped-def	Function is missing a type annotation
 2	src/mouthkeys/lark.py	no-untyped-call	Call to untyped function "carries_status_page" in typed context
 1	src/mouthkeys/lark.py	no-untyped-call	Call to untyped function "find_receiver" in typed context
 1	src/mouthkeys/lark.py	no-untyped-call	Call to untyped function "heartbeat" in typed context
@@ -305,10 +295,8 @@
 1	src/mouthkeys/onboarding.py	attr-defined	"Callable[[], QWidget]" has no attribute "settings_category"
 3	src/mouthkeys/onboarding.py	attr-defined	"QAbstractItemModel" has no attribute "item"
 1	src/mouthkeys/onboarding.py	method-assign	Cannot assign to a method
-1	src/mouthkeys/onboarding.py	no-untyped-call	Call to untyped function "RegionalFillerBanner" in typed context
 2	src/mouthkeys/onboarding.py	no-untyped-call	Call to untyped function "invalidate_tryout" in typed context
 1	src/mouthkeys/onboarding.py	no-untyped-call	Call to untyped function "languages" in typed context
-1	src/mouthkeys/onboarding.py	no-untyped-call	Call to untyped function "refresh" in typed context
 1	src/mouthkeys/onboarding.py	no-untyped-call	Call to untyped function "refresh_routes" in typed context
 1	src/mouthkeys/onboarding.py	no-untyped-call	Call to untyped function "routes" in typed context
 6	src/mouthkeys/onboarding.py	no-untyped-def	Function is missing a return type annotation
@@ -363,12 +351,7 @@
 3	src/mouthkeys/provider_tools.py	no-untyped-call	Call to untyped function "models_endpoint" in typed context
 2	src/mouthkeys/provider_tools.py	no-untyped-call	Call to untyped function "request_json" in typed context
 2	src/mouthkeys/provider_tools.py	no-untyped-call	Call to untyped function "resolve_profile" in typed context
-4	src/mouthkeys/provider_tools.py	no-untyped-def	Function is missing a type annotation
-1	src/mouthkeys/regional_ui.py	attr-defined	"Callable[[], QWidget]" has no attribute "fields"
-1	src/mouthkeys/regional_ui.py	method-assign	Cannot assign to a method
-1	src/mouthkeys/regional_ui.py	no-untyped-call	Call to untyped function "answer" in typed context
-3	src/mouthkeys/regional_ui.py	no-untyped-call	Call to untyped function "refresh" in typed context
-3	src/mouthkeys/regional_ui.py	no-untyped-def	Function is missing a type annotation
+2	src/mouthkeys/provider_tools.py	no-untyped-def	Function is missing a type annotation
 1	src/mouthkeys/routing.py	no-untyped-call	Call to untyped function "resolve_profile" in typed context
 1	src/mouthkeys/routing.py	no-untyped-def	Function is missing a type annotation
 1	src/mouthkeys/service.py	arg-type	Argument 1 to "DictationJob" has incompatible type "Any | None"; expected "str"
@@ -451,14 +434,11 @@
 1	src/mouthkeys/transcribe.py	union-attr	Item "None" of "Any | None" has no attribute "segments"
 2	src/mouthkeys/transcribe.py	union-attr	Item "None" of "Any | None" has no attribute "stream"
 1	src/mouthkeys/transcribe.py	union-attr	Item "None" of "Any | None" has no attribute "transcribe"
-1	src/mouthkeys/tray.py	no-untyped-call	Call to untyped function "Tray" in typed context
-1	src/mouthkeys/tray.py	no-untyped-call	Call to untyped function "Window" in typed context
-1	src/mouthkeys/tray.py	no-untyped-call	Call to untyped function "create_tray" in typed context
 1	src/mouthkeys/tray.py	no-untyped-call	Call to untyped function "notify_status" in typed context
 1	src/mouthkeys/tray.py	no-untyped-call	Call to untyped function "open_window" in typed context
 5	src/mouthkeys/tray.py	no-untyped-call	Call to untyped function "send" in typed context
 6	src/mouthkeys/tray.py	no-untyped-def	Function is missing a return type annotation
-7	src/mouthkeys/tray.py	no-untyped-def	Function is missing a type annotation
+5	src/mouthkeys/tray.py	no-untyped-def	Function is missing a type annotation
 2	src/mouthkeys/tray.py	union-attr	Item "None" of "QCoreApplication | None" has no attribute "quit"
 2	src/mouthkeys/upstream_backup.py	no-untyped-call	Call to untyped function "_merge_rules" in typed context
 1	src/mouthkeys/upstream_backup.py	no-untyped-call	Call to untyped function "merge_replacements" in typed context

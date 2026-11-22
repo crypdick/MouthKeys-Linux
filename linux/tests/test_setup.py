@@ -115,13 +115,13 @@ def test_regional_banner_is_inline_once_and_syncs_settings_without_other_writes(
     window = setup_window()
     changed = []
     window.fields["filler_words"].setText("unsaved-edit")
-    banner = RegionalFillerBanner(window, on_change=lambda: changed.append(True))
+    banner = RegionalFillerBanner(window, window.fields, on_change=lambda: changed.append(True))
     assert banner.parentWidget() is window
     assert not banner.isWindow()
     assert not banner.isHidden()
     assert not window.isVisible()
     assert QApplication.focusWidget() is None
-    banner.answer(keep)
+    banner.answer(keep=keep)
     saved = Config.load()
     assert saved.filler_words == ("um" if keep else "um,EH,eh")
     assert saved.audio_source == "saved-source"
@@ -131,19 +131,20 @@ def test_regional_banner_is_inline_once_and_syncs_settings_without_other_writes(
     assert banner.isHidden()
     assert changed == [True]
     assert not window.isVisible()
-    banner.answer(not keep)
+    banner.answer(keep=not keep)
     assert Config.load() == saved
 
 
 def test_stale_regional_banner_cannot_overwrite_answer_from_another_surface(monkeypatch):
     monkeypatch.setenv("TZ", "America/Toronto")
     Config(remove_filler_words="on", filler_words="um,eh").save()
-    setup = RegionalFillerBanner(setup_window())
-    settings = RegionalFillerBanner(setup_window())
+    setup_parent, settings_parent = setup_window(), setup_window()
+    setup = RegionalFillerBanner(setup_parent, setup_parent.fields)
+    settings = RegionalFillerBanner(settings_parent, settings_parent.fields)
     assert not setup.isHidden()
     assert not settings.isHidden()
-    setup.answer(False)
-    settings.answer(True)
+    setup.answer(keep=False)
+    settings.answer(keep=True)
     assert settings.isHidden()
     assert Config.load().regional_filler_answered == "on"
     assert Config.load().filler_words == "um,eh"

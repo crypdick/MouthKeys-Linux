@@ -7,7 +7,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QTimer
 from PySide6.QtGui import QIcon
-from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
+from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon, QWidget
 
 from .config import Config, runtime_dir
 from .desktop import source_names
@@ -15,10 +15,10 @@ from .qt_control import Request
 
 
 class Tray(QSystemTrayIcon):
-    def __init__(self, window=None):
+    def __init__(self, window: QWidget | None = None) -> None:
         super().__init__(QIcon(str(Path(__file__).parent / "assets" / "icon.png")), window)
         self.window = window
-        self.jobs = set()
+        self.jobs: set[Request] = set()
         self.pending = False
         self.quitting = False
         self.last_microphone = None
@@ -47,7 +47,7 @@ class Tray(QSystemTrayIcon):
         self.setToolTip("MouthKeys")
 
     def request_quit(self):
-        if self.window is not None and self.window.busy:
+        if getattr(self.window, "busy", False):
             self.setToolTip("Wait for current settings operation before quitting")
             return
         self.quitting = True
@@ -190,7 +190,7 @@ class Tray(QSystemTrayIcon):
         self.observed_status = True
 
 
-def create_tray(window=None):
+def create_tray(window: QWidget | None = None) -> Tray | None:
     if Config.load().tray != "on" or not QSystemTrayIcon.isSystemTrayAvailable():
         return None
     tray = Tray(window)

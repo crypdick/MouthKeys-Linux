@@ -120,7 +120,7 @@ def test_config_rejects_unknown_destination_guard_and_credential_source():
 
 
 def test_settings_keyring_storage_is_explicit_and_enables_only_editor_source(monkeypatch):
-    from PySide6.QtWidgets import QApplication, QInputDialog
+    from PySide6.QtWidgets import QApplication, QInputDialog, QPushButton
 
     from mouthkeys import gui, settings_choices
 
@@ -132,7 +132,12 @@ def test_settings_keyring_storage_is_explicit_and_enables_only_editor_source(mon
     window = gui.Window()
     try:
         assert not calls
-        window.keyring_action("store")
+        button = next(
+            b
+            for b in window.findChildren(QPushButton)
+            if b.text() == "Save API key in desktop keyring"
+        )
+        button.click()
         # Only the fake storage runs; window is never shown and no keyring exists.
         import time
 

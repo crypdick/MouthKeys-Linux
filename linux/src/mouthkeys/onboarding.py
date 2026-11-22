@@ -68,7 +68,9 @@ class SetupPage(QWidget):
         )
         route_note.setWordWrap(True)
         layout.addWidget(route_note)
-        self.regional_banner = RegionalFillerBanner(window, on_change=self.refresh_other_banner)
+        self.regional_banner = RegionalFillerBanner(
+            window, window.fields, on_change=self.refresh_other_banner
+        )
         layout.addWidget(self.regional_banner)
         for label, action in (
             ("Check setup", self.check_setup),

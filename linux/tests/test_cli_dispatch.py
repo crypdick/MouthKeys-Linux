@@ -304,7 +304,12 @@ def test_doctor_exit_status_is_based_on_report_without_running_desktop(
 
 @pytest.mark.parametrize(
     ("command", "module"),
-    [("gui", "gui"), ("tray", "tray"), ("overlay", "overlay_process"), ("hotkeys", "hotkeys")],
+    [
+        ("gui", "gui_launch"),
+        ("tray", "tray"),
+        ("overlay", "overlay_process"),
+        ("hotkeys", "hotkeys"),
+    ],
 )
 def test_desktop_commands_load_only_requested_launcher(monkeypatch, command, module):
     launch = Mock(return_value=7)

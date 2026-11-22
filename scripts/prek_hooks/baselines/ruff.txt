@@ -12,7 +12,6 @@
 1	src/mouthkeys/assistance.py	PLR0915	Too many statements (60 > 50)
 1	src/mouthkeys/assistance.py	SIM105	Use `contextlib.suppress(ProcessLookupError)` instead of `try`-`except`-`pass`
 1	src/mouthkeys/assistance.py	TRY004	Prefer `TypeError` exception for invalid type
-1	src/mouthkeys/assistant_history.py	PLC0415	`import` should be at the top-level of a file
 2	src/mouthkeys/assistant_ui.py	ANN001	Missing type annotation for function argument `_checked`
 1	src/mouthkeys/assistant_ui.py	ANN001	Missing type annotation for function argument `accept_cancelled`
 1	src/mouthkeys/assistant_ui.py	ANN001	Missing type annotation for function argument `automatic`
@@ -272,8 +271,6 @@
 3	tests/test_ai_stream.py	PT006	Wrong type passed to first argument of `pytest.mark.parametrize`; expected `tuple`
 1	tests/test_ai_stream.py	PT011	`pytest.raises(ValueError)` is too broad, set the `match` parameter or use a more specific exception
 4	tests/test_assistance.py	PLC0415	`import` should be at the top-level of a file
-7	tests/test_assistant_history.py	PLC0415	`import` should be at the top-level of a file
-3	tests/test_assistant_history.py	PT011	`pytest.raises(ValueError)` is too broad, set the `match` parameter or use a more specific exception
 1	tests/test_assistant_sessions.py	PLC0415	`import` should be at the top-level of a file
 6	tests/test_assistant_ui.py	PLC0415	`import` should be at the top-level of a file
 1	tests/test_assistant_ui.py	PLW0108	Lambda may be unnecessary; consider inlining inner function

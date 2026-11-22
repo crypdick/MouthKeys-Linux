@@ -69,7 +69,9 @@ reply before stopping the server.
   configured desktop integrations. `provider_settings_ui` owns explicit provider and keyring
   actions. `regional_ui` shares the same save path between the inline banner and Settings prompt.
   `assistant_chats` handles conversation selection and history, including an opt-out during a
-  pending request. `assistant_editor` displays proposals and forwards explicit review actions.
+  pending request. `assistant_session` validates and bounds messages and execution receipts for
+  both private memory and history. `assistant_history` commits saved conversations in SQLite
+  transactions. `assistant_editor` displays proposals and forwards explicit review actions.
   `recording_assistant` binds voice jobs to their starting conversation, retains execution
   receipts, and publishes bounded status snapshots. Only the active request round can publish
   incremental output. `command_preview` decodes only the root explanation for display;

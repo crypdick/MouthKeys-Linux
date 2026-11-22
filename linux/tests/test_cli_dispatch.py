@@ -184,7 +184,7 @@ def test_speaker_download_models_and_cache_deletion_keep_command_contracts(monke
     speakers.assert_called_once_with()
     assert cli.main(["models"]) == 0
     assert json.loads(capsys.readouterr().out) == [{"model": "example"}]
-    catalog.assert_called_once_with("onnx")
+    catalog.assert_called_once_with("onnx", revision="pinned")
     assert cli.main(["delete-model", "example"]) == 0
     assert capsys.readouterr().out == "Cached model deleted\n"
     remove.assert_called_once_with("example", "onnx", revision="pinned")

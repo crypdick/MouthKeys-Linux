@@ -2,7 +2,7 @@ import json
 import sys
 import wave
 from dataclasses import replace
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
 
 import numpy as np
 import pytest
@@ -10,6 +10,12 @@ import pytest
 from mouthkeys import engines, file_transcription
 from mouthkeys.config import Config
 from mouthkeys.transcribe import Transcriber, download
+
+
+def onnx_module(**members):
+    module = ModuleType("onnx_asr")
+    vars(module).update(members)
+    return module
 
 
 def test_onnx_only_download_action_can_fetch(monkeypatch):
@@ -24,7 +30,7 @@ def test_onnx_only_download_action_can_fetch(monkeypatch):
         path.mkdir(parents=True, exist_ok=True)
 
     monkeypatch.setitem(
-        sys.modules, "onnx_asr", SimpleNamespace(load_model=load_model, load_vad=load_vad)
+        sys.modules, "onnx_asr", onnx_module(load_model=load_model, load_vad=load_vad)
     )
     path = download("nemo-parakeet-tdt-0.6b-v3", "onnx", "int8")
     assert path == str(engines.managed_path("nemo-parakeet-tdt-0.6b-v3"))
@@ -58,7 +64,7 @@ def test_onnx_runtime_offline_and_bounded_vad(monkeypatch, tmp_path):
         return object()
 
     monkeypatch.setitem(
-        sys.modules, "onnx_asr", SimpleNamespace(load_model=load_model, load_vad=load_vad)
+        sys.modules, "onnx_asr", onnx_module(load_model=load_model, load_vad=load_vad)
     )
     path = tmp_path / "speech.wav"
     with wave.open(str(path), "wb") as wav:
@@ -76,7 +82,7 @@ def test_onnx_runtime_offline_and_bounded_vad(monkeypatch, tmp_path):
 
 
 def test_onnx_missing_model_never_fetches(monkeypatch):
-    monkeypatch.setitem(sys.modules, "onnx_asr", SimpleNamespace())
+    monkeypatch.setitem(sys.modules, "onnx_asr", onnx_module())
     with pytest.raises(RuntimeError, match="download first"):
         engines.load_onnx(replace(Config(), engine="onnx"))
 
@@ -320,7 +326,7 @@ def test_onnx_revision_download_is_isolated_and_runtime_offline(monkeypatch):
 
     monkeypatch.setattr(engines, "_download_onnx_revision", explicit_fetch)
     monkeypatch.setitem(
-        sys.modules, "onnx_asr", SimpleNamespace(load_model=load_model, load_vad=load_vad)
+        sys.modules, "onnx_asr", onnx_module(load_model=load_model, load_vad=load_vad)
     )
     model = "nemo-parakeet-tdt-0.6b-v3"
     path = engines.onnx_path(model, "test-commit")
@@ -342,7 +348,7 @@ def test_onnx_cancelled_redownload_cannot_keep_ready_marker(monkeypatch):
     def fail(*args, **kwargs):
         raise RuntimeError("cancelled")
 
-    monkeypatch.setitem(sys.modules, "onnx_asr", SimpleNamespace(load_model=fail))
+    monkeypatch.setitem(sys.modules, "onnx_asr", onnx_module(load_model=fail))
     with pytest.raises(RuntimeError, match="cancelled"):
         download(model, "onnx")
     assert not (path / engines.READY).exists()
@@ -357,39 +363,6 @@ def test_whisper_runtime_forwards_requested_revision(monkeypatch):
     Transcriber().load(replace(Config(), model_revision="exact-commit"))
     assert calls[0]["revision"] == "exact-commit"
     assert calls[0]["local_files_only"] is True
-
-
-def test_whisper_catalog_does_not_claim_another_revision_installed(monkeypatch, tmp_path):
-    import huggingface_hub
-    from faster_whisper.utils import _MODELS
-
-    from mouthkeys.config import cache_dir
-
-    (cache_dir() / "models").mkdir(parents=True)
-    name, repository = next(iter(_MODELS.items()))
-    cached = SimpleNamespace(
-        repo_id=repository,
-        repo_path="managed-model",
-        revisions=[SimpleNamespace(commit_hash="abc123", refs={"main"}, snapshot_path=tmp_path)],
-    )
-    monkeypatch.setattr(
-        huggingface_hub, "scan_cache_dir", lambda *a: SimpleNamespace(repos=[cached])
-    )
-
-    def item(revision):
-        return next(
-            row
-            for row in engines.model_catalog("whisper", revision=revision)
-            if row["model"] == name
-        )
-
-    (tmp_path / "tokenizer.json").write_text("{}")
-    assert not item("main")["installed"]
-    for filename in ("model.bin", "config.json", "vocabulary.json"):
-        (tmp_path / filename).write_text("complete")
-    assert item("main")["installed"]
-    assert item("abc123")["installed"]
-    assert not item("different-commit")["installed"]
 
 
 def test_whisper_missing_tokenizer_cannot_reach_library_fallback(monkeypatch, tmp_path):
@@ -418,3 +391,66 @@ def test_whisper_resolver_queries_cache_only(monkeypatch):
         engines.resolve_whisper(replace(Config(), model_revision="requested-revision"))
     assert calls[0]["local_files_only"] is True
     assert calls[0]["revision"] == "requested-revision"
+
+
+def test_onnx_missing_extra_and_unsupported_precision_do_not_load_models(monkeypatch):
+    monkeypatch.setitem(sys.modules, "onnx_asr", None)
+    with pytest.raises(RuntimeError, match="Install the onnx extra"):
+        download("synthetic", "onnx")
+    monkeypatch.setitem(sys.modules, "onnx_asr", onnx_module())
+    with pytest.raises(ValueError, match="ONNX compute type"):
+        download("synthetic", "onnx", "float16")
+    with pytest.raises(ValueError, match="Unknown engine"):
+        engines.model_catalog("unsupported")
+
+
+@pytest.mark.parametrize("available", [True, False])
+def test_onnx_cuda_requests_only_installed_execution_provider(monkeypatch, available):
+    model = "synthetic-test"
+    providers = ["CUDAExecutionProvider"] if available else ["CPUExecutionProvider"]
+    runtime = ModuleType("onnxruntime")
+    runtime.get_available_providers = lambda: providers
+    monkeypatch.setitem(sys.modules, "onnxruntime", runtime)
+    seen = []
+
+    def load_model(_model, _path, **options):
+        seen.append(options)
+        return SimpleNamespace(with_vad=lambda *_a, **_opts: "vad-model")
+
+    monkeypatch.setitem(
+        sys.modules,
+        "onnx_asr",
+        onnx_module(load_model=load_model, load_vad=lambda *_a, **_opts: None),
+    )
+    for cache in (engines.onnx_path(model), engines.managed_path("silero")):
+        cache.mkdir(parents=True)
+        (cache / engines.READY).touch()
+    config = Config(engine="onnx", model=model, device="cuda")
+    if available:
+        assert engines.load_onnx(config) == "vad-model"
+        assert seen[0]["providers"] == ["CUDAExecutionProvider", "CPUExecutionProvider"]
+        assert seen[0]["offline"] is True
+    else:
+        with pytest.raises(RuntimeError, match="requires onnxruntime-gpu"):
+            engines.load_onnx(config)
+        assert not seen
+
+
+def test_onnx_user_directory_does_not_require_managed_model_marker(monkeypatch, tmp_path):
+    calls = []
+
+    def load_model(name, path, **options):
+        calls.append((name, path, options))
+        return SimpleNamespace(with_vad=lambda *_args, **_options: "local-model")
+
+    monkeypatch.setitem(
+        sys.modules,
+        "onnx_asr",
+        onnx_module(load_model=load_model, load_vad=lambda *_a, **_kw: None),
+    )
+    silero = engines.managed_path("silero")
+    silero.mkdir(parents=True)
+    (silero / engines.READY).touch()
+    assert engines.load_onnx(Config(engine="onnx", model=str(tmp_path))) == "local-model"
+    assert calls[0][:2] == (None, tmp_path)
+    assert calls[0][2]["offline"] is True

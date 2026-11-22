@@ -76,6 +76,7 @@ reply before stopping the server.
   that was active when recording started and never enter the desktop delivery path.
   `model_downloads_ui` owns the model download process, cache actions, and progress display.
   It keeps child-process output bounded and requests model warmup only after a successful download.
+  `model_cache` resolves local revisions and restricts deletion to the selected app-owned cache.
   `file_speakers` stages explicit model downloads and validates attributed intervals against the
   decoded file.
   `file_transcription_ui` owns the file worker and its history; Settings and the tray check whether

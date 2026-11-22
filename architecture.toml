@@ -38,7 +38,7 @@ public_modules = [
   "mouthkeys.engines", "mouthkeys.file_history", "mouthkeys.file_speakers", "mouthkeys.file_transcription", "mouthkeys.file_transcription_ui",
   "mouthkeys.forced_alignment", "mouthkeys.formatting", "mouthkeys.gui", "mouthkeys.gui_launch", "mouthkeys.help_ui", "mouthkeys.history_ui", "mouthkeys.hotkeys",
   "mouthkeys.lark", "mouthkeys.lark_monitor", "mouthkeys.learning", "mouthkeys.local_api", "mouthkeys.microphone", "mouthkeys.microphone_ui",
-  "mouthkeys.model_downloads_ui", "mouthkeys.model_progress", "mouthkeys.models_ui", "mouthkeys.native_asr", "mouthkeys.native_worker", "mouthkeys.nemo_asr", "mouthkeys.onboarding",
+  "mouthkeys.model_cache", "mouthkeys.model_downloads_ui", "mouthkeys.model_progress", "mouthkeys.models_ui", "mouthkeys.native_asr", "mouthkeys.native_worker", "mouthkeys.nemo_asr", "mouthkeys.onboarding",
   "mouthkeys.operations", "mouthkeys.overlay", "mouthkeys.overlay_assistant", "mouthkeys.overlay_process", "mouthkeys.overlay_rendering",
   "mouthkeys.portal_shortcuts", "mouthkeys.postprocess", "mouthkeys.profiles", "mouthkeys.prompt_profiles_ui",
   "mouthkeys.pronunciation", "mouthkeys.qt_control", "mouthkeys.provider_settings_ui", "mouthkeys.provider_tools",

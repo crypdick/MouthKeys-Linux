@@ -13,7 +13,7 @@ PROJECT = ROOT / "linux"
 BASELINE = ROOT / "scripts/prek_hooks/baselines"
 TOOLS = {
     "ruff": ["ruff", "check", "--output-format=json", "src", "tests"],
-    "mypy": ["mypy", "--output=json", "src/mouthkeys"],
+    "mypy": ["mypy", "--output=json", "--no-error-summary", "src/mouthkeys"],
 }
 
 

@@ -13,6 +13,7 @@ RESULT = {"text": "private file transcript", "duration": 1.0, "processing_second
     [
         (["not a result"], "Invalid file transcription result"),
         (RESULT | {"duration": float("nan")}, "Invalid result duration"),
+        (RESULT | {"duration": 10**400}, "Invalid result duration"),
         (RESULT | {"processing_seconds": -1}, "Invalid result processing_seconds"),
         (RESULT | {"segments": {}}, "Invalid file segments"),
         (RESULT | {"segments": [{"text": 1}]}, "Invalid file segment"),

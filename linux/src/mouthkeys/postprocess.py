@@ -8,6 +8,7 @@ from typing import BinaryIO
 
 from .ai_providers import request_completion
 from .config import Config
+from .profiles import resolve_profile
 
 # Adapted from SettingsStore.baseDictationPromptText at upstream d50ad008.
 BASE_DICTATION_PROMPT = (
@@ -15,7 +16,7 @@ BASE_DICTATION_PROMPT = (
 )
 
 
-def dictation_prompt(config):
+def dictation_prompt(config: Config) -> str:
     body = config.ai_prompt.strip()
     if config.ai_custom_prompt_only == "on" or body.casefold().startswith(
         BASE_DICTATION_PROMPT.casefold()
@@ -24,7 +25,7 @@ def dictation_prompt(config):
     return BASE_DICTATION_PROMPT + ("\n\n" + body if body else "")
 
 
-def render_dictation_user_message(prompt_text, transcript):
+def render_dictation_user_message(prompt_text: str, transcript: str) -> str:
     """Match upstream dictation templates; Command/Edit keep their own prompts."""
     if "${transcript}" in prompt_text:
         return prompt_text.replace("${transcript}", transcript)
@@ -46,8 +47,6 @@ def process(
     text = text.strip()
     if not text:
         return ""
-    from .profiles import resolve_profile
-
     config = resolve_profile(config)
     message = render_dictation_user_message(dictation_prompt(config), text)
     result: str = request_completion(

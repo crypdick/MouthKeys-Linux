@@ -7,9 +7,9 @@ from pathlib import Path
 from typing import cast
 
 from .data_lock import dictionary_lock
-from .dictionary import Dictionary, DictionaryData, Replacement
+from .dictionary import Dictionary, DictionaryData, FormattingRule, Replacement
 from .private_files import write_private
-from .vocabulary import VocabularyStore
+from .vocabulary import VocabularyEntry, VocabularyStore
 
 MAX_TRANSFER_BYTES = 16 * 1024 * 1024
 
@@ -53,7 +53,7 @@ def merge_replacements(
         }
         if same and "id" in same:
             merged["id"] = same["id"]
-        result = retained + [merged]
+        result = [*retained, merged]
     return result
 
 
@@ -63,7 +63,7 @@ def replacement_entries(values: object) -> list[Replacement]:
     result = []
     for value in values:
         if not isinstance(value, dict):
-            raise ValueError("Invalid replacement entry")
+            raise ValueError("Invalid replacement entry")  # noqa: TRY004 - import validation
         triggers = value.get("from", value.get("triggers"))
         if isinstance(triggers, str):
             triggers = [triggers]
@@ -84,59 +84,64 @@ def replacement_entries(values: object) -> list[Replacement]:
     return merge_replacements([], result)
 
 
-def custom_word_entries(values):
+def custom_word_entries(values: object) -> list[VocabularyEntry]:
     if not isinstance(values, list):
-        raise ValueError("Custom words must be a list")
+        raise ValueError("Custom words must be a list")  # noqa: TRY004 - import validation
     entries = []
     for value in values:
-        if isinstance(value, str):
-            value = {"text": value}
-        if not isinstance(value, dict) or set(value) - {"text", "weight", "aliases"}:
+        entry = {"text": value} if isinstance(value, str) else value
+        if not isinstance(entry, dict) or set(entry) - {"text", "weight", "aliases"}:
             raise ValueError("Invalid custom word entry")
-        entries.append({"weight": None, "aliases": [], **value})
+        entries.append({"weight": None, "aliases": [], **entry})
     return VocabularyStore.validate_entries(entries)
 
 
-def decode_document(data):
+def _decode_api_entries(
+    data: dict[str, object],
+) -> tuple[dict[str, object], list[VocabularyEntry] | None]:
+    for key in ("items", "entries"):
+        if key not in data:
+            continue
+        values = data[key]
+        if (
+            isinstance(values, list)
+            and values
+            and isinstance(values[0], dict)
+            and ("triggers" in values[0] or "from" in values[0])
+        ):
+            return {"replacements": replacement_entries(values)}, None
+        return {}, custom_word_entries(values)
+    return {}, None
+
+
+def decode_document(data: object) -> tuple[dict[str, object], list[VocabularyEntry] | None]:
     """Return supplied native sections and optional vocabulary; absent means untouched."""
     if not isinstance(data, dict):
-        raise ValueError("Dictionary transfer must be a JSON object")
+        raise ValueError("Dictionary transfer must be a JSON object")  # noqa: TRY004 - import validation
     native = "punctuation" in data or "actions" in data
+    sections: dict[str, object] = {}
     if native:
         if set(data) - {"replacements", "punctuation", "actions", "customWords"}:
             raise ValueError("Unknown native dictionary transfer fields")
         sections = {key: value for key, value in data.items() if key != "customWords"}
         Dictionary.validate(sections)
-    else:
-        sections = {}
-        if "replacements" in data:
-            sections["replacements"] = replacement_entries(data["replacements"])
+    elif "replacements" in data:
+        sections["replacements"] = replacement_entries(data["replacements"])
     words = None
     for key in ("customWords", "terms"):
         if key in data:
             words = custom_word_entries(data[key])
             break
     if not native and not sections and words is None:
-        for key in ("items", "entries"):
-            if key not in data:
-                continue
-            values = data[key]
-            if (
-                isinstance(values, list)
-                and values
-                and isinstance(values[0], dict)
-                and ("triggers" in values[0] or "from" in values[0])
-            ):
-                sections["replacements"] = replacement_entries(values)
-            else:
-                words = custom_word_entries(values)
-            break
+        sections, words = _decode_api_entries(data)
     if not sections and words is None:
         raise ValueError("Expected replacements, customWords, terms, or API items/entries")
     return sections, words
 
 
-def _merge_rules(existing, incoming):
+def merge_formatting_rules(
+    existing: list[FormattingRule], incoming: list[FormattingRule]
+) -> list[FormattingRule]:
     result = copy.deepcopy(existing)
     for entry in incoming:
         keys = {phrase_key(value) for value in entry["aliases"]}
@@ -166,9 +171,15 @@ def import_file(path: str | Path, mode: str = "replace") -> DictionaryData:
                 entries
                 if mode == "replace"
                 else (
-                    merge_replacements(cast("list[Replacement]", updated[section]), entries)
+                    merge_replacements(
+                        cast("list[Replacement]", updated[section]),
+                        cast("list[Replacement]", entries),
+                    )
                     if section == "replacements"
-                    else _merge_rules(updated[section], entries)
+                    else merge_formatting_rules(
+                        cast("list[FormattingRule]", updated[section]),
+                        cast("list[FormattingRule]", entries),
+                    )
                 )
             )
         dictionary = Dictionary.validate(updated)

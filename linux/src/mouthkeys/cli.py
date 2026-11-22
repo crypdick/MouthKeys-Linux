@@ -126,8 +126,11 @@ def _transcribe_file(args: argparse.Namespace) -> int:
         if args.progress:
             print("transcription_progress " + json.dumps(event), file=sys.stderr, flush=True)
 
-    options = {"on_progress": file_progress} if args.progress else {}
-    result = transcribe_file(args.file, config, **options)
+    result = (
+        transcribe_file(args.file, config, on_progress=file_progress)
+        if args.progress
+        else transcribe_file(args.file, config)
+    )
     if args.save_history and config.save_history == "on" and config.save_file_history == "on":
         from .file_history import FileHistory
 

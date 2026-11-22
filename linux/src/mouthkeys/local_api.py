@@ -14,7 +14,7 @@ from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from urllib.parse import parse_qs, urlsplit
 
 from .api_dictionary import custom_words, replacements
@@ -217,7 +217,7 @@ class Handler(BaseHTTPRequestHandler):
             }
 
     def _transcribe(self, audio: bytes) -> dict[str, object]:
-        from .file_transcription import transcribe_file
+        from .file_transcription import SegmentDecoder, transcribe_file
 
         controller = self.server.controller
         _require_recording_idle(controller)
@@ -228,7 +228,10 @@ class Handler(BaseHTTPRequestHandler):
                 _require_recording_idle(controller)
                 config = Config.load()
                 result = transcribe_file(
-                    Path(file.name), config, transcriber=controller.transcriber, max_seconds=600
+                    Path(file.name),
+                    config,
+                    transcriber=cast("SegmentDecoder", controller.transcriber),
+                    max_seconds=600,
                 )
         return {
             **result,

@@ -225,7 +225,7 @@ class Transcriber:
             self.words = []
             self.last_alignment = None
             self._preview = TranscriptWindow()
-        return self._preview.preview(path, lambda audio: self._segments(audio, config))
+        return self._preview.preview(path, lambda audio: self.segments(audio, config))
 
     def transcribe(self, path: str | Path, config: Config) -> str:
         """Finalize a live session, or decode a standalone file from its beginning."""
@@ -239,9 +239,9 @@ class Transcriber:
             if self._uses_native_streaming(config):
                 return self._finish_native(path, config, key)
             if self._preview is None or key != self.stream_key:
-                result = decode_transcript(self._segments(str(path), config))
+                result = decode_transcript(self.segments(str(path), config))
             else:
-                result = self._preview.finish(path, lambda audio: self._segments(audio, config))
+                result = self._preview.finish(path, lambda audio: self.segments(audio, config))
             if config.pronunciation_matching == "on":
                 self._record_alignment(path, result.text, result.words)
             return result.text
@@ -272,7 +272,7 @@ class Transcriber:
         if callable(reset):
             reset()
 
-    def _segments(self, audio: str | NDArray[np.generic], config: Config) -> list[Segment]:
+    def segments(self, audio: str | NDArray[np.generic], config: Config) -> list[Segment]:
         self.load(config)
         if config.engine == "whisper":
             from .vocabulary import whisper_options

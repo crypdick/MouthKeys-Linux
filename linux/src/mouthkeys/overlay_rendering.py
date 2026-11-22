@@ -2,7 +2,7 @@
 
 import time
 from dataclasses import dataclass
-from typing import TypedDict
+from typing import NotRequired, TypedDict
 
 from PySide6.QtCore import QRectF, Qt
 from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPen, QPixmap, QTextLayout
@@ -16,6 +16,19 @@ class AssistantText(TypedDict, total=False):
     mode: str
 
 
+class MeterSample(TypedDict, total=False):
+    frame: int
+    level: float
+    at: float
+
+
+class PanelNotice(TypedDict):
+    serial: int
+    at: float
+    message: str
+    kind: NotRequired[str]
+
+
 class PanelStatus(TypedDict, total=False):
     id: str | None
     phase: str
@@ -24,6 +37,10 @@ class PanelStatus(TypedDict, total=False):
     message: str
     assistant_stream: AssistantText | None
     assistant_proposal: AssistantText | None
+    meter: MeterSample
+    notice: PanelNotice | None
+    microphone: str
+    seconds: float
 
 
 @dataclass(frozen=True)

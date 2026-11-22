@@ -245,7 +245,7 @@ def test_cancel_after_completed_native_preview_releases_cache_for_file_inference
         assert app.transcriber.stream_key is None
         return []
 
-    app.transcriber._segments = segments
+    app.transcriber.segments = segments
     from pathlib import Path
 
     from mouthkeys.file_transcription import transcribe_file

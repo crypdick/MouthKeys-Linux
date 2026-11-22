@@ -118,6 +118,18 @@ def _helper_status(value: object) -> BatteryStatus:
     return status
 
 
+def microphone_labels(source: str, battery: BatteryStatus | None) -> tuple[str, str]:
+    if battery and battery["result"] == "ok":
+        values = [
+            f"{percent}%"
+            for mic in (battery["mic1"], battery["mic2"])
+            if (percent := mic["percent"]) is not None
+        ]
+        text = source + (" " + "/".join(values) if values else "")
+        return text, "Lark A1 battery · " + (" / ".join(values) or "No linked mic")
+    return source, "Choose microphone · " + (battery.get("result", "") if battery else "")
+
+
 class BatteryMonitor:
     def __init__(self) -> None:
         self.value: BatteryStatus | None = None

@@ -115,7 +115,7 @@ def test_turn_first_file_transcription_keeps_speaker_change_inside_asr_segment(m
     result = file_transcription.transcribe_file(
         "speakers.wav",
         replace(Config(), file_speaker_labels="on"),
-        transcriber=SimpleNamespace(_segments=segments),
+        transcriber=SimpleNamespace(segments=segments),
     )
     assert calls == [32000, 32000]
     assert [(s["text"], s["speaker"], s["start"], s["end"]) for s in result["segments"]] == [

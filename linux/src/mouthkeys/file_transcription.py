@@ -5,119 +5,41 @@ import itertools
 import json
 import math
 import os
-import shutil
-import tarfile
 import tempfile
 import time
-import urllib.request
 from fractions import Fraction
 from pathlib import Path
+from typing import Any
 
-from .config import cache_dir, private_dir
-from .file_history import FileResult
+import numpy as np
+from numpy.typing import NDArray
+
+from .file_history import FileResult, FileSegment, SpeakerTurn
+from .file_speakers import (
+    SAMPLE_RATE,
+    clip_turns,
+    diarize,
+    download_diarization,
+    label_segments,
+    speaker_paths,
+    turn_chunks,
+)
 from .transcribe import Transcriber
 
-RELEASES = "https://github.com/k2-fsa/sherpa-onnx/releases/download"
-SEGMENTATION = "sherpa-onnx-pyannote-segmentation-3-0"
-EMBEDDING = "3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx"
+__all__ = [
+    "diarize",
+    "download_diarization",
+    "export_result",
+    "label_segments",
+    "result_text",
+    "speaker_paths",
+    "transcribe_file",
+]
 
 
-def speaker_paths():
-    root = cache_dir() / "models" / "speakers"
-    return root / "segmentation.onnx", root / "embedding.onnx"
-
-
-def _fetch(url, destination, max_bytes=512 * 1024 * 1024):
-    """Download into a staging directory with a bounded size and private permissions."""
-    if not url.startswith("https://"):
-        raise ValueError("Speaker model downloads require HTTPS")
-    with tempfile.NamedTemporaryFile(dir=destination.parent) as stream:
-        with urllib.request.urlopen(url, timeout=30) as response:  # noqa: S310
-            total = 0
-            while chunk := response.read(1024 * 1024):
-                total += len(chunk)
-                if total > max_bytes:
-                    raise ValueError("Speaker model download exceeds size limit")
-                stream.write(chunk)
-        stream.flush()
-        shutil.copyfile(stream.name, destination)
-    destination.chmod(0o600)
-
-
-def download_diarization():
-    """Explicitly fetch public sherpa-onnx segmentation and embedding artifacts."""
-    segmentation, embedding = speaker_paths()
-    private_dir(segmentation.parent)
-    with tempfile.TemporaryDirectory(dir=segmentation.parent) as directory:
-        root = Path(directory)
-        archive = root / "segmentation.tar.bz2"
-        _fetch(f"{RELEASES}/speaker-segmentation-models/{SEGMENTATION}.tar.bz2", archive)
-        with tarfile.open(archive, "r:bz2") as package:
-            member = package.getmember(f"{SEGMENTATION}/model.onnx")
-            if not member.isfile() or not 0 < member.size <= 512 * 1024 * 1024:
-                raise ValueError("Invalid segmentation model archive")
-            # Never extract archive paths, links, or other members onto the filesystem.
-            with (
-                package.extractfile(member) as source,
-                (root / "segmentation.onnx").open("wb") as out,
-            ):
-                shutil.copyfileobj(source, out)
-        _fetch(f"{RELEASES}/speaker-recongition-models/{EMBEDDING}", root / "embedding.onnx")
-        for name, target in (("segmentation.onnx", segmentation), ("embedding.onnx", embedding)):
-            (root / name).chmod(0o600)
-            (root / name).replace(target)
-    return str(segmentation.parent)
-
-
-def diarize(samples, speaker_count=0):
-    if type(speaker_count) is not int or not 0 <= speaker_count <= 20:
-        raise ValueError("Speaker count must be between 0 (automatic) and 20")
-    segmentation, embedding = speaker_paths()
-    if not segmentation.is_file() or not embedding.is_file():
-        raise RuntimeError("Speaker models missing; run mouthkeys download-speakers first")
-    try:
-        import sherpa_onnx
-    except ImportError:
-        raise RuntimeError("Speaker labels require the diarization optional extra") from None
-    config = sherpa_onnx.OfflineSpeakerDiarizationConfig(
-        segmentation=sherpa_onnx.OfflineSpeakerSegmentationModelConfig(
-            pyannote=sherpa_onnx.OfflineSpeakerSegmentationPyannoteModelConfig(
-                model=str(segmentation)
-            ),
-        ),
-        embedding=sherpa_onnx.SpeakerEmbeddingExtractorConfig(model=str(embedding)),
-        clustering=sherpa_onnx.FastClusteringConfig(
-            num_clusters=speaker_count or -1, threshold=0.5
-        ),
-        min_duration_on=0.3,
-        min_duration_off=0.5,
-    )
-    if not config.validate():
-        raise ValueError("Invalid or incomplete speaker model files")
-    model = sherpa_onnx.OfflineSpeakerDiarization(config)
-    if model.sample_rate != 16000:
-        raise ValueError("Speaker model must accept 16 kHz audio")
-    return [
-        {"start": float(turn.start), "end": float(turn.end), "speaker": int(turn.speaker)}
-        for turn in model.process(samples).sort_by_start_time()
-    ]
-
-
-def label_segments(segments, turns):
-    """Segment-level attribution; preserve full turns so overlaps are not concealed."""
-    for segment in segments:
-        overlaps = [
-            (max(0, min(segment["end"], turn["end"]) - max(segment["start"], turn["start"])), turn)
-            for turn in turns
-        ]
-        overlap, turn = max(overlaps, key=lambda item: item[0], default=(0, None))
-        segment["speaker"] = turn["speaker"] if overlap > 0 else None
-
-
-def _decode_bounded(path, max_seconds):
+def _decode_bounded(path: str | Path, max_seconds: object) -> NDArray[np.float32]:
     """Bound decoded samples, not just compressed bytes or untrusted duration metadata."""
     import av
-    import numpy as np
     from faster_whisper.audio import _ignore_invalid_frames
 
     if (
@@ -127,11 +49,11 @@ def _decode_bounded(path, max_seconds):
         or max_seconds <= 0
     ):
         raise ValueError("Audio duration limit must be positive and finite")
-    limit = int(max_seconds * 16000)
+    limit = int(max_seconds * SAMPLE_RATE)
     duration = Fraction(0)
     count = 0
     raw = io.BytesIO()
-    resampler = av.audio.resampler.AudioResampler(format="s16", layout="mono", rate=16000)
+    resampler = av.audio.resampler.AudioResampler(format="s16", layout="mono", rate=SAMPLE_RATE)
     # Custom AVIO reads only uploaded bytes. Disallow nested file/network protocol
     # access (for example a playlist referring to another local file or an URL).
     with (
@@ -146,7 +68,7 @@ def _decode_bounded(path, max_seconds):
         frames = _ignore_invalid_frames(container.decode(audio=0))
         for frame in itertools.chain(frames, [None]):
             if frame is not None:
-                if not frame.sample_rate or frame.samples < 0:
+                if not frame.sample_rate or frame.sample_rate < 0 or frame.samples < 0:
                     raise ValueError("Invalid audio frame")
                 duration += Fraction(frame.samples, frame.sample_rate)
                 if duration > max_seconds:
@@ -169,34 +91,43 @@ def transcribe_file(path, config, *, transcriber=None, max_seconds=None, on_prog
     """
     from faster_whisper.audio import decode_audio
 
-    def progress(stage, **details):
+    def progress(stage: str, **details: object) -> None:
         if on_progress is not None:
             on_progress({"stage": stage, **details})
 
     started = time.monotonic()
     progress("decode")
     samples = (
-        decode_audio(str(path), sampling_rate=16000)
+        decode_audio(str(path), sampling_rate=SAMPLE_RATE)
         if max_seconds is None
         else _decode_bounded(path, max_seconds)
     )
     if not len(samples):
         raise ValueError("File contains no audio")
     engine = transcriber or Transcriber()
-    turns = []
-    confidences = []
+    duration = len(samples) / SAMPLE_RATE
+    turns: list[SpeakerTurn] = []
+    confidences: list[float] = []
 
-    def decode(samples, offset=0, speaker=None, end=None):
-        decoded = []
+    def decode(
+        samples: NDArray[Any],
+        offset: float = 0,
+        speaker: int | None = None,
+        end: float | None = None,
+    ) -> list[FileSegment]:
+        decoded: list[FileSegment] = []
         for segment in engine._segments(samples, config):
-            start = max(offset, offset + float(segment.start))
-            finish = offset + float(segment.end)
+            segment_start, segment_end = float(segment.start), float(segment.end)
+            if not (math.isfinite(segment_start) and math.isfinite(segment_end)):
+                continue
+            start = max(offset, offset + segment_start)
+            finish = offset + segment_end
             if end is not None:
                 finish = min(end, finish)
             text = segment.text.strip()
             if not text or finish < start:
                 continue
-            item = {"start": start, "end": finish, "text": text}
+            item: FileSegment = {"start": start, "end": finish, "text": text}
             if speaker is not None:
                 item["speaker"] = speaker
             decoded.append(item)
@@ -207,23 +138,10 @@ def transcribe_file(path, config, *, transcriber=None, max_seconds=None, on_prog
 
     if config.file_speaker_labels == "on":
         progress("diarization")
-        turns = diarize(samples, config.file_speaker_count)
+        turns = clip_turns(diarize(samples, config.file_speaker_count), duration)
     if turns and config.file_diarization_mode == "turns":
         segments = []
-        chunks = []
-        duration = len(samples) / 16000
-        covered = 0.0
-        for turn in sorted(turns, key=lambda item: item["start"]):
-            start, end = max(0.0, turn["start"]), min(duration, turn["end"])
-            if not (math.isfinite(start) and math.isfinite(end) and start < end):
-                continue
-            # Decode uncovered intervals too: diarization misses must not silently lose words.
-            if start > covered:
-                chunks.append((covered, start, None))
-            chunks.append((start, end, turn["speaker"]))
-            covered = max(covered, end)
-        if covered < duration:
-            chunks.append((covered, duration, None))
+        chunks = turn_chunks(turns, duration)
         for index, (start, end, speaker) in enumerate(chunks):
             progress(
                 "transcribe",
@@ -232,7 +150,12 @@ def transcribe_file(path, config, *, transcriber=None, max_seconds=None, on_prog
                 kind="turn" if speaker is not None else "uncovered",
             )
             segments.extend(
-                decode(samples[round(start * 16000) : round(end * 16000)], start, speaker, end)
+                decode(
+                    samples[round(start * SAMPLE_RATE) : round(end * SAMPLE_RATE)],
+                    start,
+                    speaker,
+                    end,
+                )
             )
             progress("transcribe", completed=index + 1, total=len(chunks))
         segments.sort(key=lambda item: item["start"])
@@ -247,7 +170,7 @@ def transcribe_file(path, config, *, transcriber=None, max_seconds=None, on_prog
         "text": " ".join(segment["text"] for segment in segments).strip(),
         "segments": segments,
         "speaker_turns": turns,
-        "duration": len(samples) / 16000,
+        "duration": duration,
         "processing_seconds": round(time.monotonic() - started, 3),
         "language": config.language,
         "engine": getattr(config, "engine", "whisper"),

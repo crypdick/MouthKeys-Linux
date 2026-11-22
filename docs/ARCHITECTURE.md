@@ -62,6 +62,8 @@ then dispatches local work or uses `control` to contact the private Unix socket 
   that was active when recording started and never enter the desktop delivery path.
   `model_downloads_ui` owns the model download process, cache actions, and progress display.
   It keeps child-process output bounded and requests model warmup only after a successful download.
+  `file_speakers` stages explicit model downloads and validates attributed intervals against the
+  decoded file.
   `file_transcription_ui` owns the file worker and its history; Settings and the tray check whether
   it is busy before closing.
   `local_api` is opt-in loopback access. `ai_providers` and `ai_stream` handle configured AI

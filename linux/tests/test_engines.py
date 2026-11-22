@@ -228,6 +228,22 @@ def fake_audio_decoder(monkeypatch, input_frames, resampled):
     return calls
 
 
+@pytest.mark.parametrize("duration", [True, "1", float("inf"), 0])
+def test_api_audio_limit_rejects_invalid_duration_before_opening(tmp_path, duration):
+    with pytest.raises(ValueError, match="Audio duration limit must be positive and finite"):
+        file_transcription._decode_bounded(tmp_path / "must-not-open", duration)
+
+
+@pytest.mark.parametrize(("rate", "samples"), [(0, 100), (-16000, 100), (16000, -1)])
+def test_invalid_audio_frames_are_rejected_before_resampling(monkeypatch, tmp_path, rate, samples):
+    path = tmp_path / "compressed.audio"
+    path.write_bytes(b"fake")
+    frame = SimpleNamespace(samples=samples, sample_rate=rate)
+    fake_audio_decoder(monkeypatch, [frame], lambda _: pytest.fail("Resampled invalid frame"))
+    with pytest.raises(ValueError, match="Invalid audio frame"):
+        file_transcription._decode_bounded(path, 1)
+
+
 def test_api_audio_limit_checks_input_before_resample_or_allocation(monkeypatch, tmp_path):
     path = tmp_path / "compressed.audio"
     path.write_bytes(b"tiny compressed content")

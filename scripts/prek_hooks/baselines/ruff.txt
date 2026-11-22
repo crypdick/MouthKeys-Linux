@@ -273,34 +273,12 @@
 3	src/mouthkeys/file_history.py	TRY004	Prefer `TypeError` exception for invalid type
 1	src/mouthkeys/file_transcription.py	A002	Function argument `format` is shadowing a Python builtin
 1	src/mouthkeys/file_transcription.py	ANN001	Missing type annotation for function argument `config`
-1	src/mouthkeys/file_transcription.py	ANN001	Missing type annotation for function argument `destination`
-1	src/mouthkeys/file_transcription.py	ANN001	Missing type annotation for function argument `end`
-1	src/mouthkeys/file_transcription.py	ANN001	Missing type annotation for function argument `max_bytes`
-2	src/mouthkeys/file_transcription.py	ANN001	Missing type annotation for function argument `max_seconds`
-1	src/mouthkeys/file_transcription.py	ANN001	Missing type annotation for function argument `offset`
+1	src/mouthkeys/file_transcription.py	ANN001	Missing type annotation for function argument `max_seconds`
 1	src/mouthkeys/file_transcription.py	ANN001	Missing type annotation for function argument `on_progress`
-2	src/mouthkeys/file_transcription.py	ANN001	Missing type annotation for function argument `path`
-2	src/mouthkeys/file_transcription.py	ANN001	Missing type annotation for function argument `samples`
-1	src/mouthkeys/file_transcription.py	ANN001	Missing type annotation for function argument `segments`
-1	src/mouthkeys/file_transcription.py	ANN001	Missing type annotation for function argument `speaker_count`
-1	src/mouthkeys/file_transcription.py	ANN001	Missing type annotation for function argument `speaker`
-1	src/mouthkeys/file_transcription.py	ANN001	Missing type annotation for function argument `stage`
+1	src/mouthkeys/file_transcription.py	ANN001	Missing type annotation for function argument `path`
 1	src/mouthkeys/file_transcription.py	ANN001	Missing type annotation for function argument `transcriber`
-1	src/mouthkeys/file_transcription.py	ANN001	Missing type annotation for function argument `turns`
-1	src/mouthkeys/file_transcription.py	ANN001	Missing type annotation for function argument `url`
-1	src/mouthkeys/file_transcription.py	ANN003	Missing type annotation for `**details`
-1	src/mouthkeys/file_transcription.py	ANN201	Missing return type annotation for public function `diarize`
-1	src/mouthkeys/file_transcription.py	ANN201	Missing return type annotation for public function `download_diarization`
-1	src/mouthkeys/file_transcription.py	ANN201	Missing return type annotation for public function `label_segments`
-1	src/mouthkeys/file_transcription.py	ANN201	Missing return type annotation for public function `speaker_paths`
 1	src/mouthkeys/file_transcription.py	ANN201	Missing return type annotation for public function `transcribe_file`
-1	src/mouthkeys/file_transcription.py	ANN202	Missing return type annotation for private function `_decode_bounded`
-1	src/mouthkeys/file_transcription.py	ANN202	Missing return type annotation for private function `_fetch`
-1	src/mouthkeys/file_transcription.py	ANN202	Missing return type annotation for private function `decode`
-1	src/mouthkeys/file_transcription.py	ANN202	Missing return type annotation for private function `progress`
-1	src/mouthkeys/file_transcription.py	C901	`transcribe_file` is too complex (18 > 15)
-5	src/mouthkeys/file_transcription.py	PLC0415	`import` should be at the top-level of a file
-1	src/mouthkeys/file_transcription.py	PLR0915	Too many statements (56 > 50)
+3	src/mouthkeys/file_transcription.py	PLC0415	`import` should be at the top-level of a file
 1	src/mouthkeys/file_transcription.py	SLF001	Private member accessed: `_segments`
 2	src/mouthkeys/forced_alignment.py	ANN001	Missing type annotation for function argument `audio`
 3	src/mouthkeys/forced_alignment.py	ANN001	Missing type annotation for function argument `config`

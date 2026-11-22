@@ -83,7 +83,6 @@
 12	src/mouthkeys/benchmark.py	no-untyped-def	Function is missing a type annotation
 1	src/mouthkeys/benchmark.py	union-attr	Item "None" of "Any | None" has no attribute "close"
 1	src/mouthkeys/benchmark.py	var-annotated	Need type annotation for "seen" (hint: "seen: set[<type>] = ...")
-1	src/mouthkeys/cli.py	no-untyped-call	Call to untyped function "download_diarization" in typed context
 1	src/mouthkeys/cli.py	no-untyped-call	Call to untyped function "model_catalog" in typed context
 1	src/mouthkeys/cli.py	no-untyped-call	Call to untyped function "run_benchmark" in typed context
 1	src/mouthkeys/cli.py	no-untyped-call	Call to untyped function "transcribe_file" in typed context
@@ -126,19 +125,8 @@
 1	src/mouthkeys/file_history.py	operator	Unsupported left operand type for <= ("None")
 1	src/mouthkeys/file_history.py	operator	Unsupported operand types for <= ("int" and "None")
 1	src/mouthkeys/file_history.py	operator	Unsupported operand types for > ("int" and "None")
-1	src/mouthkeys/file_transcription.py	index	Value of type "Any | None" is not indexable
 1	src/mouthkeys/file_transcription.py	no-untyped-call	Call to untyped function "Transcriber" in typed context
-1	src/mouthkeys/file_transcription.py	no-untyped-call	Call to untyped function "_decode_bounded" in typed context
-2	src/mouthkeys/file_transcription.py	no-untyped-call	Call to untyped function "_fetch" in typed context
-2	src/mouthkeys/file_transcription.py	no-untyped-call	Call to untyped function "decode" in typed context
-1	src/mouthkeys/file_transcription.py	no-untyped-call	Call to untyped function "diarize" in typed context
-1	src/mouthkeys/file_transcription.py	no-untyped-call	Call to untyped function "label_segments" in typed context
-6	src/mouthkeys/file_transcription.py	no-untyped-call	Call to untyped function "progress" in typed context
-2	src/mouthkeys/file_transcription.py	no-untyped-call	Call to untyped function "speaker_paths" in typed context
-2	src/mouthkeys/file_transcription.py	no-untyped-def	Function is missing a return type annotation
-7	src/mouthkeys/file_transcription.py	no-untyped-def	Function is missing a type annotation
-1	src/mouthkeys/file_transcription.py	union-attr	Item "None" of "IO[bytes] | None" has no attribute "__enter__"
-1	src/mouthkeys/file_transcription.py	union-attr	Item "None" of "IO[bytes] | None" has no attribute "__exit__"
+1	src/mouthkeys/file_transcription.py	no-untyped-def	Function is missing a type annotation
 1	src/mouthkeys/forced_alignment.py	no-untyped-call	Call to untyped function "_load" in typed context
 1	src/mouthkeys/forced_alignment.py	no-untyped-call	Call to untyped function "_words" in typed context
 2	src/mouthkeys/forced_alignment.py	no-untyped-call	Call to untyped function "clear" in typed context

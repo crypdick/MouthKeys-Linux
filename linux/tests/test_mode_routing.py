@@ -148,6 +148,25 @@ def test_voice_command_cancel_event_interrupts_provider_without_late_proposal(mo
     assert not app.delivery.calls
 
 
+def test_shortcut_prompt_is_frozen_before_capture_finishes(monkeypatch):
+    profile_id, _, _ = profiles()
+    Config(ai_enabled="on", ai_model="global", edit_profile="off").save()
+    app = controller()
+    requests = []
+
+    def complete(_text, config, **_kwargs):
+        requests.append((config.ai_prompt, config.ai_model))
+        return "Edited"
+
+    monkeypatch.setattr(assistance, "request_completion", complete)
+    app.command("start", mode="edit", profile=profile_id, held=True)
+    save_profiles([])
+    app.command("stop")
+    finish(app)
+    assert requests == [("Custom mode prompt 0", "model-0")]
+    assert app.history.rows()[0]["text"] == "Edited"
+
+
 def test_prompt_routing_failure_keeps_local_dictation(monkeypatch):
     Config(ai_enabled="on", ai_model="model", lowercase_first="on").save()
     app = controller("Local text")

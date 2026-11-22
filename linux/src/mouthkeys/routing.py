@@ -5,7 +5,7 @@ import uuid
 from dataclasses import replace
 from typing import NotRequired, TypedDict, cast
 
-from .config import config_path
+from .config import Config, config_path, private_dir
 from .operations import write_private
 from .profiles import PromptProfile, load_profiles, resolve_profile
 
@@ -55,14 +55,19 @@ def load_routes(profiles: list[PromptProfile] | None = None) -> list[PromptRoute
 
 
 def save_routes(routes: object) -> None:
-    from .config import private_dir
-
     path = config_path().with_name("prompt_routes.json")
     private_dir(path.parent)
     write_private(path, json.dumps(validate_routes(routes), indent=2).encode())
 
 
-def select_prompt(config, app="", override=None, routes=None, mode="dictation", profiles=None):
+def select_prompt(
+    config: Config,
+    app: str = "",
+    override: object = None,
+    routes: list[PromptRoute] | None = None,
+    mode: str = "dictation",
+    profiles: list[PromptProfile] | None = None,
+) -> Config:
     """Resolve shortcut > per-mode app route > per-mode settings, freezing provider.
 
     Legacy routes without mode apply to dictation only. Default assistant modes

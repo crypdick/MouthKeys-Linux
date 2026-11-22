@@ -8,6 +8,8 @@ then dispatches local work or uses `control` to contact the private Unix socket 
 - **Recording:** `service.Controller` owns capture and a FIFO of `DictationJob`s. `audio.CaptureSession`
   wraps the process owned by `capture`. `microphone` owns session source preferences, retry
   budgets, and device quarantine; the service still commits capture state under its own lock.
+  `recording_setup` freezes per-recording settings and prompt rules before the controller
+  supersedes any pending desktop action. A rejected start leaves the current job in place.
   `recording_destination` samples focus and formatting context before capture stops and looks up
   metadata afterward, without activating another window. Automatic stop does not wait on focus
   in the daemon loop; an expired focus snapshot falls back to copy. `recording_preview` meters

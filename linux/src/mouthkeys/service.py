@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import cast
 
 from . import __version__, desktop_input
-from .audio import CaptureSession, CaptureTeardownError, check_audio, live_meter
+from .audio import CaptureSession, CaptureTeardownError, check_audio
 from .config import Config, private_dir, runtime_dir
 from .control import MAX_MESSAGE
 from .delivery import Delivery
@@ -21,15 +21,18 @@ from .postprocess import process
 from .pronunciation import PronunciationStore
 from .recording_destination import snapshot_for_stop
 from .recording_learning import RecordingLearning
+from .recording_preview import PreviewWork, RecordingPreview, reset_owned_stream
 from .storage import History
 from .transcribe import Transcriber
+
+FOCUS_TIMEOUT = 4
 
 
 @dataclass
 class DictationJob:
     item_id: str
     config: Config
-    predecessors: tuple
+    predecessors: tuple[threading.Event, ...]
     audio_path: Path
     mode: str = "dictation"
     selected_text: str = ""
@@ -58,6 +61,17 @@ class DictationJob:
 class FocusGate:
     ready: threading.Event = field(default_factory=threading.Event)
     valid: bool = True
+    deadline: float | None = None
+
+    def wait(self) -> None:
+        # A stop acknowledgment must not precede its focus snapshot.
+        if not self.ready.wait(timeout=FOCUS_TIMEOUT):
+            self.valid = False
+
+    def resolved(self) -> None:
+        if self.deadline is not None and time.monotonic() >= self.deadline:
+            self.valid = False
+        self.ready.set()
 
 
 def _recording_input(data: Mapping[str, object]) -> tuple[str, str, str]:
@@ -104,10 +118,8 @@ class Controller:
         self.started = None
         self.worker = None
         self.model_lock = threading.Lock()
-        self.preview_worker = None
+        self.live_preview = RecordingPreview(self.lock, self.model_lock)
         self.preview_text = ""
-        self.preview_at = 0
-        self.meter = {}
         self.interrupted = False
         self.dictation_delivery = False
         self.stop_done = threading.Event()
@@ -117,9 +129,6 @@ class Controller:
         self.notice_token = uuid.uuid4().hex
         self.media = MediaSession()
         self.recorded_seconds = 0
-        self.send_armed_at = None
-        self.send_disarmed_text = None
-        self.last_voice_at = 0
         self.ai_warning = ""
         self.last_text = ""
         self.send_pending = False
@@ -156,7 +165,7 @@ class Controller:
                 "learning_pending": self.learning.pending(),
                 "notice": self.notice,
                 "preview": self.preview_text,
-                "meter": self.meter if self.phase == "recording" else {},
+                "meter": self.live_preview.meter if self.phase == "recording" else {},
                 "microphone": self.config.audio_source if hasattr(self, "config") else "default",
                 "session_microphone": self.microphone.session_source,
                 "phase": self.phase,
@@ -166,13 +175,10 @@ class Controller:
             }
 
     def command(self, action, **data):
-        # A stop acknowledgment must not precede its focus snapshot. The worker
-        # resolves focus outside the state lock; a delayed lookup falls back to copy.
         gate = FocusGate()
         result = self._command(action, _focus_gate=gate, **data)
         if action in ("stop", "toggle") and result.get("phase") == "stopping":
-            if not gate.ready.wait(timeout=4):
-                gate.valid = False
+            gate.wait()
         return result
 
     def _command(self, action, _focus_gate, **data):
@@ -264,15 +270,22 @@ class Controller:
             return self.status()
         if self.phase not in ("recording", "switching", "capture_failed"):
             raise ValueError("Not recording")
+        self._request_capture_stop(
+            focus_gate, automatic=bool(data.get("automatic")), spoken=bool(data.get("spoken"))
+        )
+        return self.status()
+
+    def _request_capture_stop(
+        self, focus_gate: FocusGate, *, automatic: bool, spoken: bool
+    ) -> None:
         target = (
             "capture-focus"
             if self.config.delivery in ("x11", "wayland")
             and self.phase != "capture_failed"
-            and (not data.get("automatic") or data.get("spoken"))
+            and (not automatic or spoken)
             else None
         )
         self._stop(target, focus_gate)
-        return self.status()
 
     def _idle_command(self, action: str) -> dict[str, object]:
         if self.phase != "idle":
@@ -321,8 +334,7 @@ class Controller:
             fallback = replace(saved, audio_source=self.config.audio_source)
             self.phase, self.message = "switching", "Switching microphone; capture briefly pauses"
             job.phase = "switching"
-            self.send_armed_at = None
-            self.send_disarmed_text = self.preview_text
+            self.live_preview.suspend(self.preview_text)
 
         def switching_current() -> bool:
             with self.lock:
@@ -358,8 +370,7 @@ class Controller:
             self.report_error(
                 f"Previous microphone {failed} failed; switched to {current}. {error}"
             )
-        self.meter = {}
-        self.last_voice_at = time.monotonic()
+        self.live_preview.reset_meter()
         self.phase = "recording"
         job.phase = "recording"
         self.message = f"Listening on {current}; microphone switch has a capture gap"
@@ -404,13 +415,9 @@ class Controller:
             config = self.microphone.startup_config(config)
             profiles = load_profiles()
             routes = load_routes(profiles)
-            self.meter = {}
             self.preview_text = ""
-            self.preview_at = time.monotonic()
+            self.live_preview.reset()
             self.config = config
-            self.send_armed_at = None
-            self.send_disarmed_text = None
-            self.last_voice_at = time.monotonic()
             self.learning.cancel()
             if self.job and self.job.done.is_set() and self.job.edit_consumed:
                 # A new recording supersedes any reviewed edit waiting on desktop work.
@@ -760,7 +767,7 @@ class Controller:
             )
             job.context = destination.context
             if focus_gate:
-                focus_gate.ready.set()
+                focus_gate.resolved()
             try:
                 recorder.stop()
             finally:
@@ -1344,7 +1351,7 @@ class Controller:
                 key = getattr(self.transcriber, "stream_key", None)
                 if job.cancelled and key and key[0] == job.audio_path:
                     with self.model_lock:
-                        self._reset_stream_if_owned(job)
+                        reset_owned_stream(self.transcriber, job.audio_path)
             finally:
                 with self.lock:
                     job.audio_path.unlink(missing_ok=True)
@@ -1354,95 +1361,43 @@ class Controller:
                         self.phase = "idle"
                     job.done.set()
 
-    def _preview(self, item_id, config):
-        try:
-            with self.model_lock:
-                with self.lock:
-                    if self.phase != "recording" or self.item_id != item_id:
-                        return
-                    if any(not done.is_set() for done in self.job.predecessors):
-                        return  # Preserve earlier native stream caches until ordered finalization.
-                    path = self.job.audio_path
-                    preview_job = self.job
-                text = self.transcriber.preview(path, config)
-                if preview_job.cancelled or self.interrupted:
-                    self._reset_stream_if_owned(preview_job)
-            with self.lock:
-                if self.phase != "recording" or self.item_id != item_id or self.cancelled:
-                    return
-                self.preview_text = text
-                plan = parse_send(
-                    text,
-                    config.spoken_send_phrase,
-                    active=enabled(config, "spoken_send"),
-                    literal_prefix=config.literal_prefix,
-                )
-                if plan.should_send and text != self.send_disarmed_text:
-                    if self.send_armed_at is None:
-                        self.send_armed_at = time.monotonic()
-                else:
-                    self.send_armed_at = None
-        # Final inference reports errors; never log provisional transcript data.
-        except Exception:  # allow: exception-handling  # noqa: BLE001, S110
-            pass  # Preview is provisional; final inference reports actionable errors.
-        finally:
-            with self.lock:
-                if self.item_id == item_id:
-                    self.preview_at = time.monotonic()
+    def _publish_preview(self, text: str) -> None:
+        self.preview_text = text
 
-    def _reset_stream_if_owned(self, job):
-        """Caller owns model_lock; never clear a newer recording's native caches."""
-        key = getattr(self.transcriber, "stream_key", None)
-        if key and key[0] == job.audio_path and hasattr(self.transcriber, "reset_stream"):
-            self.transcriber.reset_stream()
-
-    def tick(self):
+    def tick(self) -> None:
         with self.lock:
-            if self.phase == "recording":
-                try:
-                    meter = live_meter(self.job.audio_path)
-                    if meter["frame"] != self.meter.get("frame"):
-                        self.meter = {**meter, "at": time.monotonic()}
-                        if meter["level"] >= 0.12:
-                            self.last_voice_at = time.monotonic()
-                            if (
-                                self.send_armed_at is not None
-                                and self.last_voice_at - self.send_armed_at >= 0.35
-                            ):
-                                self.send_disarmed_text = self.preview_text
-                                self.send_armed_at = None
-                except (OSError, ValueError, EOFError, wave.Error):
-                    self.meter = {}
-            if (
-                self.phase == "recording"
-                and (self.config.live_preview == "on" or self.config.send_after_pause == "on")
-                and time.monotonic() - self.preview_at >= self.config.preview_interval_ms / 1000
-                and (self.preview_worker is None or not self.preview_worker.is_alive())
-                and hasattr(self.transcriber, "preview")
-            ):
-                self.preview_worker = threading.Thread(
-                    target=self._preview, args=(self.item_id, self.config), daemon=True
+            if self.phase != "recording":
+                return
+            job = cast("DictationJob", self.job)  # Recording always has a job.
+            self.live_preview.sample(job.audio_path, self.preview_text)
+            if self.live_preview.due(self.config):
+                self.live_preview.schedule(
+                    PreviewWork(
+                        job.audio_path,
+                        self.config,
+                        self.transcriber,
+                        job.predecessors,
+                        is_recording=lambda: self.phase == "recording" and self.job is job,
+                        cancelled=lambda: job.cancelled or self.interrupted,
+                        publish=self._publish_preview,
+                    )
                 )
-                self.preview_worker.start()
-            if (
-                self.phase == "recording"
-                and self.send_armed_at is not None
-                and enabled(self.config, "send_after_pause")
-                and not self.job.held_activation
-                and enabled(self.config, "spoken_send")
-                and time.monotonic() - self.send_armed_at >= 0.5
-                and time.monotonic() - self.last_voice_at >= 0.5
-            ):
-                self.command("stop", automatic=True, spoken=True)
-            if self.phase == "recording" and (
-                self.recorder.finished()
+            spoken = self.live_preview.should_stop(self.config, held=job.held_activation)
+            if not (
+                spoken
+                or self.recorder.finished()
                 or time.monotonic() - self.started >= self.config.max_seconds
             ):
-                try:
-                    self.command("stop", automatic=True)
-                # The stop path already persisted its error for the UI.
-                except Exception:  # allow: exception-handling  # noqa: BLE001, S110
-                    pass  # The stop path has already persisted the error for the UI.
+                return
+            # The daemon must keep accepting commands while focus is resolved.
+            gate = FocusGate(deadline=time.monotonic() + FOCUS_TIMEOUT)
+            try:
+                self._request_capture_stop(gate, automatic=True, spoken=spoken)
+            # The capture stop worker reports actionable errors.
+            except Exception:  # allow: exception-handling
+                if spoken:
+                    raise
+                return
 
 
 def _short_silence(path):

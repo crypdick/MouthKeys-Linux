@@ -1,4 +1,5 @@
 import json
+import math
 import os
 import signal
 import subprocess
@@ -8,6 +9,9 @@ import time
 import wave
 from dataclasses import replace
 from pathlib import Path
+
+import numpy as np
+from numpy.typing import NDArray
 
 from .config import Config, private_dir, runtime_dir
 from .processes import python_command
@@ -357,10 +361,8 @@ def check_audio(path: Path):
             raise ValueError("Recording is too short; speak for at least a moment")
 
 
-def _read_live_audio(path: Path, seconds):
+def _read_live_audio(path: Path, seconds: float) -> tuple[NDArray[np.float32], int]:
     """Read bounded samples and their frame cursor before the WAV is finalized."""
-    import numpy as np
-
     with path.open("rb") as source, wave.open(source, "rb") as wav:
         if (wav.getnchannels(), wav.getsampwidth(), wav.getframerate()) != (1, 2, 16000):
             raise ValueError("Expected mono 16 kHz PCM")
@@ -377,8 +379,6 @@ def read_live_audio(path: Path, seconds=20):
 
 def read_audio_from(path: Path, start_frame=0, seconds=None):
     """Read forward from a committed PCM frame, including an unfinished WAV."""
-    import numpy as np
-
     with path.open("rb") as source, wave.open(source, "rb") as wav:
         if (wav.getnchannels(), wav.getsampwidth(), wav.getframerate()) != (1, 2, 16000):
             raise ValueError("Expected mono 16 kHz PCM")
@@ -393,11 +393,7 @@ def read_audio_from(path: Path, start_frame=0, seconds=None):
     return np.frombuffer(raw[: len(raw) // 2 * 2], dtype="<i2").astype(np.float32) / 32768.0
 
 
-def live_meter(path: Path):
-    import math
-
-    import numpy as np
-
+def live_meter(path: Path) -> dict[str, int | float]:
     samples, frames = _read_live_audio(path, 0.02)
     rms = float(np.sqrt(np.mean(samples * samples))) if len(samples) else 0.0
     level = max(0.0, min(1.0, (20 * math.log10(max(rms, 1e-9)) + 60) / 55))

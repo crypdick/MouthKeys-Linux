@@ -195,7 +195,10 @@ def test_cancel_after_completed_native_preview_releases_cache_for_file_inference
     app.transcriber.preview = preview
     app.transcriber.reset_stream = reset
     app.command("start")
-    app._preview(app.item_id, app.config)
+    app.live_preview.preview_at = 0
+    app.tick()
+    app.live_preview.worker.join(2)
+    assert not app.live_preview.worker.is_alive()
     assert app.transcriber.stream_key is not None
     app.command("cancel")
     finish(app)

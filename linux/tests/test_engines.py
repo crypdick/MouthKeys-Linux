@@ -116,7 +116,7 @@ def test_file_transcription_exports_segments_and_unicode(monkeypatch, tmp_path):
 
     monkeypatch.setattr(audio, "decode_audio", lambda *a, **kw: np.zeros(16000 * 3))
     model = SimpleNamespace(
-        _segments=lambda *a: [SimpleNamespace(start=0.5, end=2.0, text=" Café au lait.")]
+        segments=lambda *a: [SimpleNamespace(start=0.5, end=2.0, text=" Café au lait.")]
     )
     result = file_transcription.transcribe_file("example.mp3", Config(), transcriber=model)
     assert result["duration"] == 3
@@ -141,7 +141,7 @@ def test_speaker_labels_use_overlap_and_preserve_unmatched(monkeypatch):
     ]
     monkeypatch.setattr(file_transcription, "diarize", lambda *a: turns)
     model = SimpleNamespace(
-        _segments=lambda *a: [
+        segments=lambda *a: [
             SimpleNamespace(start=0.5, end=2.5, text="Second speaker mostly."),
             SimpleNamespace(start=4, end=5, text="No matching speech turn."),
         ]

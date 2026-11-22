@@ -12,30 +12,8 @@
 1	src/mouthkeys/delivery.py	PLR0911	Too many return statements (7 > 6)
 1	src/mouthkeys/delivery.py	PLR0911	Too many return statements (9 > 6)
 2	src/mouthkeys/dictionary.py	PLC0415	`import` should be at the top-level of a file
-1	src/mouthkeys/dictionary_transfer.py	ANN001	Missing type annotation for function argument `data`
-1	src/mouthkeys/dictionary_transfer.py	ANN001	Missing type annotation for function argument `existing`
-1	src/mouthkeys/dictionary_transfer.py	ANN001	Missing type annotation for function argument `incoming`
-1	src/mouthkeys/dictionary_transfer.py	ANN001	Missing type annotation for function argument `values`
-1	src/mouthkeys/dictionary_transfer.py	ANN201	Missing return type annotation for public function `custom_word_entries`
-1	src/mouthkeys/dictionary_transfer.py	ANN201	Missing return type annotation for public function `decode_document`
-1	src/mouthkeys/dictionary_transfer.py	ANN202	Missing return type annotation for private function `_merge_rules`
-1	src/mouthkeys/dictionary_transfer.py	PLR0912	Too many branches (13 > 12)
-1	src/mouthkeys/dictionary_transfer.py	PLW2901	`for` loop variable `value` overwritten by assignment target
-1	src/mouthkeys/dictionary_transfer.py	RUF005	Consider `[*retained, merged]` instead of concatenation
-3	src/mouthkeys/dictionary_transfer.py	TRY004	Prefer `TypeError` exception for invalid type
 8	src/mouthkeys/engines.py	PLC0415	`import` should be at the top-level of a file
 1	src/mouthkeys/engines.py	SLF001	Private member accessed: `_get_model_files`
-1	src/mouthkeys/file_history.py	DTZ006	`datetime.datetime.fromtimestamp()` called without a `tz` argument
-3	src/mouthkeys/file_history.py	TRY004	Prefer `TypeError` exception for invalid type
-1	src/mouthkeys/file_transcription.py	A002	Function argument `format` is shadowing a Python builtin
-1	src/mouthkeys/file_transcription.py	ANN001	Missing type annotation for function argument `config`
-1	src/mouthkeys/file_transcription.py	ANN001	Missing type annotation for function argument `max_seconds`
-1	src/mouthkeys/file_transcription.py	ANN001	Missing type annotation for function argument `on_progress`
-1	src/mouthkeys/file_transcription.py	ANN001	Missing type annotation for function argument `path`
-1	src/mouthkeys/file_transcription.py	ANN001	Missing type annotation for function argument `transcriber`
-1	src/mouthkeys/file_transcription.py	ANN201	Missing return type annotation for public function `transcribe_file`
-3	src/mouthkeys/file_transcription.py	PLC0415	`import` should be at the top-level of a file
-1	src/mouthkeys/file_transcription.py	SLF001	Private member accessed: `_segments`
 1	src/mouthkeys/hotkeys.py	PLC0415	`import` should be at the top-level of a file
 5	src/mouthkeys/lark.py	FBT003	Boolean positional value in function call
 1	src/mouthkeys/learning.py	PLR0911	Too many return statements (7 > 6)
@@ -46,21 +24,6 @@
 4	src/mouthkeys/native_asr.py	PLC0415	`import` should be at the top-level of a file
 1	src/mouthkeys/native_asr.py	TRY004	Prefer `TypeError` exception for invalid type
 2	src/mouthkeys/native_worker.py	PLC0415	`import` should be at the top-level of a file
-1	src/mouthkeys/overlay.py	ANN001	Missing type annotation for function argument `data`
-2	src/mouthkeys/overlay.py	ANN001	Missing type annotation for function argument `response`
-1	src/mouthkeys/overlay.py	ANN201	Missing return type annotation for public function `set_status`
-1	src/mouthkeys/overlay.py	ANN201	Missing return type annotation for public function `show_history`
-1	src/mouthkeys/overlay.py	ANN202	Missing return type annotation for private function `received`
-1	src/mouthkeys/overlay.py	C901	`set_status` is too complex (18 > 15)
-1	src/mouthkeys/overlay.py	PLC0415	`import` should be at the top-level of a file
-1	src/mouthkeys/overlay.py	PLR0912	Too many branches (19 > 12)
-1	src/mouthkeys/overlay.py	PLR0915	Too many statements (73 > 50)
-1	src/mouthkeys/postprocess.py	ANN001	Missing type annotation for function argument `config`
-1	src/mouthkeys/postprocess.py	ANN001	Missing type annotation for function argument `prompt_text`
-1	src/mouthkeys/postprocess.py	ANN001	Missing type annotation for function argument `transcript`
-1	src/mouthkeys/postprocess.py	ANN201	Missing return type annotation for public function `dictation_prompt`
-1	src/mouthkeys/postprocess.py	ANN201	Missing return type annotation for public function `render_dictation_user_message`
-1	src/mouthkeys/postprocess.py	PLC0415	`import` should be at the top-level of a file
 1	src/mouthkeys/profiles.py	C901	`validate_profiles` is too complex (23 > 15)
 1	src/mouthkeys/profiles.py	PLR0912	Too many branches (22 > 12)
 2	src/mouthkeys/profiles.py	TRY004	Prefer `TypeError` exception for invalid type

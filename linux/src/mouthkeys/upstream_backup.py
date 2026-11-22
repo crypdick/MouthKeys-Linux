@@ -16,8 +16,8 @@ from typing import Literal, overload
 from urllib.parse import urlsplit
 
 from .config import Config
-from .dictionary import Dictionary, DictionaryData
-from .dictionary_transfer import _merge_rules, merge_replacements, replacement_entries
+from .dictionary import Dictionary, DictionaryData, FormattingRule
+from .dictionary_transfer import merge_formatting_rules, merge_replacements, replacement_entries
 from .profiles import PROFILE_FIELDS, PromptProfile, load_profiles, validate_profiles
 from .routing import load_routes, validate_routes
 from .upstream_backup_sections import (
@@ -114,7 +114,7 @@ def _convert_dictionary(
     notes.handled.add("customDictionaryEntries")
     if settings.get("punctuationDictionaryRules") is not None:
         rows = read_list(settings, "punctuationDictionaryRules", 10000)
-        rules = []
+        rules: list[FormattingRule] = []
         for index, value in enumerate(rows):
             row = read_object(value)
             aliases = read_aliases(row["aliases"])
@@ -126,7 +126,7 @@ def _convert_dictionary(
                 )
                 continue
             rules.append({"aliases": aliases, "symbol": symbol})
-        dictionary["punctuation"] = _merge_rules(dictionary["punctuation"], rules)
+        dictionary["punctuation"] = merge_formatting_rules(dictionary["punctuation"], rules)
         notes.handled.add("punctuationDictionaryRules")
     if settings.get("spokenFormattingActionRules") is not None:
         symbols = {"newLine": "\n", "newParagraph": "\n\n", "tab": "\t", "space": " "}
@@ -153,7 +153,7 @@ def _convert_dictionary(
                         "Disabled action has no native aliases; remains unavailable",
                     )
             if aliases:
-                dictionary["actions"] = _merge_rules(
+                dictionary["actions"] = merge_formatting_rules(
                     dictionary["actions"],
                     [
                         {

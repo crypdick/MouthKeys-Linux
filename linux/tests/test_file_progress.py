@@ -54,7 +54,7 @@ def test_file_progress_counts_real_turns_and_uncovered_chunks(monkeypatch):
     output = file_transcription.transcribe_file(
         "example.wav",
         replace(Config(), file_speaker_labels="on"),
-        transcriber=SimpleNamespace(_segments=segments),
+        transcriber=SimpleNamespace(segments=segments),
         on_progress=events.append,
     )
     assert sizes == [16000] * 5
@@ -78,7 +78,7 @@ def test_whole_file_progress_stays_indeterminate_while_backend_blocks(monkeypatc
     file_transcription.transcribe_file(
         "example.wav",
         Config(),
-        transcriber=SimpleNamespace(_segments=segments),
+        transcriber=SimpleNamespace(segments=segments),
         on_progress=events.append,
     )
     assert events[-1] == {"stage": "finalize"}

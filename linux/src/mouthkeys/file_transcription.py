@@ -7,13 +7,16 @@ import math
 import os
 import tempfile
 import time
+from collections.abc import Callable, Iterable
 from fractions import Fraction
 from pathlib import Path
-from typing import Any
+from sys import float_info
+from typing import Any, Protocol, runtime_checkable
 
 import numpy as np
 from numpy.typing import NDArray
 
+from .config import Config
 from .file_history import FileResult, FileSegment, SpeakerTurn
 from .file_speakers import (
     SAMPLE_RATE,
@@ -25,6 +28,7 @@ from .file_speakers import (
     turn_chunks,
 )
 from .transcribe import Transcriber
+from .transcript_window import Segment
 
 __all__ = [
     "diarize",
@@ -37,16 +41,20 @@ __all__ = [
 ]
 
 
+@runtime_checkable
+class SegmentDecoder(Protocol):
+    def segments(self, audio: NDArray[np.generic], config: Config) -> Iterable[Segment]: ...
+
+
 def _decode_bounded(path: str | Path, max_seconds: object) -> NDArray[np.float32]:
     """Bound decoded samples, not just compressed bytes or untrusted duration metadata."""
-    import av
-    from faster_whisper.audio import _ignore_invalid_frames
+    import av  # noqa: PLC0415 - defer media imports until decoding
+    from faster_whisper.audio import _ignore_invalid_frames  # noqa: PLC0415
 
     if (
         isinstance(max_seconds, bool)
         or not isinstance(max_seconds, int | float)
-        or not math.isfinite(max_seconds)
-        or max_seconds <= 0
+        or not 0 < max_seconds <= float_info.max / SAMPLE_RATE
     ):
         raise ValueError("Audio duration limit must be positive and finite")
     limit = int(max_seconds * SAMPLE_RATE)
@@ -83,13 +91,20 @@ def _decode_bounded(path: str | Path, max_seconds: object) -> NDArray[np.float32
     return np.frombuffer(raw.getbuffer(), dtype=np.int16).astype(np.float32) / 32768.0
 
 
-def transcribe_file(path, config, *, transcriber=None, max_seconds=None, on_progress=None):
+def transcribe_file(
+    path: str | Path,
+    config: Config,
+    *,
+    transcriber: SegmentDecoder | None = None,
+    max_seconds: object = None,
+    on_progress: Callable[[dict[str, object]], None] | None = None,
+) -> FileResult:
     """Decode files without capture/delivery/history; optionally report stage dictionaries.
 
     Transcription counters count completed ASR chunks (including uncovered intervals),
     not estimated wall-clock completion. Whole-file backends report only their stage.
     """
-    from faster_whisper.audio import decode_audio
+    from faster_whisper.audio import decode_audio  # noqa: PLC0415 - defer media imports
 
     def progress(stage: str, **details: object) -> None:
         if on_progress is not None:
@@ -116,7 +131,7 @@ def transcribe_file(path, config, *, transcriber=None, max_seconds=None, on_prog
         end: float | None = None,
     ) -> list[FileSegment]:
         decoded: list[FileSegment] = []
-        for segment in engine._segments(samples, config):
+        for segment in engine.segments(samples, config):
             segment_start, segment_end = float(segment.start), float(segment.end)
             if not (math.isfinite(segment_start) and math.isfinite(segment_end)):
                 continue
@@ -173,7 +188,7 @@ def transcribe_file(path, config, *, transcriber=None, max_seconds=None, on_prog
         "duration": duration,
         "processing_seconds": round(time.monotonic() - started, 3),
         "language": config.language,
-        "engine": getattr(config, "engine", "whisper"),
+        "engine": config.engine,
         "model": config.model,
         "confidence": sum(confidences) / len(confidences) if confidences else None,
         "confidence_kind": "mean_segment_token_likelihood" if confidences else "unavailable",
@@ -192,7 +207,11 @@ def result_text(result: FileResult) -> str:
     )
 
 
-def export_result(result: FileResult, path: str | Path, format: str = "json") -> None:
+def export_result(
+    result: FileResult,
+    path: str | Path,
+    format: str = "json",  # noqa: A002 - public export keyword
+) -> None:
     if format not in ("json", "txt"):
         raise ValueError("Export format must be json or txt")
     path = Path(path)

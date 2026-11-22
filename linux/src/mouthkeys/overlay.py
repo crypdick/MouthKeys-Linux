@@ -3,7 +3,7 @@
 import subprocess
 import time
 from collections.abc import Callable
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from PySide6.QtCore import QPoint, QRect, QSize, Qt, QTimer
 from PySide6.QtGui import QMouseEvent, QPainter, QPaintEvent
@@ -11,12 +11,13 @@ from PySide6.QtWidgets import QApplication, QMenu, QPushButton, QWidget
 
 from .config import Config
 from .desktop import source_names
-from .lark_monitor import BatteryMonitor
+from .lark_monitor import BatteryMonitor, microphone_labels
 from .overlay_placement import OverlayPlacement
 from .overlay_rendering import (
     DARK,
     LIGHT,
     PanelFrame,
+    PanelNotice,
     PanelRenderer,
     PanelStatus,
     active_phase,
@@ -24,7 +25,7 @@ from .overlay_rendering import (
     display_text,
 )
 from .processes import python_command
-from .qt_control import Request
+from .qt_control import Request, Response
 from .trace import Trace
 
 if TYPE_CHECKING:
@@ -49,7 +50,7 @@ class Overlay(QWidget):
         self.battery = BatteryMonitor()
         self.data: PanelStatus = {}
         self.trace = Trace()
-        self.meter_frame = None
+        self.meter_frame: int | None = None
         self.renderer = PanelRenderer()
         self.jobs: set[Request] = set()
         self.pending = False
@@ -229,13 +230,13 @@ class Overlay(QWidget):
         else:
             self.send(action)
 
-    def show_history(self, response):
+    def show_history(self, response: Response) -> None:
         if "error" in response:
-            self.notice = (response["error"], time.monotonic() + 10)
+            self.notice = (str(response["error"]), time.monotonic() + 10)
             self.update()
             return
         menu = QMenu(self)
-        rows = response.get("result", [])[:12]
+        rows = cast("list[dict[str, str]]", response.get("result", []))[:12]
         if not rows:
             menu.addAction("No history yet").setEnabled(False)
         for row in rows:
@@ -259,7 +260,7 @@ class Overlay(QWidget):
     def open_assistant(self) -> None:
         # Only this explicit click may open an interactive/focusable surface.
         if self.assistant_window is None:
-            from .overlay_assistant import OverlayAssistant
+            from .overlay_assistant import OverlayAssistant  # noqa: PLC0415 - explicit open only
 
             self.assistant_window = OverlayAssistant(self.renderer.colors, self.poll)
         self.assistant_window.assistant_page.update_status(self.data)
@@ -272,12 +273,13 @@ class Overlay(QWidget):
             return
         self.pending = True
 
-        def received(response):
+        def received(response: Response) -> None:
             self.pending = False
             if "result" in response:
                 self.failures = 0
-                self.timer.setInterval(50 if response["result"]["phase"] == "recording" else 200)
-                self.set_status(response["result"])
+                status = cast("PanelStatus", response["result"])
+                self.timer.setInterval(50 if status["phase"] == "recording" else 200)
+                self.set_status(status)
             else:
                 self.hide()  # Shutdown/disconnect must not leave a stale recording panel.
                 self.active = False
@@ -288,7 +290,7 @@ class Overlay(QWidget):
 
         self.send("status", received)
 
-    def set_status(self, data):
+    def set_status(self, data: PanelStatus) -> None:
         config = Config.load()
         self.apply_settings(config)
         if self.assistant_window is not None:
@@ -304,6 +306,21 @@ class Overlay(QWidget):
             return
         active = active_phase(data["phase"])
         new_recording = data.get("id") != self.data.get("id")
+        self._update_visibility(config, data, active=active, new_recording=new_recording)
+        self._update_trace(config, data, new_recording=new_recording)
+        if active and not self.animation.isActive():
+            self.animation.start(16)
+        self.active = active
+        self.data = data
+        self._update_microphone(config, data.get("microphone", "default"), active=active)
+        if data["phase"] == "recording":
+            self.seconds = data.get("seconds", 0)
+        self.buttons["copy"].setEnabled(not active and bool(data.get("preview")))
+        self.update()
+
+    def _update_visibility(
+        self, config: Config, data: PanelStatus, *, active: bool, new_recording: bool
+    ) -> None:
         if active and (not self.active or new_recording):
             self.dismiss_at = None
             self.notice = None
@@ -314,11 +331,17 @@ class Overlay(QWidget):
             self.dismiss_at = time.monotonic() + (0.6 if success else 10)
             if message == "Cancelled":
                 self.dismiss_at = 0
+        proposal = data.get("assistant_proposal")
         if proposal and (new_recording or proposal != self.data.get("assistant_proposal")):
             # Retain the answer until explicit dismissal; never open or focus its review window.
             self.dismiss_at = None
             self.placement.show(config)
-        notice = data.get("notice")
+        self._update_notice(config, data.get("notice"))
+        if self.dismiss_at is not None and time.monotonic() >= self.dismiss_at:
+            self.hide()
+        self.placement.recover(config)
+
+    def _update_notice(self, config: Config, notice: PanelNotice | None) -> None:
         if not notice:
             self.notice = None
             self.notice_serial = None
@@ -331,9 +354,8 @@ class Overlay(QWidget):
                 self.notice = (message, time.monotonic() + 10)
                 self.dismiss_at = self.notice[1]
                 self.placement.show(config)
-        if self.dismiss_at is not None and time.monotonic() >= self.dismiss_at:
-            self.hide()
-        self.placement.recover(config)
+
+    def _update_trace(self, config: Config, data: PanelStatus, *, new_recording: bool) -> None:
         now = time.monotonic()
         if data["phase"] == "recording":
             if new_recording or self.data.get("phase") != "recording":
@@ -347,37 +369,16 @@ class Overlay(QWidget):
                 self.meter_frame = meter["frame"]
         else:
             self.trace.stop(now)
-        if active and not self.animation.isActive():
-            self.animation.start(16)
-        self.active = active
-        self.data = data
-        microphone = data.get("microphone", "default")
-        battery = self.battery.poll(config, microphone)
-        if battery and battery["result"] == "ok":
-            values = [
-                f"{percent}%"
-                for mic in (battery["mic1"], battery["mic2"])
-                if (percent := mic["percent"]) is not None
-            ]
-            self.mic_button.setText(microphone + (" " + "/".join(values) if values else ""))
-            self.mic_button.setToolTip(
-                "Lark A1 battery · " + (" / ".join(values) or "No linked mic")
-            )
-        else:
-            self.mic_button.setText(microphone)
-            self.mic_button.setToolTip(
-                "Choose microphone · " + (battery.get("result", "") if battery else "")
-            )
+
+    def _update_microphone(self, config: Config, microphone: str, *, active: bool) -> None:
+        text, hint = microphone_labels(microphone, self.battery.poll(config, microphone))
+        self.mic_button.setToolTip(hint)
         self.mic_button.setEnabled(not active)
         self.mic_button.setText(
             self.mic_button.fontMetrics().elidedText(
-                self.mic_button.text(), Qt.TextElideMode.ElideRight, self.mic_button.width() - 6
+                text, Qt.TextElideMode.ElideRight, self.mic_button.width() - 6
             )
         )
-        if data["phase"] == "recording":
-            self.seconds = data.get("seconds", 0)
-        self.buttons["copy"].setEnabled(not active and bool(data.get("preview")))
-        self.update()
 
     def animate(self) -> None:
         if not self.isVisible():

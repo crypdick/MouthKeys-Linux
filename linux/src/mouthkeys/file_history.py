@@ -1,15 +1,15 @@
 """Private, bounded file-transcription results, independent of microphone history."""
 
 import json
-import math
 import sqlite3
 import time
 import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import NotRequired, TypedDict, cast
+from sys import float_info
+from typing import NotRequired, TypedDict, TypeGuard, cast
 
 from .config import state_dir
 
@@ -36,6 +36,11 @@ class FileResult(TypedDict):
     segments: NotRequired[list[FileSegment]]
     speaker_turns: NotRequired[list[SpeakerTurn] | None]
     confidence: NotRequired[float | None]
+    confidence_kind: NotRequired[str]
+    diarization_mode: NotRequired[str | None]
+    engine: NotRequired[str]
+    language: NotRequired[str]
+    model: NotRequired[str]
 
 
 class FileHistoryEntry(TypedDict):
@@ -45,27 +50,27 @@ class FileHistoryEntry(TypedDict):
     result: FileResult
 
 
+def _finite_number(value: object) -> TypeGuard[int | float]:
+    return (type(value) is int or type(value) is float) and (
+        -float_info.max <= value <= float_info.max
+    )
+
+
 def parse_file_result(result: object) -> FileResult:
     if not isinstance(result, dict) or not isinstance(result.get("text"), str):
-        raise ValueError("Invalid file transcription result")
+        raise ValueError("Invalid file transcription result")  # noqa: TRY004 - result validation
     for name in ("duration", "processing_seconds"):
         value = result.get(name)
-        if type(value) not in (int, float) or not math.isfinite(value) or value < 0:
+        if not _finite_number(value) or value < 0:
             raise ValueError(f"Invalid result {name}")
     segments = result.get("segments", [])
     if not isinstance(segments, list):
-        raise ValueError("Invalid file segments")
+        raise ValueError("Invalid file segments")  # noqa: TRY004 - result validation
     for segment in segments:
         if not isinstance(segment, dict) or not isinstance(segment.get("text"), str):
-            raise ValueError("Invalid file segment")
+            raise ValueError("Invalid file segment")  # noqa: TRY004 - result validation
         start, end = segment.get("start"), segment.get("end")
-        if (
-            type(start) not in (int, float)
-            or type(end) not in (int, float)
-            or not math.isfinite(start)
-            or not math.isfinite(end)
-            or not 0 <= start <= end
-        ):
+        if not _finite_number(start) or not _finite_number(end) or not 0 <= start <= end:
             raise ValueError("Invalid segment timestamps")
     return cast("FileResult", result)
 
@@ -156,14 +161,13 @@ class FileHistory:
                 raise ValueError("Invalid file history entry")
             uuid.UUID(row["id"])
             if (
-                type(row["created"]) not in (int, float)
-                or not math.isfinite(row["created"])
+                not _finite_number(row["created"])
                 or not isinstance(row["name"], str)
                 or Path(row["name"]).name != row["name"]
             ):
                 raise ValueError("Invalid file history metadata")
             try:
-                datetime.fromtimestamp(row["created"])
+                datetime.fromtimestamp(row["created"], tz=UTC)
             except (ValueError, OverflowError, OSError):
                 raise ValueError("Invalid file history date") from None
             validate_result(row["result"])

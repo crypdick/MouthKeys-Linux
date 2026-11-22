@@ -37,7 +37,7 @@ def test_nonfinite_and_out_of_file_turns_do_not_create_speaker_labels(monkeypatc
     result = file_transcription.transcribe_file(
         "input.wav",
         Config(file_speaker_labels="on", file_diarization_mode=mode),
-        transcriber=SimpleNamespace(_segments=segments),
+        transcriber=SimpleNamespace(segments=segments),
     )
     assert result["speaker_turns"] == []
     assert result["diarization_mode"] is None
@@ -56,7 +56,7 @@ def test_file_segments_ignore_nonfinite_or_inverted_timings(monkeypatch):
         SimpleNamespace(start=0.5, end=1, text="Keep this", avg_logprob=float("nan")),
     ]
     result = file_transcription.transcribe_file(
-        "input.wav", Config(), transcriber=SimpleNamespace(_segments=lambda *_: pieces)
+        "input.wav", Config(), transcriber=SimpleNamespace(segments=lambda *_: pieces)
     )
     assert result["segments"] == [{"start": 0.5, "end": 1.0, "text": "Keep this"}]
     assert result["confidence"] is None
@@ -72,7 +72,7 @@ def test_confidence_uses_only_finite_retained_segment_scores(monkeypatch):
         SimpleNamespace(start=1, end=1, text="", avg_logprob=-10),
     ]
     result = file_transcription.transcribe_file(
-        "input.wav", Config(), transcriber=SimpleNamespace(_segments=lambda *_: pieces)
+        "input.wav", Config(), transcriber=SimpleNamespace(segments=lambda *_: pieces)
     )
     assert result["confidence"] == pytest.approx(0.75)
     assert result["confidence_kind"] == "mean_segment_token_likelihood"
@@ -89,7 +89,7 @@ def test_unsupported_file_export_never_creates_output(tmp_path):
 
 def test_empty_file_never_invokes_inference(monkeypatch):
     monkeypatch.setattr(audio, "decode_audio", lambda *args, **kwargs: np.array([]))
-    decoder = SimpleNamespace(_segments=lambda *_: pytest.fail("Inference on empty audio"))
+    decoder = SimpleNamespace(segments=lambda *_: pytest.fail("Inference on empty audio"))
     with pytest.raises(ValueError, match="File contains no audio"):
         file_transcription.transcribe_file("empty.wav", Config(), transcriber=decoder)
 
@@ -111,7 +111,7 @@ def test_file_turns_are_bounded_without_losing_overlapping_attribution(monkeypat
     result = file_transcription.transcribe_file(
         "input.wav",
         Config(file_speaker_labels="on"),
-        transcriber=SimpleNamespace(_segments=decode),
+        transcriber=SimpleNamespace(segments=decode),
     )
     assert [(s["start"], s["end"], s["speaker"]) for s in result["segments"]] == [
         (0.0, 0.75, 0),

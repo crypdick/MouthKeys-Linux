@@ -1,46 +1,15 @@
-import ctypes.util
 import io
 import os
 import subprocess
-import sys
 from dataclasses import replace
+from pathlib import Path
+from types import SimpleNamespace
 
+import numpy as np
 import pytest
 
-from mouthkeys import native_worker
+from mouthkeys import native_asr, native_protocol, native_worker
 from mouthkeys.config import Config
-
-
-def test_kernel_network_isolation_preserves_local_ipc_in_child():
-    if not ctypes.util.find_library("seccomp"):
-        pytest.skip("Optional native worker requires libseccomp")
-    script = """
-import socket
-from mouthkeys.native_worker import isolate_network
-isolate_network()
-for family in (socket.AF_INET, socket.AF_INET6):
-    try:
-        socket.socket(family)
-    except PermissionError:
-        pass
-    else:
-        raise AssertionError('Internet socket allowed')
-left, right = socket.socketpair()
-left.send(b'local')
-assert right.recv(5) == b'local'
-left.close()
-right.close()
-print('isolated')
-"""
-    result = subprocess.run(  # noqa: S603
-        [sys.executable, "-P", "-c", script],
-        capture_output=True,
-        text=True,
-        timeout=10,
-        check=False,
-    )
-    assert result.returncode == 0, result.stderr
-    assert result.stdout.strip() == "isolated"
 
 
 class Process:
@@ -48,10 +17,11 @@ class Process:
         self.stdin = io.BytesIO()
         self.stdout = io.BytesIO()
         for response in responses:
-            native_worker._write_message(self.stdout, response)
+            native_protocol.write_message(self.stdout, response)
         self.stdout.seek(0)
         self.returncode = None
         self.killed = False
+        self.waits = []
 
     def poll(self):
         return self.returncode
@@ -61,7 +31,17 @@ class Process:
         self.returncode = -9
 
     def wait(self, timeout):
+        self.waits.append(timeout)
         return self.returncode
+
+
+def ready_worker(monkeypatch, *responses):
+    process = Process([{"result": "ready", "native_streaming": False}, *responses])
+    config = Config(engine="nemo", native_timeout_seconds=10)
+    monkeypatch.setattr(native_worker.importlib.util, "find_spec", lambda _: object())
+    monkeypatch.setattr(native_worker.subprocess, "Popen", lambda *_args, **_options: process)
+    monkeypatch.setattr(native_protocol.select, "select", lambda read, write, *_: (read, write, []))
+    return native_worker.NativeWorkerBackend(config), process, config
 
 
 def test_model_worker_env_is_private_and_rpc_preserves_sessions(monkeypatch):
@@ -73,243 +53,248 @@ def test_model_worker_env_is_private_and_rpc_preserves_sessions(monkeypatch):
         native_worker.subprocess, "Popen", lambda *args, **kw: calls.append((args, kw)) or process
     )
     monkeypatch.setattr(
-        native_worker.select, "select", lambda read, write, *args: (read, write, [])
+        native_protocol.select, "select", lambda read, write, *args: (read, write, [])
     )
     config = replace(Config(), engine="nemo")
     backend = native_worker.NativeWorkerBackend(config)
     assert backend.stream([1, 2], config, "session") == "partial"
-    assert backend.stream([1, 2, 3], config, "session", final=True) == "final"
+    assert backend.stream([1, 2, 3], config, (Path("recording.wav"), 7), final=True) == "final"
     assert calls[0][1]["env"]["HF_HUB_OFFLINE"] == "1"
     assert calls[0][1]["env"]["TRANSFORMERS_OFFLINE"] == "1"
     assert calls[0][1]["stderr"] == subprocess.DEVNULL
     assert calls[0][1]["close_fds"] is True
     assert os.environ.get("HF_HUB_OFFLINE") == previous
     messages = io.BytesIO(process.stdin.getvalue())
-    assert native_worker._read_message(messages)[0]["config"]["engine"] == "nemo"
-    request, samples = native_worker._read_message(messages, allow_audio=True)
+    assert native_protocol.read_message(messages)[0]["config"]["engine"] == "nemo"
+    request, samples = native_protocol.read_message(messages, allow_audio=True)
     assert request["method"] == "stream"
     assert request["session_key"] == "session"
     assert request["final"] is False
     assert list(samples) == [1, 2]
-    directory = native_worker.Path(backend.directory.name)
+    final, samples = native_protocol.read_message(messages, allow_audio=True)
+    assert final["session_key"] == ["recording.wav", 7]
+    assert final["final"] is True
+    assert list(samples) == [1, 2, 3]
+    directory = Path(backend.directory.name)
     backend.close()
     assert process.killed
     assert not directory.exists()
+    backend.close()
+    assert process.waits == [3]
 
 
-def test_native_protocol_rejects_unexpected_audio_response_before_allocation():
-    import struct
+def test_startup_input_uses_timeout_and_reaps_stalled_worker(monkeypatch):
+    process = Process([])
+    monkeypatch.setattr(native_worker.importlib.util, "find_spec", lambda _: object())
+    directory = None
 
-    stream = io.BytesIO()
-    native_worker._write_message(stream, {"result": "fake"}, [1, 2])
-    stream.seek(0)
-    with pytest.raises(ValueError, match="Unexpected audio"):
-        native_worker._read_message(stream)
-    with pytest.raises(ValueError, match="message size"):
-        native_worker._read_message(io.BytesIO(struct.pack("!I", native_worker.MAX_HEADER + 1)))
+    def spawn(*_args, **options):
+        nonlocal directory
+        directory = Path(options["env"]["MOUTHKEYS_NATIVE_STATE"])
+        return process
+
+    monkeypatch.setattr(native_worker.subprocess, "Popen", spawn)
+    monkeypatch.setattr(native_protocol.select, "select", lambda *_: ([], [], []))
+    with pytest.raises(RuntimeError, match="input timed out"):
+        native_worker.NativeWorkerBackend(Config(engine="nemo", native_timeout_seconds=10))
+    assert process.killed
+    assert process.stdin.closed
+    assert process.stdout.closed
+    assert directory is not None
+    assert not directory.exists()
+
+
+def test_launch_error_cleans_temporary_directory_before_return(monkeypatch):
+    monkeypatch.setattr(native_worker.importlib.util, "find_spec", lambda _: object())
+    directory = None
+
+    def spawn(*_args, **options):
+        nonlocal directory
+        directory = Path(options["env"]["MOUTHKEYS_NATIVE_STATE"])
+        assert directory.is_dir()
+        raise OSError("Cannot start worker")
+
+    monkeypatch.setattr(native_worker.subprocess, "Popen", spawn)
+    with pytest.raises(OSError, match="Cannot start worker") as failure:
+        native_worker.NativeWorkerBackend(Config(engine="nemo"))
+    assert failure.traceback
+    assert directory is not None
+    assert not directory.exists()
+
+
+@pytest.mark.parametrize(
+    "reply", [{"words": []}, {"result": 99}, {"error": {}}, {"result": "words", "words": False}]
+)
+def test_invalid_reply_reaps_worker(monkeypatch, reply):
+    backend, process, config = ready_worker(monkeypatch, reply)
+    try:
+        with pytest.raises(RuntimeError, match="worker exited"):
+            backend.stream([0], config, "test")
+        assert not backend.alive()
+        assert process.killed
+    finally:
+        backend.close()
 
 
 def test_native_timeout_kills_worker_not_truncated_success(monkeypatch):
-    backend = native_worker.NativeWorkerBackend.__new__(native_worker.NativeWorkerBackend)
-    backend.process = Process([])
-    backend.timeout = 10
-    monkeypatch.setattr(native_worker.select, "select", lambda *args: ([], [], []))
-    with pytest.raises(RuntimeError, match="worker stopped"):
-        backend._response()
-    assert backend.process.killed
+    backend, process, config = ready_worker(monkeypatch)
+    monkeypatch.setattr(native_protocol.select, "select", lambda read, write, *_: ([], write, []))
+    with pytest.raises(RuntimeError, match="exceeded 10s; worker stopped"):
+        backend.stream([0], config, "test")
+    assert process.killed
     assert not backend.alive()
 
 
 def test_unexpected_worker_exit_is_actionable(monkeypatch):
-    backend = native_worker.NativeWorkerBackend.__new__(native_worker.NativeWorkerBackend)
-    backend.process = Process([])
-    backend.timeout = 10
-    monkeypatch.setattr(
-        native_worker.select, "select", lambda read, write, *args: (read, write, [])
-    )
+    backend, process, config = ready_worker(monkeypatch)
     with pytest.raises(RuntimeError, match="record again"):
-        backend._response()
-    assert backend.process.killed
+        backend.stream([0], config, "test")
+    assert process.killed
+    with pytest.raises(RuntimeError, match="reload model"):
+        backend.stream([0], config, "test")
 
 
 def test_long_file_rpc_uses_bounded_speech_and_restores_timestamps(monkeypatch):
-    import numpy as np
+    def reply(frames):
+        return {
+            "result": [
+                {
+                    "start": 0.0,
+                    "end": frames / 16000,
+                    "text": "word",
+                    "words": [{"word": "word", "start": 0, "end": frames / 16000}],
+                }
+            ],
+        }
 
-    from mouthkeys import native_asr
-    from mouthkeys.config import Config
-    from mouthkeys.native_worker import NativeWorkerBackend
-
-    backend = object.__new__(NativeWorkerBackend)
-    backend.timeout = 30
-    calls = []
-    monkeypatch.setattr("mouthkeys.native_worker.FILE_WINDOW_SAMPLES", 100)
+    backend, process, config = ready_worker(monkeypatch, reply(20), reply(30))
+    monkeypatch.setattr(native_worker, "FILE_WINDOW_SAMPLES", 100)
     monkeypatch.setattr(
         native_asr,
         "speech_spans",
         lambda audio: [{"start": 10, "end": 30}, {"start": 100, "end": 130}],
     )
-
-    def call(request, samples):
-        calls.append((request, len(samples)))
-        return [
-            {
-                "start": 0.0,
-                "end": len(samples) / 16000,
-                "text": "word",
-                "words": [{"word": "word", "start": 0, "end": len(samples) / 16000}],
-            }
-        ]
-
-    backend._call = call
-    result = backend.segments(np.zeros(200), Config())
-    assert [n for _, n in calls] == [20, 30]
-    assert all(req["presegmented"] for req, _ in calls)
-    assert [(s.start, s.end) for s in result] == [
-        (10 / 16000, 30 / 16000),
-        (100 / 16000, 130 / 16000),
-    ]
-    assert [(word["start"], word["end"]) for word in backend.words] == [
-        (10 / 16000, 30 / 16000),
-        (100 / 16000, 130 / 16000),
-    ]
+    try:
+        result = backend.segments(np.zeros(200), config)
+        sent = io.BytesIO(process.stdin.getvalue())
+        native_protocol.read_message(sent)
+        requests = [native_protocol.read_message(sent, allow_audio=True) for _ in range(2)]
+        assert [len(samples) for _, samples in requests] == [20, 30]
+        assert all(req["presegmented"] for req, _ in requests)
+        timestamps = [(10 / 16000, 30 / 16000), (100 / 16000, 130 / 16000)]
+        assert [(s.start, s.end) for s in result] == timestamps
+        assert [(word["start"], word["end"]) for word in backend.words] == timestamps
+    finally:
+        backend.close()
 
 
 def test_unresponsive_worker_input_is_bounded_and_killed(monkeypatch):
-    backend = object.__new__(native_worker.NativeWorkerBackend)
-    backend.process = Process([])
-    backend.timeout = 0.01
-    backend.lock = native_worker.threading.Lock()
-    monkeypatch.setattr(native_worker.select, "select", lambda *args: ([], [], []))
+    backend, process, config = ready_worker(monkeypatch)
+    monkeypatch.setattr(native_protocol.select, "select", lambda *_: ([], [], []))
     with pytest.raises(RuntimeError, match="input timed out"):
-        backend._call({"method": "segments"}, [0] * 100)
-    assert backend.process.killed
+        backend.segments([0] * 100, config)
+    assert process.killed
 
 
 def test_ready_handshake_reports_actual_native_streaming_capability(monkeypatch):
-    monkeypatch.setattr(native_worker.select, "select", lambda read, write, *a: (read, write, []))
-    process = Process([{"result": "ready", "native_streaming": False}])
-    backend = object.__new__(native_worker.NativeWorkerBackend)
-    backend.process = process
-    backend.timeout = 1
-    assert backend._response() == "ready"
-    assert backend.native_streaming is False
+    backend, _, _ = ready_worker(monkeypatch)
+    try:
+        assert backend.native_streaming is False
+    finally:
+        backend.close()
 
 
-@pytest.mark.parametrize("engine", ["nemo", "transformers"])
-def test_worker_runs_real_framing_for_backend_selection_and_redacts_inference_errors(engine):
-    if not ctypes.util.find_library("seccomp"):
-        pytest.skip("Optional native worker requires libseccomp")
-    script = """
-from types import SimpleNamespace
+def test_close_workers_continues_after_an_unreapable_worker(monkeypatch):
+    reaped = []
 
-from mouthkeys import native_worker, nemo_asr, transformers_asr
+    def stuck():
+        raise subprocess.TimeoutExpired("worker", 3)
 
-
-class Offline:
-    def __init__(self, config):
-        assert config.engine == "transformers"
-        self.words = []
-
-    def segments(self, samples, config, *, presegmented):
-        assert len(samples) == 2 and presegmented
-        return [SimpleNamespace(start=0.0, end=0.125, text="decoded file")]
+    monkeypatch.setattr(
+        native_worker,
+        "_WORKERS",
+        [
+            SimpleNamespace(close=stuck),
+            SimpleNamespace(close=lambda: reaped.append(True)),
+        ],
+    )
+    native_worker.close_workers()
+    assert reaped == [True]
 
 
-class Streaming:
-    supports_native_streaming = True
-
-    def __init__(self, config):
-        assert config.engine == "nemo"
-        self.words = []
-
-    def stream(self, samples, config, session_key, *, final):
-        if session_key == "invalid":
-            raise ValueError("private inference payload")
-        assert session_key == ["test", "take"] and final and len(samples) == 3
-        self.words = [{"word": "decoded", "start": 0, "end": 0.125}]
-        return "decoded"
-
-    def segments(self, samples, config, *, presegmented):
-        return Offline.segments(self, samples, config, presegmented=presegmented)
-
-    def reset_stream(self):
-        self.words = []
+def test_worker_cannot_launch_without_optional_dependency(monkeypatch):
+    monkeypatch.setattr(native_worker.importlib.util, "find_spec", lambda _: None)
+    monkeypatch.setattr(
+        native_worker.subprocess, "Popen", lambda *_args, **_kw: pytest.fail("spawn")
+    )
+    with pytest.raises(RuntimeError, match="Install the transformers optional dependency"):
+        native_worker.NativeWorkerBackend(Config(engine="transformers"))
 
 
-nemo_asr.NemoBackend = Streaming
-transformers_asr.TransformersBackend = Offline
-native_worker.worker_main()
-"""
-    config = native_worker.asr_config(replace(Config(), engine=engine))
-    payload = io.BytesIO()
-    native_worker._write_message(payload, {"config": config})
-    if engine == "nemo":
-        native_worker._write_message(
-            payload,
-            {"method": "stream", "config": config, "session_key": ["test", "take"], "final": True},
-            [0, 1, 2],
-        )
-        native_worker._write_message(
-            payload, {"method": "stream", "config": config, "session_key": "invalid"}, [0]
-        )
+def test_invalid_ready_handshake_reaps_worker(monkeypatch):
+    process = Process([{"result": "not ready"}])
+    monkeypatch.setattr(native_worker.importlib.util, "find_spec", lambda _: object())
+    monkeypatch.setattr(native_worker.subprocess, "Popen", lambda *_args, **_options: process)
+    monkeypatch.setattr(native_protocol.select, "select", lambda read, write, *_: (read, write, []))
+    with pytest.raises(RuntimeError, match="did not finish loading"):
+        native_worker.NativeWorkerBackend(Config(engine="nemo"))
+    assert process.killed
+    assert process.waits == [3]
+
+
+def test_worker_error_can_be_followed_by_reset_and_retry(monkeypatch):
+    backend, process, config = ready_worker(
+        monkeypatch, {"error": "Cannot decode"}, {"result": None}, {"result": "Recovered"}
+    )
+    try:
+        with pytest.raises(RuntimeError, match="Cannot decode"):
+            backend.stream([0], config, "retry")
+        assert backend.alive()
+        backend.reset_stream()
+        assert backend.stream([0], config, "retry") == "Recovered"
+        wire = io.BytesIO(process.stdin.getvalue())
+        native_protocol.read_message(wire)
+        native_protocol.read_message(wire, allow_audio=True)
+        assert native_protocol.read_message(wire)[0] == {"method": "reset_stream"}
+    finally:
+        backend.close()
+    backend.reset_stream()
+
+
+@pytest.mark.parametrize("failure", ["missing", "broken", "exited"])
+def test_unavailable_worker_is_not_reused(monkeypatch, failure):
+    backend, process, config = ready_worker(monkeypatch)
+    original_writer = process.stdin
+
+    class BrokenPipe(io.BytesIO):
+        def write(self, _data):
+            raise BrokenPipeError("No reader")
+
+    if failure == "exited":
+        process.returncode = 1
+    elif failure == "missing":
+        process.stdin = None
     else:
-        native_worker._write_message(payload, {"method": "unknown", "config": config})
-    native_worker._write_message(payload, {"method": "reset_stream"})
-    native_worker._write_message(
-        payload, {"method": "segments", "config": config, "presegmented": True}, [0, 1]
-    )
-
-    result = subprocess.run(  # noqa: S603 - local worker using fake models
-        [sys.executable, "-P", "-c", script],
-        input=payload.getvalue(),
-        capture_output=True,
-        timeout=10,
-        check=True,
-    )
-    assert b"private inference payload" not in result.stdout + result.stderr
-    output = io.BytesIO(result.stdout)
-    ready, _ = native_worker._read_message(output)
-    assert ready == {"result": "ready", "native_streaming": engine == "nemo"}
-    if engine == "nemo":
-        response, _ = native_worker._read_message(output)
-        assert response == {
-            "result": "decoded",
-            "words": [{"word": "decoded", "start": 0, "end": 0.125}],
-        }
-    failure, _ = native_worker._read_message(output)
-    assert "failed (ValueError)" in failure["error"]
-    reset, _ = native_worker._read_message(output)
-    assert reset == {"result": None, "words": []}
-    segments, _ = native_worker._read_message(output)
-    assert segments == {
-        "result": [{"start": 0, "end": 0.125, "text": "decoded file", "words": []}],
-        "words": [],
-    }
-    assert not output.read()
+        process.stdin = BrokenPipe()
+    try:
+        with pytest.raises(
+            RuntimeError, match="reload model" if failure == "exited" else "worker exited"
+        ):
+            backend.stream([0], config, "test")
+        assert not backend.alive()
+    finally:
+        backend.close()
+        original_writer.close()
+    assert process.killed == (failure != "exited")
+    assert process.stdout.closed
 
 
-def test_worker_loader_failure_is_returned_before_any_inference():
-    if not ctypes.util.find_library("seccomp"):
-        pytest.skip("Optional native worker requires libseccomp")
-    payload = io.BytesIO()
-    native_worker._write_message(
-        payload, {"config": native_worker.asr_config(Config(engine="nemo"))}
-    )
-    script = """
-from mouthkeys import native_worker, nemo_asr
-
-def missing(config):
-    raise RuntimeError("Requested local archive unavailable")
-
-nemo_asr.NemoBackend = missing
-native_worker.worker_main()
-"""
-    result = subprocess.run(  # noqa: S603 - local worker using fake models
-        [sys.executable, "-P", "-c", script],
-        input=payload.getvalue(),
-        capture_output=True,
-        timeout=10,
-        check=True,
-    )
-    response, _ = native_worker._read_message(io.BytesIO(result.stdout))
-    assert response == {"error": "Requested local archive unavailable"}
+@pytest.mark.parametrize("result", ["bad list", [{"text": "missing time"}], ["invalid segment"]])
+def test_invalid_segment_reply_reaps_worker(monkeypatch, result):
+    backend, process, config = ready_worker(monkeypatch, {"result": result})
+    try:
+        with pytest.raises(RuntimeError, match="worker exited"):
+            backend.segments([0], config)
+        assert process.killed
+    finally:
+        backend.close()

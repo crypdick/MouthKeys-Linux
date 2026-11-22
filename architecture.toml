@@ -49,6 +49,12 @@ public_modules = [
 ]
 
 [[packages]]
+name = "native_protocol"
+root = "mouthkeys.native_protocol"
+role = "primitives"
+public_modules = ["mouthkeys.native_protocol"]
+
+[[packages]]
 name = "processes"
 root = "mouthkeys.processes"
 role = "primitives"

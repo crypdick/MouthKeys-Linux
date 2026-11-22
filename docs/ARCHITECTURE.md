@@ -19,8 +19,9 @@ reply before stopping the server.
   commits results only if cancellation or logout has not won. `transcribe.Transcriber`
   uses engines in `engines` and `native_worker`. `transcript_window` commits stable preview
   segments only after the whole decode succeeds and leaves the unresolved tail for finalization.
-  `native_asr` owns local artifact checks and common
-  audio helpers; `transformers_asr` and `nemo_asr` load and decode inside the isolated worker.
+  `native_asr` owns local artifact checks and audio helpers. `native_worker` manages the offline
+  process; `native_protocol` bounds its framed JSON and PCM transfers, including startup.
+  `transformers_asr` and `nemo_asr` load and decode inside that process.
 - **Benchmarks:** `benchmark` measures explicit WAV fixtures in an offline worker.
   `benchmark_reports` validates and retains bounded local reports for the model catalog.
 - **Delivery:** `formatting` and `spoken_send` transform text without desktop effects. `storage.History`

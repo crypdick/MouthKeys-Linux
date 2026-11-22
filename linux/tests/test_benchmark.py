@@ -441,6 +441,25 @@ def test_cpu_measurement_ignores_unrelated_gpu_context(monkeypatch, tmp_path):
     assert benchmark.matching_measurement(config, [item]) is None
 
 
+@pytest.mark.parametrize("driver", ["updated driver", None])
+def test_gpu_measurement_does_not_match_a_different_driver(monkeypatch, driver):
+    config = Config(device="cuda")
+    saved = report(config)
+    saved["software"]["nvidia_driver"] = "original driver"
+    read = Path.read_text
+
+    def read_driver(path, *args, **options):
+        if path == Path("/proc/driver/nvidia/version"):
+            if driver is None:
+                raise FileNotFoundError(path)
+            return f"  {driver}\n"
+        return read(path, *args, **options)
+
+    monkeypatch.setattr(Path, "read_text", read_driver)
+    assert benchmark.software_context()["nvidia_driver"] == driver
+    assert benchmark.matching_measurement(config, [saved]) is None
+
+
 def test_model_browser_missing_weights_does_not_launch_benchmark(monkeypatch):
     from PySide6.QtWidgets import QComboBox, QLineEdit, QMessageBox, QWidget
 

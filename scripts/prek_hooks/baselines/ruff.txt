@@ -278,24 +278,11 @@
 3	src/mouthkeys/provider_tools.py	TRY004	Prefer `TypeError` exception for invalid type
 1	src/mouthkeys/routing.py	PLC0415	`import` should be at the top-level of a file
 1	src/mouthkeys/routing.py	PLR0913	Too many arguments in function definition (6 > 5)
-1	src/mouthkeys/service.py	ANN001	Missing type annotation for function argument `_focus_gate`
-2	src/mouthkeys/service.py	ANN001	Missing type annotation for function argument `action`
 1	src/mouthkeys/service.py	ANN001	Missing type annotation for function argument `delivery`
 1	src/mouthkeys/service.py	ANN001	Missing type annotation for function argument `history`
 1	src/mouthkeys/service.py	ANN001	Missing type annotation for function argument `recorder`
 1	src/mouthkeys/service.py	ANN001	Missing type annotation for function argument `transcriber`
-2	src/mouthkeys/service.py	ANN003	Missing type annotation for `**data`
-1	src/mouthkeys/service.py	ANN201	Missing return type annotation for public function `command`
-1	src/mouthkeys/service.py	ANN201	Missing return type annotation for public function `interrupt`
-1	src/mouthkeys/service.py	ANN202	Missing return type annotation for private function `_command`
-1	src/mouthkeys/service.py	ANN202	Missing return type annotation for private function `_warmup`
 1	src/mouthkeys/service.py	ANN204	Missing return type annotation for special method `__init__`
-1	src/mouthkeys/service.py	C901	`_finish` is too complex (23 > 15)
-1	src/mouthkeys/service.py	PLC0415	`import` should be at the top-level of a file
-1	src/mouthkeys/service.py	PLR0911	Too many return statements (9 > 6)
-1	src/mouthkeys/service.py	PLR0912	Too many branches (25 > 12)
-1	src/mouthkeys/service.py	PLR0915	Too many statements (84 > 50)
-1	src/mouthkeys/service.py	SIM105	Use `contextlib.suppress(Exception)` instead of `try`-`except`-`pass`
 1	src/mouthkeys/setup_languages.py	ANN001	Missing type annotation for function argument `engine`
 1	src/mouthkeys/setup_languages.py	ANN001	Missing type annotation for function argument `label`
 1	src/mouthkeys/setup_languages.py	ANN001	Missing type annotation for function argument `language_code`

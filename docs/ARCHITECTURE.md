@@ -38,6 +38,8 @@ reply before stopping the server.
   and local formatting. `pronunciation_spans` bounds acoustic search and applies only completed,
   disjoint matches to observed word timings. `recording_cleanup` runs configured AI cleanup with
   the recording's cancellation event.
+  `recording_finalizer` runs stopped jobs through recognition, review or dictation, and retirement.
+  It and the controller share one `recording_state` lock for job and UI transitions.
   `recording_delivery` receives committed text and owns the cancellable Spoken Send review
   window. The key reservation uses the same lock as cancel and new-recording commands.
   Manual replay checks ownership again before requesting a paste; it cannot update a newer

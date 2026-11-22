@@ -83,7 +83,7 @@ def record_private_execution(session, result):
     return session
 
 
-def append_private_messages(session, messages):
+def append_private_messages(session: dict[str, Any], messages: object) -> dict[str, Any]:
     previous = validate_messages(session["messages"])
     events = validate_executions(session.get("executions", []), len(previous))
     combined = [*previous, *validate_messages(messages)]
@@ -96,7 +96,7 @@ def append_private_messages(session, messages):
     return session
 
 
-def validate_messages(messages):
+def validate_messages(messages: object) -> list[dict[str, str]]:
     if not isinstance(messages, list) or len(messages) > MAX_MESSAGES:
         raise ValueError("Invalid assistant messages")
     if len(messages) % 2:
@@ -132,7 +132,7 @@ def context_messages(messages):
 
 
 class AssistantHistory:
-    def __init__(self):
+    def __init__(self) -> None:
         self.path = state_dir() / "assistant.sqlite3"
         with self.connect() as db:
             db.execute("""CREATE TABLE IF NOT EXISTS sessions (
@@ -195,7 +195,7 @@ class AssistantHistory:
             "executions": validate_executions(events, len(messages)),
         }
 
-    def current(self, mode):
+    def current(self, mode: str) -> dict[str, Any]:
         self._mode(mode)
         with self.connect() as db:
             row = db.execute("SELECT id FROM current WHERE mode=?", (mode,)).fetchone()
@@ -241,8 +241,8 @@ class AssistantHistory:
             db.execute("DELETE FROM sessions WHERE id=?", (item_id,))
             db.execute("DELETE FROM current WHERE id=?", (item_id,))
 
-    def append(self, item_id, messages):
-        validate_messages(messages)
+    def append(self, item_id: str, messages: object) -> None:
+        messages = validate_messages(messages)
         with self.connect() as db:
             db.execute("BEGIN IMMEDIATE")
             row = db.execute("SELECT * FROM sessions WHERE id=?", (item_id,)).fetchone()

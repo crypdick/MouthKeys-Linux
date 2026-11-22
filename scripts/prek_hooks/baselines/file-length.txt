@@ -1,2 +1,1 @@
-661	linux/src/mouthkeys/assistant_ui.py
 1313	linux/src/mouthkeys/service.py

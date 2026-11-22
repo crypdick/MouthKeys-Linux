@@ -100,18 +100,14 @@
 1	src/mouthkeys/assistance.py	SIM105	Use `contextlib.suppress(ProcessLookupError)` instead of `try`-`except`-`pass`
 1	src/mouthkeys/assistance.py	TRY004	Prefer `TypeError` exception for invalid type
 1	src/mouthkeys/assistant_history.py	ANN001	Missing type annotation for function argument `events`
-2	src/mouthkeys/assistant_history.py	ANN001	Missing type annotation for function argument `item_id`
+1	src/mouthkeys/assistant_history.py	ANN001	Missing type annotation for function argument `item_id`
 1	src/mouthkeys/assistant_history.py	ANN001	Missing type annotation for function argument `message_count`
-4	src/mouthkeys/assistant_history.py	ANN001	Missing type annotation for function argument `messages`
-1	src/mouthkeys/assistant_history.py	ANN001	Missing type annotation for function argument `mode`
+1	src/mouthkeys/assistant_history.py	ANN001	Missing type annotation for function argument `messages`
 3	src/mouthkeys/assistant_history.py	ANN001	Missing type annotation for function argument `result`
 2	src/mouthkeys/assistant_history.py	ANN001	Missing type annotation for function argument `rows`
-3	src/mouthkeys/assistant_history.py	ANN001	Missing type annotation for function argument `session`
-1	src/mouthkeys/assistant_history.py	ANN201	Missing return type annotation for public function `append_private_messages`
-1	src/mouthkeys/assistant_history.py	ANN201	Missing return type annotation for public function `append`
+2	src/mouthkeys/assistant_history.py	ANN001	Missing type annotation for function argument `session`
 1	src/mouthkeys/assistant_history.py	ANN201	Missing return type annotation for public function `connect`
 1	src/mouthkeys/assistant_history.py	ANN201	Missing return type annotation for public function `context_messages`
-1	src/mouthkeys/assistant_history.py	ANN201	Missing return type annotation for public function `current`
 1	src/mouthkeys/assistant_history.py	ANN201	Missing return type annotation for public function `export`
 1	src/mouthkeys/assistant_history.py	ANN201	Missing return type annotation for public function `pending_executions`
 1	src/mouthkeys/assistant_history.py	ANN201	Missing return type annotation for public function `record_execution`
@@ -119,8 +115,6 @@
 1	src/mouthkeys/assistant_history.py	ANN201	Missing return type annotation for public function `restore`
 1	src/mouthkeys/assistant_history.py	ANN201	Missing return type annotation for public function `validate_execution`
 1	src/mouthkeys/assistant_history.py	ANN201	Missing return type annotation for public function `validate_executions`
-1	src/mouthkeys/assistant_history.py	ANN201	Missing return type annotation for public function `validate_messages`
-1	src/mouthkeys/assistant_history.py	ANN204	Missing return type annotation for special method `__init__`
 1	src/mouthkeys/assistant_history.py	ANN205	Missing return type annotation for staticmethod `validate_entries`
 1	src/mouthkeys/assistant_history.py	PLC0415	`import` should be at the top-level of a file
 2	src/mouthkeys/assistant_ui.py	ANN001	Missing type annotation for function argument `_checked`
@@ -128,36 +122,21 @@
 1	src/mouthkeys/assistant_ui.py	ANN001	Missing type annotation for function argument `automatic`
 1	src/mouthkeys/assistant_ui.py	ANN001	Missing type annotation for function argument `callback`
 1	src/mouthkeys/assistant_ui.py	ANN001	Missing type annotation for function argument `cancel_event`
-1	src/mouthkeys/assistant_ui.py	ANN001	Missing type annotation for function argument `command`
 1	src/mouthkeys/assistant_ui.py	ANN001	Missing type annotation for function argument `continuation`
 1	src/mouthkeys/assistant_ui.py	ANN001	Missing type annotation for function argument `function`
-3	src/mouthkeys/assistant_ui.py	ANN001	Missing type annotation for function argument `piece`
+1	src/mouthkeys/assistant_ui.py	ANN001	Missing type annotation for function argument `piece`
 1	src/mouthkeys/assistant_ui.py	ANN001	Missing type annotation for function argument `proposal`
-2	src/mouthkeys/assistant_ui.py	ANN001	Missing type annotation for function argument `request_id`
 2	src/mouthkeys/assistant_ui.py	ANN001	Missing type annotation for function argument `response`
 1	src/mouthkeys/assistant_ui.py	ANN001	Missing type annotation for function argument `result`
 1	src/mouthkeys/assistant_ui.py	ANN001	Missing type annotation for function argument `return_to_target`
 1	src/mouthkeys/assistant_ui.py	ANN001	Missing type annotation for function argument `window`
-1	src/mouthkeys/assistant_ui.py	ANN002	Missing type annotation for `*_`
 1	src/mouthkeys/assistant_ui.py	ANN201	Missing return type annotation for public function `accept_edit`
 1	src/mouthkeys/assistant_ui.py	ANN201	Missing return type annotation for public function `cancel_request`
-1	src/mouthkeys/assistant_ui.py	ANN201	Missing return type annotation for public function `confirm_command`
-1	src/mouthkeys/assistant_ui.py	ANN201	Missing return type annotation for public function `copy_result`
 1	src/mouthkeys/assistant_ui.py	ANN201	Missing return type annotation for public function `current_selection`
-1	src/mouthkeys/assistant_ui.py	ANN201	Missing return type annotation for public function `delete_chat`
 1	src/mouthkeys/assistant_ui.py	ANN201	Missing return type annotation for public function `generate`
-1	src/mouthkeys/assistant_ui.py	ANN201	Missing return type annotation for public function `mode_changed`
-1	src/mouthkeys/assistant_ui.py	ANN201	Missing return type annotation for public function `new_chat`
 1	src/mouthkeys/assistant_ui.py	ANN201	Missing return type annotation for public function `record`
-1	src/mouthkeys/assistant_ui.py	ANN201	Missing return type annotation for public function `reload_chat`
-1	src/mouthkeys/assistant_ui.py	ANN201	Missing return type annotation for public function `rename_chat`
-1	src/mouthkeys/assistant_ui.py	ANN201	Missing return type annotation for public function `render_conversation`
-1	src/mouthkeys/assistant_ui.py	ANN201	Missing return type annotation for public function `reset_proposal`
 1	src/mouthkeys/assistant_ui.py	ANN201	Missing return type annotation for public function `run_command`
-1	src/mouthkeys/assistant_ui.py	ANN201	Missing return type annotation for public function `show_delta`
 1	src/mouthkeys/assistant_ui.py	ANN201	Missing return type annotation for public function `show_proposal`
-1	src/mouthkeys/assistant_ui.py	ANN201	Missing return type annotation for public function `show_thinking`
-1	src/mouthkeys/assistant_ui.py	ANN201	Missing return type annotation for public function `switch_chat`
 1	src/mouthkeys/assistant_ui.py	ANN202	Missing return type annotation for private function `_task`
 2	src/mouthkeys/assistant_ui.py	ANN202	Missing return type annotation for private function `complete`
 1	src/mouthkeys/assistant_ui.py	ANN202	Missing return type annotation for private function `done`
@@ -165,11 +144,8 @@
 1	src/mouthkeys/assistant_ui.py	ANN202	Missing return type annotation for private function `on_delta`
 1	src/mouthkeys/assistant_ui.py	ANN204	Missing return type annotation for special method `__init__`
 2	src/mouthkeys/assistant_ui.py	FBT002	Boolean default positional argument in function definition
-6	src/mouthkeys/assistant_ui.py	FBT003	Boolean positional value in function call
+2	src/mouthkeys/assistant_ui.py	FBT003	Boolean positional value in function call
 1	src/mouthkeys/assistant_ui.py	PLC0415	`import` should be at the top-level of a file
-1	src/mouthkeys/assistant_ui.py	PLR0912	Too many branches (15 > 12)
-1	src/mouthkeys/assistant_ui.py	PLR0915	Too many statements (108 > 50)
-1	src/mouthkeys/assistant_ui.py	PLR0915	Too many statements (71 > 50)
 1	src/mouthkeys/assistant_ui.py	SIM108	Use ternary operator `reviewed = f"Working directory: {directory}\n\n{command}" if directory else command` instead of `if`-`else`-block
 1	src/mouthkeys/atspi_helper.py	ANN001	Missing type annotation for function argument `after`
 2	src/mouthkeys/atspi_helper.py	ANN001	Missing type annotation for function argument `before`
@@ -837,7 +813,7 @@
 7	tests/test_assistant_history.py	PLC0415	`import` should be at the top-level of a file
 3	tests/test_assistant_history.py	PT011	`pytest.raises(ValueError)` is too broad, set the `match` parameter or use a more specific exception
 2	tests/test_assistant_sessions.py	PLC0415	`import` should be at the top-level of a file
-9	tests/test_assistant_ui.py	PLC0415	`import` should be at the top-level of a file
+6	tests/test_assistant_ui.py	PLC0415	`import` should be at the top-level of a file
 1	tests/test_assistant_ui.py	PLW0108	Lambda may be unnecessary; consider inlining inner function
 3	tests/test_assistant_ui.py	RUF059	Unpacked variable `app` is never used
 3	tests/test_atspi.py	PLC0415	`import` should be at the top-level of a file

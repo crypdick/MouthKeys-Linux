@@ -30,24 +30,15 @@
 1	src/mouthkeys/assistant_history.py	no-untyped-call	Call to untyped function "validate_entries" of "AssistantHistory" in typed context
 3	src/mouthkeys/assistant_history.py	no-untyped-call	Call to untyped function "validate_execution" in typed context
 5	src/mouthkeys/assistant_history.py	no-untyped-call	Call to untyped function "validate_executions" in typed context
-10	src/mouthkeys/assistant_history.py	no-untyped-call	Call to untyped function "validate_messages" in typed context
-3	src/mouthkeys/assistant_history.py	no-untyped-def	Function is missing a return type annotation
-12	src/mouthkeys/assistant_history.py	no-untyped-def	Function is missing a type annotation
+2	src/mouthkeys/assistant_history.py	no-untyped-def	Function is missing a return type annotation
+8	src/mouthkeys/assistant_history.py	no-untyped-def	Function is missing a type annotation
 1	src/mouthkeys/assistant_history.py	var-annotated	Need type annotation for "result" (hint: "result: list[<type>] = ...")
-1	src/mouthkeys/assistant_ui.py	arg-type	Argument 1 to "dict" has incompatible type "Any | None"; expected "SupportsKeysAndGetItem[Any, Any]"
 1	src/mouthkeys/assistant_ui.py	assignment	Incompatible types in assignment (expression has type "Event", target has type "str")
 2	src/mouthkeys/assistant_ui.py	attr-defined	"Callable[[], QWidget]" has no attribute "jobs"
 3	src/mouthkeys/assistant_ui.py	attr-defined	"Callable[[], QWidget]" has no attribute "send"
-2	src/mouthkeys/assistant_ui.py	index	Value of type "Any | None" is not indexable
 1	src/mouthkeys/assistant_ui.py	method-assign	Cannot assign to a method
-9	src/mouthkeys/assistant_ui.py	no-untyped-call	Call to untyped function "AssistantHistory" in typed context
 2	src/mouthkeys/assistant_ui.py	no-untyped-call	Call to untyped function "_task" in typed context
-2	src/mouthkeys/assistant_ui.py	no-untyped-call	Call to untyped function "accept_edit" in typed context
-1	src/mouthkeys/assistant_ui.py	no-untyped-call	Call to untyped function "append" in typed context
-1	src/mouthkeys/assistant_ui.py	no-untyped-call	Call to untyped function "append_private_messages" in typed context
-1	src/mouthkeys/assistant_ui.py	no-untyped-call	Call to untyped function "confirm_command" in typed context
 2	src/mouthkeys/assistant_ui.py	no-untyped-call	Call to untyped function "context_messages" in typed context
-1	src/mouthkeys/assistant_ui.py	no-untyped-call	Call to untyped function "current" in typed context
 2	src/mouthkeys/assistant_ui.py	no-untyped-call	Call to untyped function "current_selection" in typed context
 1	src/mouthkeys/assistant_ui.py	no-untyped-call	Call to untyped function "execute_command" in typed context
 1	src/mouthkeys/assistant_ui.py	no-untyped-call	Call to untyped function "generate" in typed context
@@ -55,16 +46,12 @@
 1	src/mouthkeys/assistant_ui.py	no-untyped-call	Call to untyped function "propose" in typed context
 1	src/mouthkeys/assistant_ui.py	no-untyped-call	Call to untyped function "record_execution" in typed context
 1	src/mouthkeys/assistant_ui.py	no-untyped-call	Call to untyped function "record_private_execution" in typed context
-8	src/mouthkeys/assistant_ui.py	no-untyped-call	Call to untyped function "reload_chat" in typed context
-3	src/mouthkeys/assistant_ui.py	no-untyped-call	Call to untyped function "render_conversation" in typed context
 2	src/mouthkeys/assistant_ui.py	no-untyped-call	Call to untyped function "requires_confirmation" in typed context
-4	src/mouthkeys/assistant_ui.py	no-untyped-call	Call to untyped function "reset_proposal" in typed context
 1	src/mouthkeys/assistant_ui.py	no-untyped-call	Call to untyped function "run_command" in typed context
 1	src/mouthkeys/assistant_ui.py	no-untyped-call	Call to untyped function "select_prompt" in typed context
 1	src/mouthkeys/assistant_ui.py	no-untyped-call	Call to untyped function "show_proposal" in typed context
-1	src/mouthkeys/assistant_ui.py	no-untyped-call	Call to untyped function "validate_messages" in typed context
-12	src/mouthkeys/assistant_ui.py	no-untyped-def	Function is missing a return type annotation
-14	src/mouthkeys/assistant_ui.py	no-untyped-def	Function is missing a type annotation
+4	src/mouthkeys/assistant_ui.py	no-untyped-def	Function is missing a return type annotation
+10	src/mouthkeys/assistant_ui.py	no-untyped-def	Function is missing a type annotation
 3	src/mouthkeys/atspi_helper.py	no-untyped-call	Call to untyped function "active_window" in typed context
 1	src/mouthkeys/atspi_helper.py	no-untyped-call	Call to untyped function "expected_text" in typed context
 1	src/mouthkeys/atspi_helper.py	no-untyped-call	Call to untyped function "find_focused" in typed context
@@ -112,7 +99,6 @@
 12	src/mouthkeys/benchmark.py	no-untyped-def	Function is missing a type annotation
 1	src/mouthkeys/benchmark.py	union-attr	Item "None" of "Any | None" has no attribute "close"
 1	src/mouthkeys/benchmark.py	var-annotated	Need type annotation for "seen" (hint: "seen: set[<type>] = ...")
-1	src/mouthkeys/cli.py	no-untyped-call	Call to untyped function "AssistantHistory" in typed context
 1	src/mouthkeys/cli.py	no-untyped-call	Call to untyped function "download_diarization" in typed context
 1	src/mouthkeys/cli.py	no-untyped-call	Call to untyped function "model_catalog" in typed context
 1	src/mouthkeys/cli.py	no-untyped-call	Call to untyped function "resolve_profile" in typed context
@@ -301,7 +287,6 @@
 1	src/mouthkeys/onboarding.py	no-untyped-call	Call to untyped function "routes" in typed context
 6	src/mouthkeys/onboarding.py	no-untyped-def	Function is missing a return type annotation
 6	src/mouthkeys/onboarding.py	no-untyped-def	Function is missing a type annotation
-2	src/mouthkeys/operations.py	no-untyped-call	Call to untyped function "AssistantHistory" in typed context
 2	src/mouthkeys/operations.py	no-untyped-call	Call to untyped function "_prepare_backup" in typed context
 2	src/mouthkeys/operations.py	no-untyped-call	Call to untyped function "_read_import" in typed context
 1	src/mouthkeys/operations.py	no-untyped-call	Call to untyped function "backup_export" in typed context
@@ -356,7 +341,6 @@
 1	src/mouthkeys/routing.py	no-untyped-def	Function is missing a type annotation
 1	src/mouthkeys/service.py	arg-type	Argument 1 to "DictationJob" has incompatible type "Any | None"; expected "str"
 1	src/mouthkeys/service.py	assignment	Incompatible types in assignment (expression has type "bool", target has type "str")
-2	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "AssistantHistory" in typed context
 1	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "CaptureSession" in typed context
 1	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "Transcriber" in typed context
 1	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "_accept_edit" in typed context
@@ -371,12 +355,9 @@
 1	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "_short_silence" in typed context
 20	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "_update" in typed context
 1	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "_wait_for_predecessors" in typed context
-1	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "append" in typed context
-1	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "append_private_messages" in typed context
 2	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "context_messages" in typed context
 1	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "correct" of "PronunciationStore" in typed context
 1	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "correct_spans" of "PronunciationStore" in typed context
-1	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "current" in typed context
 1	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "enroll" of "PronunciationStore" in typed context
 1	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "execute_command" in typed context
 1	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "format_text" in typed context

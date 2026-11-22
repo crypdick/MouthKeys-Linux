@@ -4,6 +4,7 @@ import time
 import pytest
 from PySide6.QtWidgets import QApplication, QWidget
 
+from mouthkeys.assistant_history import AssistantHistory
 from mouthkeys.assistant_ui import AssistantPage
 from mouthkeys.config import Config, state_dir
 
@@ -33,17 +34,17 @@ def test_voice_edit_review_button_requires_capture_and_explicit_return(monkeypat
         sent.append((action, data)) or callback({"result": {"message": "Edit inserted"}})
     )
     assistant.show_proposal({"mode": "edit", "text": "Typed rewrite"})
-    assert not assistant.replace_button.isEnabled()
-    assert not assistant.return_replace_button.isEnabled()
+    assert not assistant.editor.replace_button.isEnabled()
+    assert not assistant.editor.return_replace_button.isEnabled()
     assistant.show_proposal(
         {"mode": "edit", "text": "Voice rewrite", "edit_id": "job", "can_accept_edit": True}
     )
-    assert assistant.replace_button.isEnabled()
+    assert assistant.editor.replace_button.isEnabled()
     monkeypatch.setattr(QMessageBox, "question", lambda *a: QMessageBox.StandardButton.Yes)
     assistant.accept_edit(True)
     assert sent == [("accept_edit", {"id": "job", "return_to_target": True})]
     assert assistant.feedback.text() == "Edit inserted"
-    assert not assistant.replace_button.isEnabled()
+    assert not assistant.editor.replace_button.isEnabled()
     assistant.accept_edit(False)
     assert len(sent) == 1
     window.close()
@@ -54,7 +55,7 @@ def test_voice_stream_clears_old_actionable_proposal_and_cancels_service():
     sent = []
     window.send = lambda action: sent.append(action)
     assistant.show_proposal({"mode": "command", "text": "Old result", "command": "old"})
-    assert assistant.run_button.isEnabled()
+    assert assistant.editor.run_button.isEnabled()
     assistant.update_status(
         {
             "phase": "transcribing",
@@ -62,8 +63,8 @@ def test_voice_stream_clears_old_actionable_proposal_and_cancels_service():
         }
     )
     assert assistant.proposal is None
-    assert not assistant.run_button.isEnabled()
-    assert assistant.result.toPlainText() == "New partial"
+    assert not assistant.editor.run_button.isEnabled()
+    assert assistant.editor.result.toPlainText() == "New partial"
     assistant.cancel_request()
     assert sent == ["cancel"]
     window.close()
@@ -96,7 +97,7 @@ def test_typed_automatic_chain_freezes_resolved_profile_and_voice_clears_it(monk
             "truncated": False,
         },
     )
-    assistant.instruction.setText("List files")
+    assistant.editor.instruction.setText("List files")
     assistant.generate()
     process_until(app, lambda: len(seen) == 2 and not assistant.jobs)
     assert seen == [("model-0", True), ("model-0", True)]
@@ -123,11 +124,11 @@ def test_typed_automatic_command_respects_policy_without_confirmation(monkeypatc
 
     monkeypatch.setattr("mouthkeys.assistant_ui.execute_command", execute)
     monkeypatch.setattr(
-        assistant,
+        assistant.editor,
         "confirm_command",
         lambda _: (_ for _ in ()).throw(AssertionError("Unexpected confirmation")),
     )
-    assistant.instruction.setText("List files")
+    assistant.editor.instruction.setText("List files")
     assistant.generate()
     process_until(app, lambda: executed and not assistant.jobs)
     assert executed == ["ls"]
@@ -154,17 +155,17 @@ def test_typed_edit_cancel_signals_worker_and_discards_late_deltas_and_result(mo
     assistant.mode.setCurrentIndex(1)
     assistant.generate()
     assert entered.wait(1)
-    process_until(app, lambda: assistant.result.toPlainText() == "Partial")
+    process_until(app, lambda: assistant.editor.result.toPlainText() == "Partial")
     task = assistant.request_task
-    assert assistant.cancel_request_button.isEnabled()
+    assert assistant.editor.cancel_request_button.isEnabled()
     assistant.cancel_request()
     assert events[0].is_set()
     assert task.wait(2000)
     process_until(app, lambda: not assistant.jobs)
     assert assistant.proposal is None
-    assert assistant.result.toPlainText() == "Partial"
+    assert assistant.editor.result.toPlainText() == "Partial"
     assert assistant.feedback.text() == "Request cancelled"
-    assert not assistant.cancel_request_button.isEnabled()
+    assert not assistant.editor.cancel_request_button.isEnabled()
     assert not window.jobs
     assistant.close()
     window.close()
@@ -186,10 +187,10 @@ def test_typed_edit_streams_successfully_without_cancel_or_direct_desktop_delive
     task = assistant.request_task
     assert task.wait(2000)
     process_until(app, lambda: not assistant.jobs)
-    assert assistant.result.toPlainText() == "First second"
+    assert assistant.editor.result.toPlainText() == "First second"
     assert assistant.proposal == {"mode": "edit", "text": "First second"}
-    assert not assistant.run_button.isEnabled()
-    assert not assistant.cancel_request_button.isEnabled()
+    assert not assistant.editor.run_button.isEnabled()
+    assert not assistant.editor.cancel_request_button.isEnabled()
     assistant.close()
     window.close()
 
@@ -208,18 +209,18 @@ def test_edit_followup_uses_previous_result_not_original_selection(monkeypatch):
 
     monkeypatch.setattr("mouthkeys.assistant_ui.propose", propose)
     assistant.mode.setCurrentIndex(1)
-    assistant.selection.setPlainText("Original")
-    assistant.instruction.setText("Shorten")
+    assistant.editor.selection.setPlainText("Original")
+    assistant.editor.instruction.setText("Shorten")
     assistant.generate()
     process_until(app, lambda: not assistant.jobs)
-    assistant.instruction.setText("Make friendlier")
+    assistant.editor.instruction.setText("Make friendlier")
     assistant.generate()
     process_until(app, lambda: not assistant.jobs)
     assert calls[0][1] == "Original"
     assert calls[1][1] == ""
     assert calls[1][2][-1] == {"role": "assistant", "content": "First rewrite"}
-    assert assistant.result.toPlainText() == "Second rewrite"
-    assert len(assistant.session["messages"]) == 4
+    assert assistant.editor.result.toPlainText() == "Second rewrite"
+    assert len(assistant.chats.session["messages"]) == 4
     sent = []
     window.send = lambda action, data: sent.append(data)
     assistant.record()
@@ -257,7 +258,7 @@ def test_private_voice_to_typed_and_back_preserves_context_without_db(monkeypatc
         }
 
     monkeypatch.setattr("mouthkeys.assistant_ui.propose", propose)
-    assistant.instruction.setText("Follow up")
+    assistant.editor.instruction.setText("Follow up")
     assistant.generate()
     process_until(app, lambda: not assistant.jobs)
     assert calls == [private]
@@ -273,13 +274,11 @@ def test_private_voice_to_typed_and_back_preserves_context_without_db(monkeypatc
 def test_reviewed_result_survives_restart_without_automatic_continuation(monkeypatch, tmp_path):
     import json
 
-    from mouthkeys.assistant_history import AssistantHistory
-
     Config(command_continue="off").save()
     app, window, assistant = page()
     request = json.dumps({"instruction": "Inspect", "selected_text": ""})
     response = json.dumps({"command": "suggested command", "explanation": "Inspect"})
-    assistant.request_context = (dict(assistant.session), True, "")
+    assistant.request_context = (dict(assistant.chats.session), True, "")
     assistant.show_proposal(
         {
             "mode": "command",
@@ -289,12 +288,12 @@ def test_reviewed_result_survives_restart_without_automatic_continuation(monkeyp
             "response": response,
         }
     )
-    session_id = assistant.session["id"]
-    assistant.command.setPlainText("reviewed command")
-    assistant.directory.setText(str(tmp_path))
+    session_id = assistant.chats.session["id"]
+    assistant.editor.command.setPlainText("reviewed command")
+    assistant.editor.directory.setText(str(tmp_path))
     confirmations, executions = [], []
     monkeypatch.setattr(
-        assistant, "confirm_command", lambda text: confirmations.append(text) or True
+        assistant.editor, "confirm_command", lambda text: confirmations.append(text) or True
     )
 
     def execute(command, **options):
@@ -311,13 +310,13 @@ def test_reviewed_result_survives_restart_without_automatic_continuation(monkeyp
     process_until(app, lambda: not assistant.jobs)
     assert executions == [("reviewed command", str(tmp_path))]
     assert confirmations == [f"Working directory: {tmp_path}\n\nreviewed command"]
-    assert not assistant.run_button.isEnabled()
+    assert not assistant.editor.run_button.isEnabled()
     receipt = AssistantHistory().get(session_id)["executions"][0]["result"]
     assert receipt["command"] == "reviewed command"
     assert receipt["output"] == "Observed output"
-    assistant.new_chat()
+    assistant.chats.new()
     AssistantHistory().select(session_id)
-    assistant.reload_chat()
+    assistant.chats.reload()
     requests = []
 
     def propose(instruction, config, mode, selection, **kwargs):
@@ -325,7 +324,7 @@ def test_reviewed_result_survives_restart_without_automatic_continuation(monkeyp
         return {"mode": "command", "text": "Finished", "command": ""}
 
     monkeypatch.setattr("mouthkeys.assistant_ui.propose", propose)
-    assistant.instruction.setText("What happened?")
+    assistant.editor.instruction.setText("What happened?")
     assistant.generate()
     process_until(app, lambda: not assistant.jobs)
     assert requests[0]["observed_command_results"][0]["output"] == "Observed output"
@@ -334,8 +333,6 @@ def test_reviewed_result_survives_restart_without_automatic_continuation(monkeyp
 
 
 def test_voice_command_adopts_mode_and_chat_before_followup(monkeypatch):
-    from mouthkeys.assistant_history import AssistantHistory
-
     app, window, assistant = page()
     assistant.mode.setCurrentIndex(1)
     store = AssistantHistory()
@@ -354,7 +351,7 @@ def test_voice_command_adopts_mode_and_chat_before_followup(monkeypatch):
         }
     )
     assert assistant.mode.currentData() == "command"
-    assert assistant.chats.currentData() == chat["id"]
+    assert assistant.chats.picker.currentData() == chat["id"]
     calls = []
 
     def propose(instruction, config, mode, selection, **kwargs):
@@ -362,7 +359,7 @@ def test_voice_command_adopts_mode_and_chat_before_followup(monkeypatch):
         return {"mode": mode, "text": "Finished", "command": ""}
 
     monkeypatch.setattr("mouthkeys.assistant_ui.propose", propose)
-    assistant.instruction.setText("Next step")
+    assistant.editor.instruction.setText("Next step")
     assistant.generate()
     process_until(app, lambda: not assistant.jobs)
     assert calls == [("command", messages)]
@@ -373,24 +370,22 @@ def test_repeated_equal_voice_proposals_use_job_identity():
     app, window, assistant = page()
     proposal = {"mode": "command", "text": "Same answer", "command": "same command"}
     assistant.update_status({"id": "first-job", "phase": "idle", "assistant_proposal": proposal})
-    assert assistant.run_button.isEnabled()
+    assert assistant.editor.run_button.isEnabled()
     assistant.proposal = None
-    assistant.run_button.setEnabled(False)
+    assistant.editor.run_button.setEnabled(False)
     assistant.update_status({"id": "first-job", "phase": "idle", "assistant_proposal": proposal})
-    assert not assistant.run_button.isEnabled()
+    assert not assistant.editor.run_button.isEnabled()
     assistant.update_status({"id": "second-job", "phase": "idle", "assistant_proposal": proposal})
-    assert assistant.run_button.isEnabled()
+    assert assistant.editor.run_button.isEnabled()
     window.close()
 
 
 def test_disabling_history_before_run_keeps_new_outcome_private(monkeypatch):
-    from mouthkeys.assistant_history import AssistantHistory
-
     app, window, assistant = page()
-    saved_id = assistant.session["id"]
+    saved_id = assistant.chats.session["id"]
     assistant.show_proposal({"mode": "command", "text": "Inspect", "command": "reviewed command"})
     Config(save_history="off", command_continue="off").save()
-    monkeypatch.setattr(assistant, "confirm_command", lambda text: True)
+    monkeypatch.setattr(assistant.editor, "confirm_command", lambda text: True)
     monkeypatch.setattr(
         "mouthkeys.assistant_ui.execute_command",
         lambda *a, **kw: {
@@ -403,6 +398,41 @@ def test_disabling_history_before_run_keeps_new_outcome_private(monkeypatch):
     assistant.run_command()
     process_until(app, lambda: not assistant.jobs)
     assert AssistantHistory().get(saved_id)["executions"] == []
-    assert assistant.session["id"] is None
-    assert assistant.session["executions"][0]["result"]["output"] == "Private observed output"
+    assert assistant.chats.session["id"] is None
+    assert assistant.chats.session["executions"][0]["result"]["output"] == "Private observed output"
     window.close()
+
+
+def test_disabling_history_before_typed_result_returns_keeps_the_turn_private(monkeypatch):
+    app, window, assistant = page()
+    entered, release = threading.Event(), threading.Event()
+
+    def propose(*_args, **_kwargs):
+        entered.set()
+        assert release.wait(2)
+        return {
+            "mode": "edit",
+            "text": "Private result",
+            "request": "Private instruction",
+            "response": "Private result",
+        }
+
+    monkeypatch.setattr("mouthkeys.assistant_ui.propose", propose)
+    assistant.mode.setCurrentIndex(1)
+    session_id = assistant.chats.session["id"]
+    assistant.editor.instruction.setText("Rewrite")
+    assistant.generate()
+    try:
+        assert entered.wait(1)
+        Config(save_history="off").save()
+    finally:
+        release.set()
+        process_until(app, lambda: not assistant.jobs)
+    try:
+        assert AssistantHistory().get(session_id)["messages"] == []
+        assert assistant.chats.session["id"] is None
+        assert assistant.chats.session["messages"][-1]["content"] == "Private result"
+        assert assistant.editor.result.toPlainText() == "Private result"
+        assert not window.isVisible()
+    finally:
+        window.close()

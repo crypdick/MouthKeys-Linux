@@ -63,10 +63,10 @@ def test_explicit_review_reuses_assistant_page_and_preserves_panel_focus_flags(m
     assert not host.windowFlags() & Qt.WindowType.WindowDoesNotAcceptFocus
     assert widget.windowFlags() & Qt.WindowType.WindowDoesNotAcceptFocus
     assistant = host.assistant_page
-    assert assistant.result.toPlainText() == "Inspect files"
-    assert assistant.command.toPlainText() == "pwd"
-    assert assistant.run_button.isEnabled()
-    assert not assistant.command.isHidden()
+    assert assistant.editor.result.toPlainText() == "Inspect files"
+    assert assistant.editor.command.toPlainText() == "pwd"
+    assert assistant.editor.run_button.isEnabled()
+    assert not assistant.editor.command.isHidden()
     widget.open_assistant()
     assert widget.assistant_window is host
     assert not host.jobs  # Opening a proposal cannot run it.
@@ -90,14 +90,14 @@ def test_expanded_review_has_recent_new_followup_and_live_status(monkeypatch):
     widget.assistant_window = host
     assistant = host.assistant_page
     assistant.mode.setCurrentIndex(assistant.mode.findData("edit"))
-    assert assistant.chats.count() == 2
-    assistant.chats.setCurrentIndex(assistant.chats.findData(first["id"]))
-    assert "First draft" in assistant.conversation.toPlainText()
-    assistant.instruction.setText("Make it shorter")
-    assert assistant.instruction.text() == "Make it shorter"
-    assistant.new_chat()
-    assert assistant.chats.count() == 3
-    assert assistant.session["id"] not in (first["id"], second["id"])
+    assert assistant.chats.picker.count() == 2
+    assistant.chats.picker.setCurrentIndex(assistant.chats.picker.findData(first["id"]))
+    assert "First draft" in assistant.chats.transcript.toPlainText()
+    assistant.editor.instruction.setText("Make it shorter")
+    assert assistant.editor.instruction.text() == "Make it shorter"
+    assistant.chats.new()
+    assert assistant.chats.picker.count() == 3
+    assert assistant.chats.session["id"] not in (first["id"], second["id"])
     widget.set_status(
         {
             "id": "voice",
@@ -109,8 +109,8 @@ def test_expanded_review_has_recent_new_followup_and_live_status(monkeypatch):
             },
         }
     )
-    assert assistant.result.toPlainText() == "Live final"
-    assert assistant.session["id"] == first["id"]
+    assert assistant.editor.result.toPlainText() == "Live final"
+    assert assistant.chats.session["id"] == first["id"]
     assert not host.isVisible()
     assert not host.jobs
 
@@ -126,7 +126,7 @@ def test_disabled_passive_panel_still_updates_explicit_review(monkeypatch):
         "assistant_proposal": {"mode": "edit", "text": "Review remains available"},
     }
     widget.set_status(status)
-    assert host.assistant_page.result.toPlainText() == "Review remains available"
+    assert host.assistant_page.editor.result.toPlainText() == "Review remains available"
     assert widget.data == status
     assert not widget.isVisible()
 

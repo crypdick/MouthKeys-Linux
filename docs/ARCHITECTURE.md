@@ -37,6 +37,8 @@ then dispatches local work or uses `control` to contact the private Unix socket 
   shared by CLI, Settings, and backup restore.
 - **UI and optional integrations:** `gui`, `overlay`, `tray`, and `hotkeys` call the service.
   `tray_status` interprets service replies and deduplicates alerts independently of Qt.
+  `lark_monitor` polls the opted-in input and discards stale results; only the isolated
+  `lark` helper opens the receiver and sends its fixed status heartbeat.
   `x11_shortcuts` owns the native X11 connection and passive grabs. `hotkeys` serializes
   their events and releases an owned held recording when the listener stops. The Wayland
   listener (`portal_shortcuts`) reads events from a separate GI helper (`portal_helper`),

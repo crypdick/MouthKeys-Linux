@@ -4,20 +4,23 @@ import copy
 import json
 import uuid
 from pathlib import Path
+from typing import cast
 
 from .data_lock import dictionary_lock
-from .dictionary import Dictionary, DictionaryData
+from .dictionary import Dictionary, DictionaryData, Replacement
 from .operations import write_private
 from .vocabulary import VocabularyStore
 
 MAX_TRANSFER_BYTES = 16 * 1024 * 1024
 
 
-def phrase_key(value):
+def phrase_key(value: str) -> str:
     return " ".join(value.casefold().split())
 
 
-def merge_replacements(existing, incoming):
+def merge_replacements(
+    existing: list[Replacement], incoming: list[Replacement]
+) -> list[Replacement]:
     """Upsert by replacement; incoming triggers move from conflicting rules."""
     result = copy.deepcopy(existing)
     for entry in incoming:
@@ -36,14 +39,14 @@ def merge_replacements(existing, incoming):
             )
         )
         keys = set(triggers)
-        retained = []
+        retained: list[Replacement] = []
         for old in result:
             if old is same:
                 continue
             remaining = [value for value in old["triggers"] if phrase_key(value) not in keys]
             if remaining:
                 retained.append({**old, "triggers": remaining})
-        merged = {
+        merged: Replacement = {
             **entry,
             "triggers": triggers,
             "replacement": same["replacement"] if same else entry["replacement"],
@@ -54,7 +57,7 @@ def merge_replacements(existing, incoming):
     return result
 
 
-def replacement_entries(values):
+def replacement_entries(values: object) -> list[Replacement]:
     if not isinstance(values, list) or len(values) > 10000:
         raise ValueError("Replacement import must contain at most 10000 entries")
     result = []
@@ -76,8 +79,8 @@ def replacement_entries(values):
             except (ValueError, TypeError, AttributeError):
                 raise ValueError("Invalid replacement ID") from None
         # Validate each entry before resolving cross-entry conflicts like upstream.
-        Dictionary.validate({**Dictionary.defaults(), "replacements": [entry]})
-        result.append(entry)
+        checked = Dictionary.validate({**Dictionary.defaults(), "replacements": [entry]})
+        result.extend(checked["replacements"])
     return merge_replacements([], result)
 
 
@@ -163,7 +166,7 @@ def import_file(path: str | Path, mode: str = "replace") -> DictionaryData:
                 entries
                 if mode == "replace"
                 else (
-                    merge_replacements(updated[section], entries)
+                    merge_replacements(cast("list[Replacement]", updated[section]), entries)
                     if section == "replacements"
                     else _merge_rules(updated[section], entries)
                 )

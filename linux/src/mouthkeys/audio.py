@@ -386,7 +386,9 @@ def read_live_audio(path: Path, seconds=20):
     return _read_live_audio(path, seconds)[0]
 
 
-def read_audio_from(path: Path, start_frame=0, seconds=None):
+def read_audio_from(
+    path: Path, start_frame: int = 0, seconds: float | None = None
+) -> NDArray[np.float32]:
     """Read forward from a committed PCM frame, including an unfinished WAV."""
     with path.open("rb") as source, wave.open(source, "rb") as wav:
         if (wav.getnchannels(), wav.getsampwidth(), wav.getframerate()) != (1, 2, 16000):

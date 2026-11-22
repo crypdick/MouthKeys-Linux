@@ -1,6 +1,7 @@
 import json
 import threading
 from dataclasses import replace
+from types import SimpleNamespace
 
 import pytest
 
@@ -215,15 +216,42 @@ def test_invalid_inline_context_is_rejected_before_recording_or_state_mutation()
     assert not (state_dir() / "assistant.sqlite3").exists()
 
 
-def test_loaded_model_status_suppresses_dead_worker_without_waiting():
-    from types import SimpleNamespace
-
+@pytest.mark.parametrize("probe_error", [False, True])
+def test_loaded_model_status_suppresses_dead_worker_and_can_reload(monkeypatch, probe_error):
     transcriber = Transcriber()
+    config = Config(engine="nemo")
     alive = [True]
-    transcriber.model = SimpleNamespace(alive=lambda: alive[0])
-    transcriber._loaded(Config())
+    closed = []
+
+    def probe():
+        if not alive[0] and probe_error:
+            raise OSError("Worker lost")
+        return alive[0]
+
+    models = iter([SimpleNamespace(alive=probe, close=lambda: closed.append(True)), object()])
+    monkeypatch.setattr("mouthkeys.native_worker.NativeWorkerBackend", lambda _: next(models))
+    transcriber.load(config)
     app = controller()
     app.transcriber = transcriber
-    assert app.status()["loaded_model"]["model"] == Config().model
+    assert app.status()["loaded_model"]["model"] == config.model
     alive[0] = False
     assert app.status()["loaded_model"] is None
+    transcriber.load(config)
+    assert closed == [True]
+    assert app.status()["loaded_model"]["model"] == config.model
+
+
+def test_loaded_model_does_not_pair_a_replaced_worker_with_old_metadata(monkeypatch):
+    transcriber = Transcriber()
+    old = Config(engine="nemo", model="old")
+    new = Config(engine="nemo", model="new")
+
+    def replaced_during_probe():
+        transcriber.load(new)
+        return True
+
+    models = iter([SimpleNamespace(alive=replaced_during_probe), object()])
+    monkeypatch.setattr("mouthkeys.native_worker.NativeWorkerBackend", lambda _: next(models))
+    transcriber.load(old)
+    assert transcriber.loaded_model is None
+    assert transcriber.loaded_model["model"] == "new"

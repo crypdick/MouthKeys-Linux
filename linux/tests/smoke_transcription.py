@@ -105,7 +105,7 @@ def main(argv=None):
                 audio.setframerate(rate)
                 audio.writeframes((frames + b"\0\0" * (rate // 2)) * 3)
             transcriber.preview(recording, config)
-            committed = len(transcriber.committed)
+            committed = transcriber.committed_segments
             assert committed, "Preview did not exercise committed-segment continuation"
             final = transcriber.transcribe(recording, config)
             assert final.casefold().count("hello") >= 2, "Repeated utterances were lost"

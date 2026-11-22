@@ -1,4 +1,5 @@
 import wave
+from dataclasses import replace
 from types import SimpleNamespace
 
 import pytest
@@ -70,6 +71,31 @@ def test_completed_prefix_survives_long_recording_and_stop_decodes_only_tail(eng
     assert model.lengths == [20, 14]
 
 
+def test_preview_waits_for_audio_and_does_not_redo_unchanged_pcm(engine, tmp_path):
+    transcriber, model = engine
+    path = tmp_path / "recording.wav"
+    audio(path, 0.25)
+    assert transcriber.preview(path, Config()) == ""
+    assert transcriber.committed_segments == 0
+    audio(path, 5)
+    model.results = [[segment(0, 2, "Stable."), segment(2, 5, "Pending.")]]
+    assert transcriber.preview(path, Config()) == "Stable. Pending."
+    assert transcriber.committed_segments == 1
+    assert transcriber.preview(path, Config()) == "Stable. Pending."
+    assert model.lengths == [5]
+
+
+def test_trimmed_recording_does_not_reuse_removed_preview_tail(engine, tmp_path):
+    transcriber, model = engine
+    path = tmp_path / "recording.wav"
+    audio(path, 5)
+    model.results = [[segment(0, 2, "Stable."), segment(2, 5, "Pending.")]]
+    assert transcriber.preview(path, Config()) == "Stable. Pending."
+    audio(path, 2)
+    assert transcriber.transcribe(path, Config()) == "Stable."
+    assert model.lengths == [5]
+
+
 def test_preview_never_skips_backlog(engine, tmp_path):
     transcriber, model = engine
     path = tmp_path / "recording.wav"
@@ -112,6 +138,57 @@ def test_new_recording_or_language_does_not_reuse_old_preview(engine, tmp_path, 
     model.results = [[segment(0, 3, " New.")]]
     assert transcriber.transcribe(path, config) == "New."
     assert model.lengths == [4, 4]
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"vocabulary_boosting": "on"},
+        {"asr_max_tokens": 256},
+        {"native_streaming": "off"},
+        {"streaming_latency": "80"},
+    ],
+)
+def test_changed_decode_settings_do_not_reuse_old_preview(engine, tmp_path, change):
+    transcriber, model = engine
+    path = tmp_path / "recording.wav"
+    audio(path, 5)
+    model.results = [[segment(0, 2, "Old preview.")]]
+    transcriber.preview(path, Config())
+    model.results = [[segment(0, 4, "Fresh transcript.")]]
+    assert transcriber.transcribe(path, replace(Config(), **change)) == "Fresh transcript."
+    assert model.lengths == [5, 5]
+
+
+def test_failed_preview_update_does_not_partially_commit_segments(engine, tmp_path):
+    transcriber, model = engine
+    path = tmp_path / "recording.wav"
+    audio(path, 8)
+    model.results = [[segment(0, 2, "First."), segment(2, float("nan"), "Invalid boundary.")]]
+    with pytest.raises(ValueError, match="NaN"):
+        transcriber.preview(path, Config())
+    model.results = [[segment(0, 2, "First."), segment(2, 7, "Then second.")]]
+    assert transcriber.preview(path, Config()) == "First. Then second."
+    assert transcriber.transcribe(path, Config()) == "First. Then second."
+    assert model.lengths == [8, 8]
+
+
+def test_failed_backend_reset_still_discards_preview(engine, tmp_path):
+    transcriber, model = engine
+    path = tmp_path / "recording.wav"
+    audio(path, 5)
+    model.results = [[segment(0, 2, "Cancelled.")]]
+    transcriber.preview(path, Config())
+
+    def failed_reset():
+        raise RuntimeError("Worker lost")
+
+    model.reset_stream = failed_reset
+    with pytest.raises(RuntimeError, match="Worker lost"):
+        transcriber.reset_stream()
+    assert transcriber.stream_key is None
+    model.results = [[segment(0, 4, "Fresh transcript.")]]
+    assert transcriber.transcribe(path, Config()) == "Fresh transcript."
 
 
 def test_final_without_preview_and_silence(engine, tmp_path):
@@ -181,8 +258,6 @@ def timed_segment(start, end, text):
 
 
 def test_final_word_alignment_retains_committed_and_offsets_fresh_tail(engine, tmp_path):
-    from dataclasses import replace
-
     transcriber, model = engine
     config = replace(Config(), pronunciation_matching="on")
     path = tmp_path / "words.wav"
@@ -201,9 +276,51 @@ def test_final_word_alignment_retains_committed_and_offsets_fresh_tail(engine, t
     assert transcriber.last_alignment["text"] == "First. Correct."
 
 
-def test_final_word_alignment_reuses_pending_and_clears_on_reset(engine, tmp_path):
-    from dataclasses import replace
+def test_alignment_discards_invalid_word_timing_and_nonfinite_confidence(engine, tmp_path):
+    transcriber, model = engine
+    path = tmp_path / "words.wav"
+    audio(path, 3)
+    words = [
+        SimpleNamespace(word="First", start=0, end=1, probability=float("nan")),
+        SimpleNamespace(word="invalid", start=2, end=1),
+        SimpleNamespace(word="invalid", start=float("inf"), end=2),
+        SimpleNamespace(word="invalid", start=1, end=float("inf")),
+        SimpleNamespace(word="second", start=1, end=2),
+    ]
+    model.results = [[SimpleNamespace(start=0, end=2, text="First second", words=words)]]
+    assert transcriber.transcribe(path, Config(pronunciation_matching="on")) == "First second"
+    assert transcriber.words == [
+        {"word": "First", "start": 0, "end": 1},
+        {"word": "second", "start": 1, "end": 2},
+    ]
 
+
+@pytest.mark.parametrize("native_words", [False, True])
+def test_native_final_keeps_words_or_reports_optional_alignment_failure(
+    monkeypatch, tmp_path, native_words
+):
+    transcriber = Transcriber()
+    path = tmp_path / "recording.wav"
+    audio(path, 1)
+    timing = {"word": "Native", "start": 0.0, "end": 1.0}
+    model = SimpleNamespace(stream=lambda *_args, **_options: "Native")
+    if native_words:
+        model.words = [timing]
+    monkeypatch.setattr("mouthkeys.native_worker.NativeWorkerBackend", lambda _: model)
+    config = Config(
+        engine="nemo", pronunciation_matching="on", pronunciation_aligner_model=str(tmp_path)
+    )
+    assert transcriber.transcribe(path, config) == "Native"
+    assert transcriber.last_alignment["text"] == "Native"
+    if native_words:
+        assert transcriber.words == [timing]
+        assert "warning" not in transcriber.last_alignment
+    else:
+        assert transcriber.words == []
+        assert "ASR text retained" in transcriber.last_alignment["warning"]
+
+
+def test_final_word_alignment_reuses_pending_and_clears_on_reset(engine, tmp_path):
     transcriber, model = engine
     config = replace(Config(), pronunciation_matching="on")
     path = tmp_path / "words.wav"

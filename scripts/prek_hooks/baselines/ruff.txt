@@ -101,15 +101,13 @@
 1	src/mouthkeys/audio.py	ANN001	Missing type annotation for function argument `error`
 1	src/mouthkeys/audio.py	ANN001	Missing type annotation for function argument `path`
 1	src/mouthkeys/audio.py	ANN001	Missing type annotation for function argument `recorder`
-2	src/mouthkeys/audio.py	ANN001	Missing type annotation for function argument `seconds`
+1	src/mouthkeys/audio.py	ANN001	Missing type annotation for function argument `seconds`
 3	src/mouthkeys/audio.py	ANN001	Missing type annotation for function argument `source`
-1	src/mouthkeys/audio.py	ANN001	Missing type annotation for function argument `start_frame`
 4	src/mouthkeys/audio.py	ANN001	Missing type annotation for function argument `timeout`
 1	src/mouthkeys/audio.py	ANN001	Missing type annotation for function argument `tolerate_ended_failure`
 1	src/mouthkeys/audio.py	ANN201	Missing return type annotation for public function `bluetooth_capture_ready`
 1	src/mouthkeys/audio.py	ANN201	Missing return type annotation for public function `error`
 2	src/mouthkeys/audio.py	ANN201	Missing return type annotation for public function `finished`
-1	src/mouthkeys/audio.py	ANN201	Missing return type annotation for public function `read_audio_from`
 1	src/mouthkeys/audio.py	ANN201	Missing return type annotation for public function `read_live_audio`
 2	src/mouthkeys/audio.py	ANN201	Missing return type annotation for public function `stop`
 1	src/mouthkeys/audio.py	ANN201	Missing return type annotation for public function `switch_source`
@@ -495,34 +493,7 @@
 1	src/mouthkeys/spoken_send.py	FBT001	Boolean-typed positional argument in function definition
 1	src/mouthkeys/spoken_send.py	FBT002	Boolean default positional argument in function definition
 1	src/mouthkeys/spoken_send.py	RUF100	Unused `noqa` directive (unused: `FBT001`, `FBT002`)
-3	src/mouthkeys/transcribe.py	ANN001	Missing type annotation for function argument `audio`
-1	src/mouthkeys/transcribe.py	ANN001	Missing type annotation for function argument `compute_type`
-7	src/mouthkeys/transcribe.py	ANN001	Missing type annotation for function argument `config`
-1	src/mouthkeys/transcribe.py	ANN001	Missing type annotation for function argument `engine`
-2	src/mouthkeys/transcribe.py	ANN001	Missing type annotation for function argument `offset`
-3	src/mouthkeys/transcribe.py	ANN001	Missing type annotation for function argument `path`
-1	src/mouthkeys/transcribe.py	ANN001	Missing type annotation for function argument `progress`
-1	src/mouthkeys/transcribe.py	ANN001	Missing type annotation for function argument `revision`
-2	src/mouthkeys/transcribe.py	ANN001	Missing type annotation for function argument `segments`
-1	src/mouthkeys/transcribe.py	ANN001	Missing type annotation for function argument `text`
-1	src/mouthkeys/transcribe.py	ANN001	Missing type annotation for function argument `words`
-1	src/mouthkeys/transcribe.py	ANN201	Missing return type annotation for public function `download`
-1	src/mouthkeys/transcribe.py	ANN201	Missing return type annotation for public function `load`
-1	src/mouthkeys/transcribe.py	ANN201	Missing return type annotation for public function `loaded_model`
-1	src/mouthkeys/transcribe.py	ANN201	Missing return type annotation for public function `preview`
-1	src/mouthkeys/transcribe.py	ANN201	Missing return type annotation for public function `reset_stream`
-1	src/mouthkeys/transcribe.py	ANN201	Missing return type annotation for public function `transcribe`
-1	src/mouthkeys/transcribe.py	ANN202	Missing return type annotation for private function `_align_segments`
-1	src/mouthkeys/transcribe.py	ANN202	Missing return type annotation for private function `_decode`
-1	src/mouthkeys/transcribe.py	ANN202	Missing return type annotation for private function `_loaded`
-1	src/mouthkeys/transcribe.py	ANN202	Missing return type annotation for private function `_record_alignment`
-1	src/mouthkeys/transcribe.py	ANN202	Missing return type annotation for private function `_segments`
-1	src/mouthkeys/transcribe.py	ANN202	Missing return type annotation for private function `_session`
-1	src/mouthkeys/transcribe.py	ANN202	Missing return type annotation for private function `_uses_native_streaming`
-1	src/mouthkeys/transcribe.py	ANN204	Missing return type annotation for special method `__init__`
-1	src/mouthkeys/transcribe.py	ANN205	Missing return type annotation for staticmethod `_stream_key`
-1	src/mouthkeys/transcribe.py	ANN205	Missing return type annotation for staticmethod `_word_metadata`
-17	src/mouthkeys/transcribe.py	PLC0415	`import` should be at the top-level of a file
+11	src/mouthkeys/transcribe.py	PLC0415	`import` should be at the top-level of a file
 1	src/mouthkeys/tray.py	PLC0415	`import` should be at the top-level of a file
 2	src/mouthkeys/upstream_backup.py	PLR0913	Too many arguments in function definition (6 > 5)
 2	src/mouthkeys/upstream_backup.py	TRY004	Prefer `TypeError` exception for invalid type
@@ -542,7 +513,7 @@
 4	tests/test_assistance.py	PLC0415	`import` should be at the top-level of a file
 7	tests/test_assistant_history.py	PLC0415	`import` should be at the top-level of a file
 3	tests/test_assistant_history.py	PT011	`pytest.raises(ValueError)` is too broad, set the `match` parameter or use a more specific exception
-2	tests/test_assistant_sessions.py	PLC0415	`import` should be at the top-level of a file
+1	tests/test_assistant_sessions.py	PLC0415	`import` should be at the top-level of a file
 6	tests/test_assistant_ui.py	PLC0415	`import` should be at the top-level of a file
 1	tests/test_assistant_ui.py	PLW0108	Lambda may be unnecessary; consider inlining inner function
 3	tests/test_assistant_ui.py	RUF059	Unpacked variable `app` is never used
@@ -584,7 +555,7 @@
 31	tests/test_gui.py	PLC0415	`import` should be at the top-level of a file
 2	tests/test_hotkeys.py	PLC0415	`import` should be at the top-level of a file
 1	tests/test_hotkeys.py	PT006	Wrong type passed to first argument of `pytest.mark.parametrize`; expected `tuple`
-6	tests/test_incremental.py	PLC0415	`import` should be at the top-level of a file
+4	tests/test_incremental.py	PLC0415	`import` should be at the top-level of a file
 2	tests/test_lark.py	PLC0415	`import` should be at the top-level of a file
 1	tests/test_learning.py	PT006	Wrong type passed to first argument of `pytest.mark.parametrize`; expected `tuple`
 2	tests/test_learning.py	PT011	`pytest.raises(ValueError)` is too broad, set the `match` parameter or use a more specific exception

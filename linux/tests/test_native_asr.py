@@ -128,18 +128,28 @@ def test_native_final_short_tail_is_padded_not_dropped(monkeypatch):
 
 
 def test_transcriber_routes_native_live_and_final_to_same_session(monkeypatch, tmp_path):
-    from mouthkeys import audio
+    from mouthkeys import transcribe
 
     calls = []
     model = SimpleNamespace(stream=lambda *a, **kw: calls.append((a, kw)) or "native")
     transcriber = Transcriber()
     monkeypatch.setattr(transcriber, "load", lambda config: setattr(transcriber, "model", model))
-    monkeypatch.setattr(audio, "read_audio_from", lambda path: np.zeros(16000))
+    monkeypatch.setattr(transcribe, "read_audio_from", lambda path: np.zeros(16000))
     config = replace(Config(), engine="nemo", native_streaming="on")
     assert transcriber.preview(tmp_path / "audio.wav", config) == "native"
     assert transcriber.transcribe(tmp_path / "audio.wav", config) == "native"
     assert calls[0][0][2] == calls[1][0][2]
     assert calls[1][1] == {"final": True}
+
+    def failed_reset():
+        raise OSError("Native reset failed")
+
+    model.reset_stream = failed_reset
+    transcriber.preview(tmp_path / "audio.wav", config)
+    with pytest.raises(OSError, match="Native reset failed"):
+        transcriber.reset_stream()
+    transcriber.preview(tmp_path / "audio.wav", config)
+    assert calls[2][0][2] != calls[3][0][2]
 
 
 def test_nemo_uses_real_weighted_graph_scores_and_restores_disabled_decoder(monkeypatch, tmp_path):

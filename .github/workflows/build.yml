@@ -24,10 +24,10 @@ jobs:
       - uses: astral-sh/setup-uv@d0d8abe699bfb85fec6de9f7adb5ae17292296ff # v6
         with:
           version: "0.13.5"
-      - name: Qt offscreen libraries
+      - name: Headless test dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgl1 libegl1 libopengl0
+          sudo apt-get install -y --no-install-recommends ffmpeg libgl1 libegl1 libopengl0
       - name: Validate Linux
         run: ./linux/check.sh
 
@@ -46,10 +46,10 @@ jobs:
       - uses: astral-sh/setup-uv@d0d8abe699bfb85fec6de9f7adb5ae17292296ff # v6
         with:
           version: "0.13.5"
-      - name: Qt offscreen libraries
+      - name: Headless test dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgl1 libegl1 libopengl0
+          sudo apt-get install -y --no-install-recommends ffmpeg libgl1 libegl1 libopengl0
       - name: Bump, validate, and commit version
         env:
           SOURCE_SHA: ${{ github.sha }}

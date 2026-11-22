@@ -122,43 +122,8 @@
 3	src/mouthkeys/audio.py	ANN204	Missing return type annotation for special method `__init__`
 1	src/mouthkeys/audio.py	PLR0911	Too many return statements (7 > 6)
 2	src/mouthkeys/audio.py	SIM115	Use a context manager for opening files
-1	src/mouthkeys/benchmark.py	ANN001	Missing type annotation for function argument `cancel_event`
-3	src/mouthkeys/benchmark.py	ANN001	Missing type annotation for function argument `config`
-1	src/mouthkeys/benchmark.py	ANN001	Missing type annotation for function argument `context`
-1	src/mouthkeys/benchmark.py	ANN001	Missing type annotation for function argument `destination`
-1	src/mouthkeys/benchmark.py	ANN001	Missing type annotation for function argument `fixture`
-1	src/mouthkeys/benchmark.py	ANN001	Missing type annotation for function argument `hypothesis`
-1	src/mouthkeys/benchmark.py	ANN001	Missing type annotation for function argument `left`
-2	src/mouthkeys/benchmark.py	ANN001	Missing type annotation for function argument `path`
-1	src/mouthkeys/benchmark.py	ANN001	Missing type annotation for function argument `pid`
-1	src/mouthkeys/benchmark.py	ANN001	Missing type annotation for function argument `proc`
-1	src/mouthkeys/benchmark.py	ANN001	Missing type annotation for function argument `process`
-2	src/mouthkeys/benchmark.py	ANN001	Missing type annotation for function argument `reference`
-1	src/mouthkeys/benchmark.py	ANN001	Missing type annotation for function argument `reports`
-1	src/mouthkeys/benchmark.py	ANN001	Missing type annotation for function argument `request`
-1	src/mouthkeys/benchmark.py	ANN001	Missing type annotation for function argument `right`
-1	src/mouthkeys/benchmark.py	ANN001	Missing type annotation for function argument `save`
-1	src/mouthkeys/benchmark.py	ANN001	Missing type annotation for function argument `source`
-1	src/mouthkeys/benchmark.py	ANN001	Missing type annotation for function argument `timeout`
-1	src/mouthkeys/benchmark.py	ANN001	Missing type annotation for function argument `value`
-1	src/mouthkeys/benchmark.py	ANN201	Missing return type annotation for public function `accuracy`
-1	src/mouthkeys/benchmark.py	ANN201	Missing return type annotation for public function `matching_measurement`
-1	src/mouthkeys/benchmark.py	ANN201	Missing return type annotation for public function `measurements`
-1	src/mouthkeys/benchmark.py	ANN201	Missing return type annotation for public function `run_benchmark`
-1	src/mouthkeys/benchmark.py	ANN201	Missing return type annotation for public function `worker_main`
-1	src/mouthkeys/benchmark.py	ANN202	Missing return type annotation for private function `_artifact_identity`
-1	src/mouthkeys/benchmark.py	ANN202	Missing return type annotation for private function `_copy_fixture`
-1	src/mouthkeys/benchmark.py	ANN202	Missing return type annotation for private function `_distance`
-1	src/mouthkeys/benchmark.py	ANN202	Missing return type annotation for private function `_fixture`
-1	src/mouthkeys/benchmark.py	ANN202	Missing return type annotation for private function `_local_config`
-1	src/mouthkeys/benchmark.py	ANN202	Missing return type annotation for private function `_measure`
-1	src/mouthkeys/benchmark.py	ANN202	Missing return type annotation for private function `_stop`
-1	src/mouthkeys/benchmark.py	ANN202	Missing return type annotation for private function `_tree_rss`
-1	src/mouthkeys/benchmark.py	ANN202	Missing return type annotation for private function `words`
 7	src/mouthkeys/benchmark.py	PLC0415	`import` should be at the top-level of a file
-1	src/mouthkeys/benchmark.py	PLR0912	Too many branches (14 > 12)
 1	src/mouthkeys/benchmark.py	PLR0913	Too many arguments in function definition (6 > 5)
-1	src/mouthkeys/benchmark.py	SIM105	Use `contextlib.suppress(ProcessLookupError)` instead of `try`-`except`-`pass`
 13	src/mouthkeys/cli.py	PLC0415	`import` should be at the top-level of a file
 1	src/mouthkeys/clipboard.py	ANN001	Missing type annotation for function argument `clipboard`
 1	src/mouthkeys/clipboard.py	ANN001	Missing type annotation for function argument `delay_ms`
@@ -587,8 +552,7 @@
 2	tests/test_automatic_commands.py	PT006	Wrong type passed to first argument of `pytest.mark.parametrize`; expected `tuple`
 1	tests/test_automatic_commands.py	RUF059	Unpacked variable `executed` is never used
 1	tests/test_automatic_commands.py	RUF059	Unpacked variable `proposals` is never used
-3	tests/test_benchmark.py	PLC0415	`import` should be at the top-level of a file
-1	tests/test_benchmark.py	RUF001	String contains ambiguous `Ａ` (FULLWIDTH LATIN CAPITAL LETTER A). Did you mean `A` (LATIN CAPITAL LETTER A)?
+2	tests/test_benchmark.py	PLC0415	`import` should be at the top-level of a file
 3	tests/test_bluetooth_capture.py	PLC0415	`import` should be at the top-level of a file
 1	tests/test_bluetooth_capture.py	SIM115	Use a context manager for opening files
 6	tests/test_capture.py	PLC0415	`import` should be at the top-level of a file

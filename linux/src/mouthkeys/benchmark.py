@@ -2,7 +2,6 @@
 
 import hashlib
 import json
-import math
 import os
 import re
 import signal
@@ -11,18 +10,22 @@ import sys
 import tempfile
 import time
 import unicodedata
-import uuid
 import wave
+from collections.abc import Sequence
+from contextlib import suppress
 from dataclasses import asdict, replace
 from datetime import UTC, datetime
 from pathlib import Path
+from threading import Event
+from typing import Any
 
 from .benchmark_context import decode_settings, hardware_context, model_identity, software_context
-from .config import Config, private_dir, state_dir
-from .operations import write_private
+from .benchmark_reports import save_measurement
+from .config import Config, private_dir
 
-MAX_REPORTS = 100
 MAX_REFERENCE = 16000
+MAX_FIXTURE_BYTES = 128 * 1024 * 1024
+MAX_ARTIFACT_FILES = 10000
 MAX_METRIC_CELLS = 4_000_000
 MEMORY_SCOPE = (
     "Sampled sum of benchmark worker and descendant resident sets, including model loading. "
@@ -35,7 +38,7 @@ SCOPE = (
 )
 
 
-def _distance(left, right):
+def _distance(left: Sequence[str], right: Sequence[str]) -> int | None:
     if len(left) * len(right) > MAX_METRIC_CELLS:
         return None
     if len(right) > len(left):
@@ -51,16 +54,16 @@ def _distance(left, right):
     return row[-1]
 
 
-def accuracy(reference, hypothesis):
+def accuracy(reference: str, hypothesis: str) -> dict[str, str | int | float | None]:
     """Exact Levenshtein rates, with a bounded cell budget per metric."""
 
-    def words(value):
+    def words(value: str) -> list[str]:
         return re.findall(r"[^\W_]+", unicodedata.normalize("NFKC", value).casefold())
 
     expected, actual = words(reference), words(hypothesis)
     if not expected:
         raise ValueError("Reference must contain at least one letter or digit")
-    result = {
+    result: dict[str, str | int | float | None] = {
         "algorithm": "levenshtein-nfkc-casefold-alphanumeric-v1",
         "normalization": "Unicode alphanumeric words; CER joins words without spaces/punctuation",
         "reference_sha256": hashlib.sha256(reference.encode()).hexdigest(),
@@ -79,9 +82,9 @@ def accuracy(reference, hypothesis):
     return result
 
 
-def _fixture(path):
+def _fixture(path: str | Path) -> Path:
     path = Path(path).expanduser().resolve(strict=True)
-    if not path.is_file() or path.stat().st_size > 128 * 1024 * 1024:
+    if not path.is_file() or path.stat().st_size > MAX_FIXTURE_BYTES:
         raise ValueError("Benchmark needs a WAV file no larger than 128 MiB")
     with wave.open(str(path)) as audio:
         duration = audio.getnframes() / audio.getframerate()
@@ -90,8 +93,10 @@ def _fixture(path):
     return path
 
 
-def _tree_rss(pid, proc=Path("/proc")):
-    pending, seen, total, observed = [pid], set(), 0, False
+def _tree_rss(pid: int, proc: Path = Path("/proc")) -> int | None:
+    pending = [pid]
+    seen: set[int] = set()
+    total, observed = 0, False
     while pending and len(seen) < 128:
         current = pending.pop()
         if current in seen:
@@ -111,20 +116,47 @@ def _tree_rss(pid, proc=Path("/proc")):
     return total if observed else None
 
 
-def _stop(process):
+def _stop(process: subprocess.Popen[bytes]) -> None:
     if process.poll() is None:
-        try:
+        with suppress(ProcessLookupError):
             os.killpg(process.pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
     process.wait(timeout=3)
 
 
-def run_benchmark(config, fixture, *, reference=None, timeout=600, cancel_event=None, save=True):
-    """Run a separate socket-denied worker. Reports retain neither text nor fixture paths."""
-    config.validate()
+def _check_cancellation(cancel_event: Event | None) -> None:
     if cancel_event is not None and cancel_event.is_set():
         raise RuntimeError("Benchmark cancelled")
+
+
+def _sample_worker(
+    process: subprocess.Popen[bytes], deadline: float, cancel_event: Event | None
+) -> tuple[int | None, int]:
+    peak: int | None = None
+    samples = 0
+    while process.poll() is None:
+        _check_cancellation(cancel_event)
+        if time.monotonic() >= deadline:
+            raise RuntimeError("Benchmark timed out; worker stopped")
+        rss = _tree_rss(process.pid)
+        if rss is not None:
+            peak = max(peak or 0, rss)
+            samples += 1
+        time.sleep(0.02)
+    return peak, samples
+
+
+def run_benchmark(
+    config: Config,
+    fixture: str | Path,
+    *,
+    reference: object = None,
+    timeout: object = 600,
+    cancel_event: Event | None = None,
+    save: bool = True,
+) -> dict[str, Any]:
+    """Run a separate socket-denied worker. Reports retain neither text nor fixture paths."""
+    config.validate()
+    _check_cancellation(cancel_event)
     fixture = _fixture(fixture)
     if not isinstance(timeout, int | float) or not 1 <= timeout <= 3600:
         raise ValueError("Benchmark timeout must be between 1 and 3600 seconds")
@@ -135,7 +167,6 @@ def run_benchmark(config, fixture, *, reference=None, timeout=600, cancel_event=
     request = {"config": asdict(config), "fixture": str(fixture), "reference": reference}
     environment = {key: value for key, value in os.environ.items() if not key.startswith("PYTHON")}
     environment.update(HF_HUB_OFFLINE="1", TRANSFORMERS_OFFLINE="1", HF_DATASETS_OFFLINE="1")
-    peak, samples = None, 0
     with tempfile.TemporaryFile() as source, tempfile.TemporaryFile() as output:
         source.write(json.dumps(request).encode())
         source.seek(0)
@@ -149,16 +180,7 @@ def run_benchmark(config, fixture, *, reference=None, timeout=600, cancel_event=
         )
         deadline = time.monotonic() + timeout
         try:
-            while process.poll() is None:
-                if cancel_event is not None and cancel_event.is_set():
-                    raise RuntimeError("Benchmark cancelled")
-                if time.monotonic() >= deadline:
-                    raise RuntimeError("Benchmark timed out; worker stopped")
-                rss = _tree_rss(process.pid)
-                if rss is not None:
-                    peak = max(peak or 0, rss)
-                    samples += 1
-                time.sleep(0.02)
+            peak, samples = _sample_worker(process, deadline, cancel_event)
             output.seek(0)
             raw = output.read(256 * 1024 + 1)
             if len(raw) > 256 * 1024 or process.returncode:
@@ -168,71 +190,33 @@ def run_benchmark(config, fixture, *, reference=None, timeout=600, cancel_event=
             response = json.loads(raw)
             if "error" in response:
                 raise RuntimeError(response["error"])
-            report = response["result"]
+            report: dict[str, Any] = response["result"]
         finally:
             _stop(process)
-    if cancel_event is not None and cancel_event.is_set():
-        raise RuntimeError("Benchmark cancelled")
+    _check_cancellation(cancel_event)
     report.update(
         sampled_peak_tree_rss_bytes=peak,
         memory_samples=samples,
         memory_scope=MEMORY_SCOPE,
     )
     if save:
-        root = private_dir(state_dir() / "benchmarks")
-        write_private(root / (uuid.uuid4().hex + ".json"), json.dumps(report).encode())
-        for old in sorted(root.glob("*.json"), key=lambda path: path.stat().st_mtime)[
-            :-MAX_REPORTS
-        ]:
-            old.unlink(missing_ok=True)
+        save_measurement(report)
     return report
 
 
-def measurements():
-    """Latest bounded local records; invalid/deleted records are not measurements."""
-    root = state_dir() / "benchmarks"
-    reports = []
-    for path in sorted(root.glob("*.json"), key=lambda path: path.stat().st_mtime, reverse=True)[
-        :MAX_REPORTS
-    ]:
-        try:
-            if path.stat().st_size > 256 * 1024:
-                continue
-            report = json.loads(path.read_bytes())
-            if (
-                report["version"] == 1
-                and all(
-                    isinstance(report.get(key), dict)
-                    for key in ("hardware", "software", "artifact", "decode_settings")
-                )
-                and (report.get("accuracy") is None or isinstance(report["accuracy"], dict))
-                and all(
-                    isinstance(report[key], str)
-                    for key in (
-                        "engine",
-                        "model",
-                        "revision",
-                        "device",
-                        "compute_type",
-                        "timestamp_utc",
-                        "fixture_sha256",
-                    )
-                )
-                and all(
-                    type(report[key]) in (int, float)
-                    and math.isfinite(report[key])
-                    and report[key] >= 0
-                    for key in ("real_time_factor", "decode_seconds", "audio_seconds")
-                )
-            ):
-                reports.append(report)
-        except (OSError, ValueError, TypeError, KeyError):
-            continue
-    return reports
+def _measurement_context(report: dict[str, Any]) -> tuple[object, object]:
+    return report["fixture_sha256"], (report.get("accuracy") or {}).get("reference_sha256")
 
 
-def matching_measurement(config, reports, context=None):
+def matching_measurement(
+    config: Config,
+    reports: Sequence[dict[str, Any]],
+    context: Sequence[object] | None = None,
+) -> dict[str, Any] | None:
     """Never apply another device/language/library/artifact/fixture result to this row."""
+    if not reports:
+        return None
+
     from .native_asr import effective_revision
 
     revision = (
@@ -255,29 +239,22 @@ def matching_measurement(config, reports, context=None):
         }
         == software
     ]
+    model = model_identity(config.model)
+    settings = decode_settings(config)
     candidates = [
         report
         for report in reports
         if report["engine"] == config.engine
-        and report["model"] == model_identity(config.model)
+        and report["model"] == model
         and report["revision"] == revision
         and report["device"] == config.device
         and report["compute_type"] == config.compute_type
-        and report.get("decode_settings") == decode_settings(config)
+        and report.get("decode_settings") == settings
     ]
     if not candidates:
         return None
-    if context is None:
-        context = (
-            reports[0]["fixture_sha256"],
-            (reports[0].get("accuracy") or {}).get("reference_sha256"),
-        )
-    candidates = [
-        report
-        for report in candidates
-        if (report["fixture_sha256"], (report.get("accuracy") or {}).get("reference_sha256"))
-        == tuple(context)
-    ]
+    scope = _measurement_context(reports[0]) if context is None else tuple(context)
+    candidates = [report for report in candidates if _measurement_context(report) == scope]
     if not candidates:
         return None
     try:
@@ -288,7 +265,7 @@ def matching_measurement(config, reports, context=None):
     return next((report for report in candidates if report.get("artifact") == artifact), None)
 
 
-def _local_config(config):
+def _local_config(config: Config) -> tuple[Config, Path]:
     from .engines import READY, managed_path, onnx_path, resolve_whisper
     from .native_asr import local_artifact
 
@@ -304,26 +281,25 @@ def _local_config(config):
                 raise RuntimeError("Benchmark requires an already installed ONNX model")
         if not (managed_path("silero") / READY).is_file():
             raise RuntimeError("Benchmark requires an already installed Silero VAD")
-    return replace(config, model=str(path.resolve())), path.resolve()
+    path = path.resolve()
+    return replace(config, model=str(path)), path
 
 
-def _artifact_identity(path):
+def _artifact_identity(path: Path) -> dict[str, str | None]:
     # A metadata fingerprint is quick even for multi-GB weights; never call it a weight hash.
+    directory = path.is_dir()
     files = []
-    for item in [path] if path.is_file() else path.rglob("*"):
-        if item.is_file():
-            files.append(item)
-            if len(files) > 10000:
-                raise ValueError("Benchmark model contains too many files")
-    files.sort()
-    manifest = [
-        [
-            str(item.relative_to(path) if path.is_dir() else item.name),
-            item.stat().st_size,
-            item.stat().st_mtime_ns,
-        ]
-        for item in files
-    ]
+    for item in path.rglob("*") if directory else [path]:
+        if not item.is_file():
+            continue
+        files.append(item)
+        if len(files) > MAX_ARTIFACT_FILES:
+            raise ValueError("Benchmark model contains too many files")
+    manifest = []
+    for item in sorted(files):
+        stat = item.stat()
+        name = str(item.relative_to(path)) if directory else item.name
+        manifest.append([name, stat.st_size, stat.st_mtime_ns])
     return {
         "metadata_sha256": hashlib.sha256(json.dumps(manifest).encode()).hexdigest(),
         "scope": "Relative file names, byte sizes and mtimes; not a weight-content hash",
@@ -331,13 +307,13 @@ def _artifact_identity(path):
     }
 
 
-def _copy_fixture(source, destination):
+def _copy_fixture(source: Path, destination: Path) -> str:
     digest, size = hashlib.sha256(), 0
     with source.open("rb") as incoming, destination.open("xb") as output:
         destination.chmod(0o600)
         while chunk := incoming.read(1024 * 1024):
             size += len(chunk)
-            if size > 128 * 1024 * 1024:
+            if size > MAX_FIXTURE_BYTES:
                 raise ValueError("Benchmark WAV exceeds 128 MiB")
             digest.update(chunk)
             output.write(chunk)
@@ -345,7 +321,7 @@ def _copy_fixture(source, destination):
     return digest.hexdigest()
 
 
-def _measure(request):
+def _measure(request: dict[str, Any]) -> dict[str, Any]:
     from .file_transcription import transcribe_file
     from .native_asr import effective_revision
     from .transcribe import Transcriber
@@ -377,8 +353,9 @@ def _measure(request):
             result = transcribe_file(snapshot, config, transcriber=transcriber, max_seconds=600)
             finished = time.monotonic()
         finally:
-            if hasattr(transcriber.model, "close"):
-                transcriber.model.close()
+            close = getattr(transcriber.model, "close", None)
+            if callable(close):
+                close()
     return {
         "version": 1,
         "timestamp_utc": datetime.now(UTC).isoformat(),
@@ -409,7 +386,7 @@ def _measure(request):
     }
 
 
-def worker_main():
+def worker_main() -> None:
     # Keep library diagnostics separate from the bounded JSON result.
     output = os.fdopen(os.dup(sys.stdout.fileno()), "wb")
     sys.stdout = sys.stderr
@@ -421,7 +398,7 @@ def worker_main():
         raw = sys.stdin.buffer.read(2 * 1024 * 1024 + 1)
         if len(raw) > 2 * 1024 * 1024:
             raise ValueError("Benchmark request too large")
-        response = {"result": _measure(json.loads(raw))}
+        response: dict[str, object] = {"result": _measure(json.loads(raw))}
     # The worker returns failure through its private response channel.
     except Exception as exc:  # allow: exception-handling  # noqa: BLE001
         response = {"error": str(exc)[:1000]}

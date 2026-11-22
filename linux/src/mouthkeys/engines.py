@@ -4,6 +4,7 @@ import hashlib
 import shutil
 from pathlib import Path
 
+from .benchmark_reports import measurements
 from .config import cache_dir
 
 READY = ".mouthkeys-ready"
@@ -264,7 +265,7 @@ def model_catalog(
     """
     from dataclasses import replace
 
-    from .benchmark import matching_measurement, measurements
+    from .benchmark import matching_measurement
 
     measured = measurements()
     rows = _model_catalog(engine, revision=revision)

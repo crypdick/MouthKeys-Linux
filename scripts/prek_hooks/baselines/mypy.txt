@@ -52,27 +52,11 @@
 2	src/mouthkeys/audio.py	union-attr	Item "None" of "Popen[bytes] | None" has no attribute "wait"
 1	src/mouthkeys/audio.py	union-attr	Item "None" of "Wave_write | None" has no attribute "writeframes"
 1	src/mouthkeys/benchmark.py	no-untyped-call	Call to untyped function "Transcriber" in typed context
-2	src/mouthkeys/benchmark.py	no-untyped-call	Call to untyped function "_artifact_identity" in typed context
-1	src/mouthkeys/benchmark.py	no-untyped-call	Call to untyped function "_copy_fixture" in typed context
-1	src/mouthkeys/benchmark.py	no-untyped-call	Call to untyped function "_distance" in typed context
-3	src/mouthkeys/benchmark.py	no-untyped-call	Call to untyped function "_fixture" in typed context
-2	src/mouthkeys/benchmark.py	no-untyped-call	Call to untyped function "_local_config" in typed context
-1	src/mouthkeys/benchmark.py	no-untyped-call	Call to untyped function "_measure" in typed context
-1	src/mouthkeys/benchmark.py	no-untyped-call	Call to untyped function "_stop" in typed context
-1	src/mouthkeys/benchmark.py	no-untyped-call	Call to untyped function "_tree_rss" in typed context
-2	src/mouthkeys/benchmark.py	no-untyped-call	Call to untyped function "accuracy" in typed context
 1	src/mouthkeys/benchmark.py	no-untyped-call	Call to untyped function "isolate_network" in typed context
 1	src/mouthkeys/benchmark.py	no-untyped-call	Call to untyped function "onnx_path" in typed context
 1	src/mouthkeys/benchmark.py	no-untyped-call	Call to untyped function "resolve_whisper" in typed context
 1	src/mouthkeys/benchmark.py	no-untyped-call	Call to untyped function "transcribe_file" in typed context
-1	src/mouthkeys/benchmark.py	no-untyped-call	Call to untyped function "words" in typed context
-1	src/mouthkeys/benchmark.py	no-untyped-call	Call to untyped function "worker_main" in typed context
-2	src/mouthkeys/benchmark.py	no-untyped-def	Function is missing a return type annotation
-12	src/mouthkeys/benchmark.py	no-untyped-def	Function is missing a type annotation
-1	src/mouthkeys/benchmark.py	union-attr	Item "None" of "Any | None" has no attribute "close"
-1	src/mouthkeys/benchmark.py	var-annotated	Need type annotation for "seen" (hint: "seen: set[<type>] = ...")
 1	src/mouthkeys/cli.py	no-untyped-call	Call to untyped function "model_catalog" in typed context
-1	src/mouthkeys/cli.py	no-untyped-call	Call to untyped function "run_benchmark" in typed context
 1	src/mouthkeys/cli.py	no-untyped-call	Call to untyped function "transcribe_file" in typed context
 3	src/mouthkeys/clipboard.py	no-untyped-call	Call to untyped function "acknowledge" in typed context
 1	src/mouthkeys/clipboard.py	no-untyped-call	Call to untyped function "capture_formats" in typed context
@@ -98,8 +82,6 @@
 1	src/mouthkeys/engines.py	no-untyped-call	Call to untyped function "_download_onnx_revision" in typed context
 1	src/mouthkeys/engines.py	no-untyped-call	Call to untyped function "_model_catalog" in typed context
 2	src/mouthkeys/engines.py	no-untyped-call	Call to untyped function "has_revision" in typed context
-1	src/mouthkeys/engines.py	no-untyped-call	Call to untyped function "matching_measurement" in typed context
-1	src/mouthkeys/engines.py	no-untyped-call	Call to untyped function "measurements" in typed context
 2	src/mouthkeys/engines.py	no-untyped-call	Call to untyped function "onnx_module" in typed context
 5	src/mouthkeys/engines.py	no-untyped-call	Call to untyped function "onnx_path" in typed context
 2	src/mouthkeys/engines.py	no-untyped-call	Call to untyped function "onnx_quantization" in typed context
@@ -176,7 +158,6 @@
 1	src/mouthkeys/models_ui.py	no-untyped-call	Call to untyped function "filter_rows" in typed context
 1	src/mouthkeys/models_ui.py	no-untyped-call	Call to untyped function "model_catalog" in typed context
 3	src/mouthkeys/models_ui.py	no-untyped-call	Call to untyped function "refresh" in typed context
-1	src/mouthkeys/models_ui.py	no-untyped-call	Call to untyped function "run_benchmark" in typed context
 1	src/mouthkeys/models_ui.py	no-untyped-call	Call to untyped function "update_resident" in typed context
 8	src/mouthkeys/models_ui.py	no-untyped-def	Function is missing a return type annotation
 4	src/mouthkeys/models_ui.py	no-untyped-def	Function is missing a type annotation

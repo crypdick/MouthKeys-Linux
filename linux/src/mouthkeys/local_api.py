@@ -19,8 +19,8 @@ from urllib.parse import parse_qs, urlsplit
 
 from .api_dictionary import custom_words, replacements
 from .config import Config
-from .operations import statistics
 from .service import Controller
+from .statistics import statistics
 
 MAX_BODY = 25 * 1024 * 1024
 

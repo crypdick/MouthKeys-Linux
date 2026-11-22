@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from .config import private_dir, state_dir
-from .operations import write_private
+from .private_files import write_private
 
 MAX_REPORTS = 100
 MAX_REPORT_BYTES = 256 * 1024

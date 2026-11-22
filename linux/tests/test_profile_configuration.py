@@ -3,7 +3,7 @@ from uuid import uuid4
 
 import pytest
 
-from mouthkeys import profiles as profiles_module
+from mouthkeys import private_files
 from mouthkeys.config import Config, config_path
 from mouthkeys.profiles import PROFILE_FIELDS, load_profiles, save_profiles
 from mouthkeys.routing import load_routes, save_routes, select_prompt
@@ -59,7 +59,7 @@ def test_tempfile_open_failure_preserves_profile_store(monkeypatch):
         raise PermissionError("cannot open temporary file")
 
     with monkeypatch.context() as patch:
-        patch.setattr(profiles_module.tempfile, "NamedTemporaryFile", fail_open)
+        patch.setattr(private_files.tempfile, "NamedTemporaryFile", fail_open)
         with pytest.raises(PermissionError, match="cannot open temporary file"):
             save_profiles([profile()])
     assert load_profiles() == [original | {"shortcut": ""}]

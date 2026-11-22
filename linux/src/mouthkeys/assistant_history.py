@@ -4,8 +4,9 @@ import json
 import sqlite3
 import time
 import uuid
+from collections.abc import Iterator
 from contextlib import contextmanager
-from typing import Any
+from typing import Any, cast
 
 from .config import state_dir
 
@@ -146,7 +147,7 @@ class AssistantHistory:
         self.path.chmod(0o600)
 
     @contextmanager
-    def connect(self):
+    def connect(self) -> Iterator[sqlite3.Connection]:
         db = sqlite3.connect(self.path, timeout=3)
         db.execute("PRAGMA foreign_keys=ON")
         db.row_factory = sqlite3.Row
@@ -298,11 +299,11 @@ class AssistantHistory:
             )
             db.execute("UPDATE sessions SET updated=? WHERE id=?", (time.time(), item_id))
 
-    def export(self):
+    def export(self) -> list[dict[str, Any]]:
         return [self.get(row["id"]) for row in self.rows()]
 
     @staticmethod
-    def validate_entries(rows):
+    def validate_entries(rows: object) -> list[dict[str, Any]]:
         import math
 
         if not isinstance(rows, list) or len(rows) > MAX_SESSIONS:
@@ -333,10 +334,10 @@ class AssistantHistory:
             validate_executions(row.get("executions", []), len(row["messages"]))
             if row["mode"] != "command" and row.get("executions"):
                 raise ValueError("Only command sessions may contain execution events")
-        return rows
+        return cast("list[dict[str, Any]]", rows)
 
-    def restore(self, rows):
-        self.validate_entries(rows)
+    def restore(self, rows: object) -> None:
+        rows = self.validate_entries(rows)
         with self.connect() as db:
             for row in rows:
                 db.execute(

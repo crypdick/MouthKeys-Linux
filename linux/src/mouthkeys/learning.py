@@ -17,7 +17,7 @@ from typing import Any, NotRequired, TypedDict, TypeGuard
 from .config import Config, config_path, private_dir
 from .data_lock import dictionary_lock
 from .dictionary import Dictionary
-from .operations import write_private
+from .private_files import write_private
 from .vocabulary import VocabularyStore
 
 _BOUNDARIES = set(',!?;:"“”()[]{}<>')

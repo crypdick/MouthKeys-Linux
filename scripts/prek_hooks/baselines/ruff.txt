@@ -39,11 +39,6 @@
 1	src/mouthkeys/assistance.py	PLR0915	Too many statements (60 > 50)
 1	src/mouthkeys/assistance.py	SIM105	Use `contextlib.suppress(ProcessLookupError)` instead of `try`-`except`-`pass`
 1	src/mouthkeys/assistance.py	TRY004	Prefer `TypeError` exception for invalid type
-2	src/mouthkeys/assistant_history.py	ANN001	Missing type annotation for function argument `rows`
-1	src/mouthkeys/assistant_history.py	ANN201	Missing return type annotation for public function `connect`
-1	src/mouthkeys/assistant_history.py	ANN201	Missing return type annotation for public function `export`
-1	src/mouthkeys/assistant_history.py	ANN201	Missing return type annotation for public function `restore`
-1	src/mouthkeys/assistant_history.py	ANN205	Missing return type annotation for staticmethod `validate_entries`
 1	src/mouthkeys/assistant_history.py	PLC0415	`import` should be at the top-level of a file
 2	src/mouthkeys/assistant_ui.py	ANN001	Missing type annotation for function argument `_checked`
 1	src/mouthkeys/assistant_ui.py	ANN001	Missing type annotation for function argument `accept_cancelled`
@@ -124,7 +119,7 @@
 1	src/mouthkeys/clipboard.py	PLR0915	Too many statements (56 > 50)
 1	src/mouthkeys/clipboard.py	SIM105	Use `contextlib.suppress(BrokenPipeError)` instead of `try`-`except`-`pass`
 1	src/mouthkeys/clipboard.py	TRY300	Consider moving this statement to an `else` block
-3	src/mouthkeys/config.py	PLC0415	`import` should be at the top-level of a file
+2	src/mouthkeys/config.py	PLC0415	`import` should be at the top-level of a file
 1	src/mouthkeys/config.py	TRY004	Prefer `TypeError` exception for invalid type
 1	src/mouthkeys/delivery.py	PLR0911	Too many return statements (7 > 6)
 1	src/mouthkeys/delivery.py	PLR0911	Too many return statements (9 > 6)
@@ -273,30 +268,6 @@
 2	src/mouthkeys/onboarding.py	ARG002	Unused method argument: `args`
 2	src/mouthkeys/onboarding.py	FBT003	Boolean positional value in function call
 2	src/mouthkeys/onboarding.py	PLC0415	`import` should be at the top-level of a file
-1	src/mouthkeys/operations.py	ANN001	Missing type annotation for function argument `action`
-1	src/mouthkeys/operations.py	ANN001	Missing type annotation for function argument `allow_mutation`
-2	src/mouthkeys/operations.py	ANN001	Missing type annotation for function argument `app_map`
-1	src/mouthkeys/operations.py	ANN001	Missing type annotation for function argument `config`
-2	src/mouthkeys/operations.py	ANN001	Missing type annotation for function argument `data`
-2	src/mouthkeys/operations.py	ANN001	Missing type annotation for function argument `expected_sha256`
-4	src/mouthkeys/operations.py	ANN001	Missing type annotation for function argument `history`
-3	src/mouthkeys/operations.py	ANN001	Missing type annotation for function argument `path`
-1	src/mouthkeys/operations.py	ANN001	Missing type annotation for function argument `today`
-1	src/mouthkeys/operations.py	ANN201	Missing return type annotation for public function `backup_export`
-1	src/mouthkeys/operations.py	ANN201	Missing return type annotation for public function `backup_import`
-1	src/mouthkeys/operations.py	ANN201	Missing return type annotation for public function `handle_action`
-1	src/mouthkeys/operations.py	ANN201	Missing return type annotation for public function `statistics`
-1	src/mouthkeys/operations.py	ANN202	Missing return type annotation for private function `_prepare_backup`
-1	src/mouthkeys/operations.py	ANN202	Missing return type annotation for private function `_read_import`
-1	src/mouthkeys/operations.py	C901	`_prepare_backup` is too complex (19 > 15)
-1	src/mouthkeys/operations.py	DTZ005	`datetime.datetime.now()` called without a `tz` argument
-2	src/mouthkeys/operations.py	DTZ006	`datetime.datetime.fromtimestamp()` called without a `tz` argument
-1	src/mouthkeys/operations.py	DTZ011	`datetime.date.today()` used
-1	src/mouthkeys/operations.py	FBT002	Boolean default positional argument in function definition
-22	src/mouthkeys/operations.py	PLC0415	`import` should be at the top-level of a file
-1	src/mouthkeys/operations.py	PLR0911	Too many return statements (9 > 6)
-1	src/mouthkeys/operations.py	PLR0912	Too many branches (18 > 12)
-1	src/mouthkeys/operations.py	PLR0915	Too many statements (57 > 50)
 1	src/mouthkeys/overlay.py	ANN001	Missing type annotation for function argument `data`
 2	src/mouthkeys/overlay.py	ANN001	Missing type annotation for function argument `response`
 1	src/mouthkeys/overlay.py	ANN201	Missing return type annotation for public function `set_status`

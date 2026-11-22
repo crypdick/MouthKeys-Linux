@@ -16,7 +16,7 @@ from typing import TypedDict
 from .config import config_path, private_dir
 from .data_lock import dictionary_lock
 from .dictionary import Dictionary, phrase_pattern
-from .operations import write_private
+from .private_files import write_private
 
 MAX_TERMS = 256
 MAX_PROMPT_BYTES = 4096

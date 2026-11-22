@@ -6,7 +6,7 @@ from dataclasses import replace
 from typing import NotRequired, TypedDict, cast
 
 from .config import Config, config_path, private_dir
-from .operations import write_private
+from .private_files import write_private
 from .profiles import PromptProfile, load_profiles, resolve_profile
 
 

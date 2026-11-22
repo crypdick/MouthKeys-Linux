@@ -177,9 +177,11 @@ def test_legacy_config_loads_new_defaults(tmp_path):
         ("created", float("nan")),
         ("created", float("inf")),
         ("created", 1e100),
+        ("created", 10**400),
         ("duration", -1),
         ("duration", True),
         ("duration", float("nan")),
+        ("duration", 10**400),
     ],
 )
 def test_invalid_backup_numbers_rejected_before_mutation(tmp_path, field, value):
@@ -189,9 +191,13 @@ def test_invalid_backup_numbers_rejected_before_mutation(tmp_path, field, value)
     backup_export(history, path)
     data = json.loads(path.read_text())
     data["history"][0][field] = value
+    data["history"][0]["text"] = "must not replace the transcript"
+    data["config"]["spoken_send"] = "on"
     path.write_text(json.dumps(data))
     with pytest.raises(ValueError):
         backup_import(history, path)
+    assert Config.load().spoken_send == "off"
+    assert history.get(item)["text"] == "hello world"
     assert history.get(item)["duration"] == 2.5
     assert len(history.all_rows()) == 1
 

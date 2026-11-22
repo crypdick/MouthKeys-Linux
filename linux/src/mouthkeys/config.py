@@ -7,6 +7,8 @@ from typing import Self
 
 from beartype.roar import BeartypeCallHintParamViolation
 
+from .private_files import write_private
+
 
 def private_dir(path: Path) -> Path:
     path.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -220,13 +222,7 @@ class Config:
         self.validate()
         path = config_path()
         private_dir(path.parent)
-        # Atomic replacement: a daemon cannot observe a partially written config.
-        import tempfile
-
-        with tempfile.NamedTemporaryFile(mode="w", dir=path.parent, delete=False) as file:
-            json.dump(asdict(self), file, indent=2)
-            temp = Path(file.name)
-        temp.replace(path)
+        write_private(path, json.dumps(asdict(self), indent=2).encode())
 
 
 RANGES = {

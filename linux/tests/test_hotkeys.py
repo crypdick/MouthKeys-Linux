@@ -2,6 +2,7 @@ from dataclasses import replace
 
 import pytest
 
+from mouthkeys import hotkeys, profiles
 from mouthkeys.config import Config
 from mouthkeys.hotkeys import Activation, bindings, ensure_hotkeys, parse_chord
 from mouthkeys.portal_shortcuts import preferred_trigger
@@ -23,7 +24,7 @@ def test_shortcut_parsing_multiple_primary_mouse_and_portal_names():
 
 
 @pytest.mark.parametrize(
-    "mode,held,expected",
+    ("mode", "held", "expected"),
     [
         ("toggle", 1, ["toggle"]),
         ("hold", 1, ["start", "stop"]),
@@ -66,7 +67,6 @@ def test_automatic_stop_of_existing_recording_does_not_double_stop():
 
 
 def test_desktop_default_never_starts_native_grabs_or_portal(monkeypatch):
-    from mouthkeys import hotkeys
 
     monkeypatch.setattr(
         hotkeys.subprocess, "Popen", lambda *args, **kwargs: pytest.fail("Grab spawned")
@@ -75,7 +75,6 @@ def test_desktop_default_never_starts_native_grabs_or_portal(monkeypatch):
 
 
 def test_profile_shortcut_routes_per_recording_and_release_is_id_scoped(monkeypatch):
-    from mouthkeys import profiles
 
     profile = "e252cc1c-26c5-4a62-b5ac-69e3c100c1b9"
     monkeypatch.setattr(profiles, "load_profiles", lambda: [{"id": profile, "shortcut": "ctrl+F8"}])

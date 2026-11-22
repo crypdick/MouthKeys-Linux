@@ -9,8 +9,11 @@ from pathlib import Path
 
 import pytest
 
+from mouthkeys import credentials, upstream_backup
+from mouthkeys.ai_providers import request_headers, request_json
 from mouthkeys.config import Config
 from mouthkeys.dictionary import Dictionary
+from mouthkeys.formatting import format_text
 from mouthkeys.operations import backup_import, backup_preview, handle_action
 from mouthkeys.profiles import PROFILE_FIELDS, load_profiles
 from mouthkeys.routing import load_routes, select_prompt
@@ -195,7 +198,10 @@ def test_invalid_migration_rejected_before_mutation(tmp_path, damage):
     history = History()
     path = source_file(tmp_path, document)
     before = xdg_files()
-    with pytest.raises(ValueError):
+    with pytest.raises(
+        ValueError,
+        match=r"Unsupported upstream backup schema version|Upstream (AI processing model|dates|removeFillerWordsEnabled|wasAIProcessed) must",
+    ):
         backup_import(history, path)
     assert xdg_files() == before
 
@@ -222,7 +228,6 @@ def test_preview_service_action_allowed_while_recording_without_touching_history
 def test_read_bounds_actual_bytes_and_pure_conversion_does_not_mutate_arguments(
     tmp_path, monkeypatch
 ):
-    from mouthkeys import upstream_backup
 
     monkeypatch.setattr(upstream_backup, "MAX_BACKUP_BYTES", 4)
     with pytest.raises(ValueError, match="100 MiB"):
@@ -301,7 +306,7 @@ def test_imported_drafts_do_not_change_active_profiles_providers_or_app_routes()
 
 
 @pytest.mark.parametrize(
-    "endpoint,credential_source",
+    ("endpoint", "credential_source"),
     [
         ("https://new-provider.example/v1", "secret-service"),
         ("http://localhost:1234/v1", "environment"),
@@ -310,8 +315,6 @@ def test_imported_drafts_do_not_change_active_profiles_providers_or_app_routes()
 def test_imported_endpoint_never_reuses_environment_key_or_unrelated_discovery(
     monkeypatch, endpoint, credential_source
 ):
-    from mouthkeys import credentials
-    from mouthkeys.ai_providers import request_headers, request_json
 
     monkeypatch.setenv("MOUTHKEYS_AI_API_KEY", "unrelated-secret")
     document = upstream_document()
@@ -370,7 +373,6 @@ def test_upstream_audio_settings_cannot_restore_retention():
 
 @pytest.mark.parametrize("aliases", [[], ["", " ", "\t", " \n "]])
 def test_disabled_empty_spoken_action_disables_existing_aliases(aliases):
-    from mouthkeys.formatting import format_text
 
     document = upstream_document()
     document["settings"]["spokenFormattingActionRules"] = [

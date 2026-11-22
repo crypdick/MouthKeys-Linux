@@ -3,11 +3,12 @@ import os
 import signal
 import subprocess
 from dataclasses import replace
+from pathlib import Path
 from threading import Event
 
 import pytest
 
-from mouthkeys import assistance
+from mouthkeys import assistance, assistant_ui
 from mouthkeys.config import Config
 
 
@@ -249,12 +250,9 @@ def test_executor_reports_real_exit_code_and_combines_stdout_and_stderr():
 
 
 def test_assistant_ui_requires_review_of_exact_command(monkeypatch):
-    from pathlib import Path
 
     pytest.importorskip("PySide6")
-    from PySide6.QtWidgets import QApplication, QWidget
-
-    from mouthkeys import assistant_ui
+    from PySide6.QtWidgets import QApplication, QWidget  # noqa: PLC0415 - optional Qt test
 
     app = QApplication.instance() or QApplication([])
     parent = QWidget()

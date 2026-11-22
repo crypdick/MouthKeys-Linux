@@ -3,6 +3,7 @@ import threading
 from dataclasses import replace
 from types import SimpleNamespace
 
+import faster_whisper
 import pytest
 
 from mouthkeys.assistant_history import AssistantHistory
@@ -96,7 +97,6 @@ def test_cancelled_voice_turn_never_appends_conversation(monkeypatch):
 
 
 def test_loaded_model_status_is_resident_not_current_selection(monkeypatch):
-    import faster_whisper
 
     transcriber = Transcriber()
     monkeypatch.setattr("mouthkeys.engines.resolve_whisper", lambda config: config.model)

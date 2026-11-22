@@ -1,12 +1,16 @@
+import json
 import threading
 import time
 
 import pytest
-from PySide6.QtWidgets import QApplication, QWidget
+from PySide6.QtWidgets import QApplication, QMessageBox, QWidget
 
 from mouthkeys.assistant_history import AssistantHistory
 from mouthkeys.assistant_ui import AssistantPage
 from mouthkeys.config import Config, state_dir
+from mouthkeys.profiles import load_profiles, save_profiles
+
+from .test_mode_routing import profiles
 
 
 def page():
@@ -14,7 +18,11 @@ def page():
     window = QWidget()
     window.jobs = set()
     window.send = lambda *args, **kwargs: None
-    return app, window, AssistantPage(window, lambda *args: window.send(*args), window.jobs)
+
+    def send(action, data, callback):
+        window.send(action, data, callback)
+
+    return app, window, AssistantPage(window, send, window.jobs)
 
 
 def process_until(app, predicate):
@@ -26,9 +34,8 @@ def process_until(app, predicate):
 
 
 def test_voice_edit_review_button_requires_capture_and_explicit_return(monkeypatch):
-    from PySide6.QtWidgets import QMessageBox
 
-    app, window, assistant = page()
+    _app, window, assistant = page()
     sent = []
     window.send = lambda action, data, callback: (
         sent.append((action, data)) or callback({"result": {"message": "Edit inserted"}})
@@ -51,7 +58,7 @@ def test_voice_edit_review_button_requires_capture_and_explicit_return(monkeypat
 
 
 def test_voice_stream_clears_old_actionable_proposal_and_cancels_service():
-    app, window, assistant = page()
+    _app, window, assistant = page()
     sent = []
     window.send = lambda action, _data, _callback: sent.append(action)
     assistant.show_proposal({"mode": "command", "text": "Old result", "command": "old"})
@@ -71,9 +78,6 @@ def test_voice_stream_clears_old_actionable_proposal_and_cancels_service():
 
 
 def test_typed_automatic_chain_freezes_resolved_profile_and_voice_clears_it(monkeypatch):
-    from mouthkeys.profiles import load_profiles, save_profiles
-
-    from .test_mode_routing import profiles
 
     profile_id = profiles()[0]
     Config(command_profile=profile_id, command_confirm="off", command_continue="on").save()
@@ -196,7 +200,6 @@ def test_typed_edit_streams_successfully_without_cancel_or_direct_desktop_delive
 
 
 def test_edit_followup_uses_previous_result_not_original_selection(monkeypatch):
-    import json
 
     app, window, assistant = page()
     calls = []
@@ -229,7 +232,6 @@ def test_edit_followup_uses_previous_result_not_original_selection(monkeypatch):
 
 
 def test_private_voice_to_typed_and_back_preserves_context_without_db(monkeypatch):
-    import json
 
     Config(save_history="off").save()
     app, window, assistant = page()
@@ -272,7 +274,6 @@ def test_private_voice_to_typed_and_back_preserves_context_without_db(monkeypatc
 
 
 def test_reviewed_result_survives_restart_without_automatic_continuation(monkeypatch, tmp_path):
-    import json
 
     Config(command_continue="off").save()
     app, window, assistant = page()
@@ -367,7 +368,7 @@ def test_voice_command_adopts_mode_and_chat_before_followup(monkeypatch):
 
 
 def test_repeated_equal_voice_proposals_use_job_identity():
-    app, window, assistant = page()
+    _app, window, assistant = page()
     proposal = {"mode": "command", "text": "Same answer", "command": "same command"}
     assistant.update_status({"id": "first-job", "phase": "idle", "assistant_proposal": proposal})
     assert assistant.editor.run_button.isEnabled()

@@ -1,10 +1,12 @@
+import io
 import json
-import pathlib
+import wave
 from types import SimpleNamespace
 
 import pytest
 
 from mouthkeys import capture_readiness, capture_recorder
+from mouthkeys.config import Config
 
 
 def node(name, **props):
@@ -77,10 +79,6 @@ def test_graph_failure_does_not_report_bluetooth_ready(monkeypatch):
 def test_recorder_waits_for_bluetooth_even_when_virtual_samples_exist(
     monkeypatch, tmp_path, becomes_ready
 ):
-    import os
-    import wave
-
-    from mouthkeys.config import Config
 
     path = tmp_path / "capture.wav"
     elapsed = 0
@@ -88,7 +86,7 @@ def test_recorder_waits_for_bluetooth_even_when_virtual_samples_exist(
 
     class Process:
         def __init__(self, args, **kwargs):
-            self.stdin = pathlib.Path(os.devnull).open("wb")
+            self.stdin = io.BytesIO()
             processes.append(self)
             with wave.open(str(path), "wb") as wav:
                 wav.setnchannels(1)

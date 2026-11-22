@@ -7,6 +7,7 @@ from pathlib import Path
 from unittest.mock import Mock
 
 import pytest
+from faster_whisper.tokenizer import _LANGUAGE_CODES
 from PySide6.QtWidgets import QApplication, QComboBox, QLineEdit, QPushButton, QWidget
 
 from mouthkeys import onboarding
@@ -17,7 +18,7 @@ from mouthkeys.regional_ui import RegionalFillerBanner
 from mouthkeys.setup_languages import COHERE, PARAKEET_V3, languages, routes
 
 
-@pytest.mark.parametrize("region,word,codes,zones,message", REGIONS)
+@pytest.mark.parametrize(("region", "word", "codes", "zones", "message"), REGIONS)
 def test_regional_rules_cover_every_pinned_region_and_time_zone(
     region, word, codes, zones, message
 ):
@@ -57,7 +58,6 @@ def test_regional_offer_is_once_local_and_ordered_and_never_claims_minnesota_fro
 
 
 def test_all_locked_whisper_languages_have_explicit_routes_and_no_guessed_native_languages():
-    from faster_whisper.tokenizer import _LANGUAGE_CODES
 
     assert set(dict(languages())) == set(_LANGUAGE_CODES)
     for code in _LANGUAGE_CODES:

@@ -1,8 +1,17 @@
+import json
 from dataclasses import replace
+from types import SimpleNamespace
 
-from mouthkeys import desktop
+import pytest
+from PySide6.QtCore import QByteArray, QMimeData
+from PySide6.QtWidgets import QApplication, QMenu
+
+from mouthkeys import accessibility, clipboard, clipboard_owner, desktop
+from mouthkeys.clipboard_owner import capture_formats, temporary_mime
 from mouthkeys.config import Config
+from mouthkeys.overlay import Overlay
 from mouthkeys.overlay_rendering import live_counters
+from mouthkeys.tray import Tray
 
 
 def test_microphone_priority_exclusions_and_fallback(monkeypatch):
@@ -16,7 +25,6 @@ def test_microphone_priority_exclusions_and_fallback(monkeypatch):
 
 
 def test_microphone_never_applies_to_explicit_selection():
-    import pytest
 
     with pytest.raises(ValueError, match="Never"):
         desktop.choose_source(Config(audio_source="bad", microphone_never="bad"))
@@ -57,9 +65,6 @@ def test_sound_disabled_never_spawns_process(monkeypatch):
 
 
 def test_configurable_overlay_scales_without_showing_window():
-    from PySide6.QtWidgets import QApplication
-
-    from mouthkeys.overlay import Overlay
 
     app = QApplication.instance() or QApplication([])
     panel = Overlay()
@@ -75,9 +80,6 @@ def test_configurable_overlay_scales_without_showing_window():
 
 
 def test_overlay_history_popup_copies_selected_entry_without_pasting(monkeypatch):
-    from PySide6.QtWidgets import QApplication, QMenu
-
-    from mouthkeys.overlay import Overlay
 
     app = QApplication.instance() or QApplication([])
     panel = Overlay()
@@ -95,12 +97,6 @@ def test_overlay_history_popup_copies_selected_entry_without_pasting(monkeypatch
 
 
 def test_clipboard_snapshot_restores_every_format_but_not_new_user_copy(monkeypatch):
-    from types import SimpleNamespace
-
-    import pytest
-    from PySide6.QtCore import QByteArray, QMimeData
-
-    from mouthkeys import clipboard_owner
 
     mime = QMimeData()
     mime.setData("text/plain", QByteArray(b"hello"))
@@ -122,7 +118,6 @@ def test_clipboard_snapshot_restores_every_format_but_not_new_user_copy(monkeypa
 
 
 def test_context_uses_only_foreground_snapshot_and_skips_unknown_focus(monkeypatch):
-    from mouthkeys import accessibility
 
     monkeypatch.setattr(
         accessibility, "read_snapshot", lambda: {"foreground": True, "context": "before cursor"}
@@ -135,9 +130,6 @@ def test_context_uses_only_foreground_snapshot_and_skips_unknown_focus(monkeypat
 
 
 def test_accessibility_uses_isolated_distro_python_when_venv_has_no_gi(monkeypatch):
-    from types import SimpleNamespace
-
-    from mouthkeys import accessibility
 
     monkeypatch.setenv("DISPLAY", ":fake")
     monkeypatch.setattr(accessibility.importlib.util, "find_spec", lambda _: None)
@@ -156,9 +148,6 @@ def test_accessibility_uses_isolated_distro_python_when_venv_has_no_gi(monkeypat
 
 
 def test_tray_alerts_are_opt_in_deduplicated_and_do_not_claim_verified_paste(monkeypatch):
-    from PySide6.QtWidgets import QApplication
-
-    from mouthkeys.tray import Tray
 
     app = QApplication.instance() or QApplication([])
     tray = Tray()
@@ -188,9 +177,6 @@ def test_tray_alerts_are_opt_in_deduplicated_and_do_not_claim_verified_paste(mon
 
 
 def test_tray_cannot_quit_during_file_transcription():
-    from types import SimpleNamespace
-
-    from mouthkeys.tray import Tray
 
     tips = []
     fake = SimpleNamespace(
@@ -204,7 +190,6 @@ def test_tray_cannot_quit_during_file_transcription():
 
 
 def test_ai_failure_notifications_have_independent_preference_and_deduplication(monkeypatch):
-    from mouthkeys.tray import Tray
 
     tray = Tray()
     tray.timer.stop()
@@ -258,7 +243,6 @@ def test_desktop_default_source_is_resolved_for_actual_microphone_label(monkeypa
 
 
 def test_preset_start_stop_cues_use_bundled_pcm_files_without_playback(monkeypatch):
-    from mouthkeys import desktop
 
     calls = []
 
@@ -279,7 +263,6 @@ def test_preset_start_stop_cues_use_bundled_pcm_files_without_playback(monkeypat
 
 
 def test_temporary_clipboard_history_hint_does_not_modify_normal_copy_formats():
-    from mouthkeys.clipboard_owner import capture_formats, temporary_mime
 
     assert capture_formats(temporary_mime("hello", exclude_history=False)) == {
         "text/plain": b"hello"
@@ -290,9 +273,6 @@ def test_temporary_clipboard_history_hint_does_not_modify_normal_copy_formats():
 
 
 def test_queued_clipboard_transactions_wait_for_restoration_ack_before_next_snapshot(monkeypatch):
-    import json
-
-    from mouthkeys import clipboard
 
     state = {"clipboard": "original"}
     snapshots = []

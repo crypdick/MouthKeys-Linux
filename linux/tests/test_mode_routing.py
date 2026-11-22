@@ -2,11 +2,13 @@ import json
 import threading
 import uuid
 from dataclasses import asdict, replace
+from pathlib import Path
 
 import pytest
 
 from mouthkeys import assistance, routing
 from mouthkeys.config import Config
+from mouthkeys.file_transcription import transcribe_file
 from mouthkeys.learning import CorrectionLearner
 from mouthkeys.profiles import PROFILE_FIELDS, save_profiles
 from mouthkeys.recording_edit import matches_edit_selection
@@ -80,7 +82,7 @@ def test_same_application_routes_can_differ_by_mode_and_legacy_is_dictation():
     config = Config(ai_enabled="on", ai_model="global")
     assert select_prompt(config, "Editor", mode="dictation").ai_enabled == "off"
     assert select_prompt(config, "Editor", mode="edit").ai_enabled == "on"
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="Each application needs one unique prompt route"):
         save_routes(
             [
                 {"app": "Editor", "profile": "off"},
@@ -246,9 +248,6 @@ def test_cancel_after_completed_native_preview_releases_cache_for_file_inference
         return []
 
     app.transcriber.segments = segments
-    from pathlib import Path
-
-    from mouthkeys.file_transcription import transcribe_file
 
     result = transcribe_file(
         Path(__file__).parent / "resources" / "dictation_fixture.wav",

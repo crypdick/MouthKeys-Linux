@@ -1,13 +1,25 @@
 import json
 import uuid
-from dataclasses import asdict
+from dataclasses import asdict, replace
+from types import SimpleNamespace
 
+import numpy as np
 import pytest
+from faster_whisper import audio
 
+from mouthkeys import file_transcription
 from mouthkeys.config import Config
+from mouthkeys.dictionary import Dictionary
 from mouthkeys.file_history import FileHistory
-from mouthkeys.profiles import PROFILE_FIELDS, save_profiles
-from mouthkeys.routing import save_routes, select_prompt
+from mouthkeys.operations import backup_import
+from mouthkeys.profiles import PROFILE_FIELDS, load_profiles, save_profiles
+from mouthkeys.pronunciation import PronunciationStore
+from mouthkeys.routing import load_routes, save_routes, select_prompt
+from mouthkeys.storage import History
+from mouthkeys.vocabulary import VocabularyStore
+
+from .pipeline_support import finish
+from .test_pipeline_options import controller
 
 
 def result(text="saved result"):
@@ -54,12 +66,12 @@ def test_file_history_restore_validates_before_mutation():
     store.add("original.wav", result())
     rows = store.rows()
     rows[0]["created"] = float("nan")
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="Invalid file history metadata"):
         store.restore(rows)
     assert len(store.rows()) == 1
     rows = store.rows()
     rows[0]["name"] = "../escape.wav"
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="Invalid file history metadata"):
         store.restore(rows)
     assert len(store.rows()) == 1
 
@@ -81,19 +93,12 @@ def test_app_routing_scope_and_explicit_shortcut_precedence():
 
 def test_routing_rejects_missing_profile_without_erasing_saved_routes():
     save_routes([{"app": "Editor", "profile": "off"}])
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="Prompt route selects a missing profile"):
         save_routes([{"app": "Editor", "profile": str(uuid.uuid4())}])
     assert select_prompt(Config(ai_enabled="on"), "Editor").ai_enabled == "off"
 
 
 def test_turn_first_file_transcription_keeps_speaker_change_inside_asr_segment(monkeypatch):
-    from dataclasses import replace
-    from types import SimpleNamespace
-
-    import numpy as np
-    from faster_whisper import audio
-
-    from mouthkeys import file_transcription
 
     samples = np.concatenate([np.ones(32000), np.ones(32000) * 2])
     monkeypatch.setattr(audio, "decode_audio", lambda *args, **kwargs: samples)
@@ -128,11 +133,6 @@ def test_turn_first_file_transcription_keeps_speaker_change_inside_asr_segment(m
 
 def test_recording_freezes_prompt_profile_before_later_edits(monkeypatch):
 
-    from mouthkeys.profiles import load_profiles
-
-    from .pipeline_support import finish
-    from .test_pipeline_options import controller
-
     item_id = profile()
     Config(ai_enabled="on", ai_profile=item_id).save()
     app = controller("Original words")
@@ -155,13 +155,6 @@ def test_recording_freezes_prompt_profile_before_later_edits(monkeypatch):
 
 
 def test_legacy_backup_preserves_newer_stores_and_referenced_profiles(tmp_path):
-    from mouthkeys.dictionary import Dictionary
-    from mouthkeys.operations import backup_import
-    from mouthkeys.profiles import load_profiles
-    from mouthkeys.pronunciation import PronunciationStore
-    from mouthkeys.routing import load_routes
-    from mouthkeys.storage import History
-    from mouthkeys.vocabulary import VocabularyStore
 
     item_id = profile()
     save_routes([{"app": "Editor", "profile": item_id}])
@@ -190,8 +183,6 @@ def test_legacy_backup_preserves_newer_stores_and_referenced_profiles(tmp_path):
 
 
 def test_spoken_send_only_never_claims_copy_or_erases_last_transcript():
-    from .pipeline_support import finish
-    from .test_pipeline_options import controller
 
     Config(delivery="x11", spoken_send="on").save()
     app = controller("Previous dictation")

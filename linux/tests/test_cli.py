@@ -1,18 +1,28 @@
+import contextlib
+import fcntl
 import json
 import os
 import socket
 import subprocess
 import sys
+import threading
 import time
+from dataclasses import asdict
 from importlib.metadata import version
 from pathlib import Path
 
 import pytest
+from beartype.roar import BeartypeCallHintParamViolation
 
-from mouthkeys import control
+from mouthkeys import benchmark, control, storage
 from mouthkeys.cli import main
 from mouthkeys.config import Config, config_path, runtime_dir
 from mouthkeys.control import ensure_overlay, request
+from mouthkeys.daemon import Server
+from mouthkeys.dictionary import Dictionary
+from mouthkeys.processes import python_command
+from mouthkeys.service import Controller
+from mouthkeys.vocabulary import VocabularyStore
 
 
 def test_microphone_cli_preserves_session_and_persistent_selection(monkeypatch, capsys):
@@ -30,8 +40,6 @@ def test_microphone_cli_preserves_session_and_persistent_selection(monkeypatch, 
 
 
 def test_dictionary_cli_portable_roundtrip_and_merge(tmp_path, capsys):
-    from mouthkeys.dictionary import Dictionary
-    from mouthkeys.vocabulary import VocabularyStore
 
     source = tmp_path / "source.json"
     source.write_text(
@@ -53,7 +61,6 @@ def test_dictionary_cli_portable_roundtrip_and_merge(tmp_path, capsys):
 
 
 def test_benchmark_cli_uses_overrides_without_daemon_or_saved_config(monkeypatch, tmp_path, capsys):
-    from mouthkeys import benchmark
 
     calls = []
     reference = tmp_path / "reference.txt"
@@ -106,11 +113,6 @@ def test_benchmark_cli_uses_overrides_without_daemon_or_saved_config(monkeypatch
 def test_backup_preview_cli_never_constructs_history_or_starts_daemon(
     monkeypatch, tmp_path, capsys
 ):
-    from dataclasses import asdict
-
-    from mouthkeys import storage
-    from mouthkeys.config import Config, config_path
-    from mouthkeys.dictionary import Dictionary
 
     path = tmp_path / "backup.json"
     path.write_text(
@@ -236,7 +238,6 @@ def test_real_daemon_ipc_duplicate_start_malformed_request_and_shutdown():
 
 
 def test_overlay_launcher_skips_headless_and_existing_panel(monkeypatch):
-    import fcntl
 
     def unexpected(*args, **kwargs):
         raise AssertionError("Must not launch a desktop process")
@@ -267,10 +268,8 @@ def test_installed_command_from_untrusted_directory_starts_safe_daemon(tmp_path)
         assert result.returncode == 0, result.stderr.decode()
         assert json.loads(result.stdout)["phase"] == "idle"
     finally:
-        try:
+        with contextlib.suppress(FileNotFoundError, ConnectionRefusedError):
             request("shutdown")
-        except (FileNotFoundError, ConnectionRefusedError):
-            pass
         deadline = time.monotonic() + 3
         while (runtime_dir() / "control.sock").exists() and time.monotonic() < deadline:
             time.sleep(0.02)
@@ -302,10 +301,6 @@ def test_reviewed_edit_cli_preserves_explicit_target_and_focus_choice(monkeypatc
 
 
 def test_socket_errors_persist_feedback_for_panel():
-    import threading
-
-    from mouthkeys.daemon import Server
-    from mouthkeys.service import Controller
 
     controller = Controller()
     controller.phase = "loading"
@@ -313,8 +308,6 @@ def test_socket_errors_persist_feedback_for_panel():
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
         try:
-            import pytest
-
             with pytest.raises(RuntimeError, match="Busy"):
                 request("toggle")
             status = request("status")
@@ -342,9 +335,6 @@ def test_config_rejects_malformed_documents(raw, message):
 
 
 def test_runtime_types_guard_python_helper_command():
-    from beartype.roar import BeartypeCallHintParamViolation
-
-    from mouthkeys.processes import python_command
 
     assert python_command("mouthkeys", "status")[1:] == ["-P", "-m", "mouthkeys", "status"]
     with pytest.raises(BeartypeCallHintParamViolation):

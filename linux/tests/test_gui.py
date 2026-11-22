@@ -1,8 +1,19 @@
+import subprocess
 import time
+from dataclasses import asdict
 from importlib import import_module
 from importlib.metadata import version
+from types import SimpleNamespace
 
 import pytest
+
+from mouthkeys import desktop_input, gui, model_downloads_ui, settings_choices
+from mouthkeys.config import Config
+from mouthkeys.dictionary import Dictionary
+from mouthkeys.gui import Window
+from mouthkeys.models_ui import ModelBrowser
+from mouthkeys.service import Controller
+from mouthkeys.vocabulary import VocabularyStore
 
 QApplication = pytest.importorskip("PySide6.QtWidgets").QApplication
 settings_gui = import_module("mouthkeys.gui")
@@ -10,10 +21,7 @@ qt_control = import_module("mouthkeys.qt_control")
 
 
 def test_taskbar_hint_is_configurable_and_separate_from_tray(monkeypatch):
-    from PySide6.QtCore import Qt
-
-    from mouthkeys.config import Config
-    from mouthkeys.gui import Window
+    from PySide6.QtCore import Qt  # noqa: PLC0415 - optional Qt test
 
     Config(hide_from_taskbar="on", tray="off").save()
     monkeypatch.setattr(Window, "poll", lambda self: None)
@@ -31,10 +39,8 @@ def test_taskbar_hint_is_configurable_and_separate_from_tray(monkeypatch):
 
 
 def test_model_browser_resident_state_uses_loaded_identity_not_selected_settings(monkeypatch):
-    from PySide6.QtCore import Qt
-    from PySide6.QtWidgets import QComboBox, QLineEdit, QWidget
-
-    from mouthkeys.models_ui import ModelBrowser
+    from PySide6.QtCore import Qt  # noqa: PLC0415 - optional Qt test
+    from PySide6.QtWidgets import QComboBox, QLineEdit, QWidget  # noqa: PLC0415 - optional Qt test
 
     window = QWidget()
     engine = QComboBox()
@@ -82,10 +88,6 @@ def test_model_browser_resident_state_uses_loaded_identity_not_selected_settings
 
 @pytest.mark.parametrize("success", [True, False])
 def test_download_retries_unavailable_model_only_after_success(monkeypatch, tmp_path, success):
-    from types import SimpleNamespace
-
-    from mouthkeys import gui, model_downloads_ui
-    from mouthkeys.service import Controller
 
     app = QApplication.instance() or QApplication([])
     ready = tmp_path / "model-ready"
@@ -139,8 +141,6 @@ def test_download_retries_unavailable_model_only_after_success(monkeypatch, tmp_
 
 def test_settings_show_app_and_running_service_versions(monkeypatch):
 
-    from mouthkeys import gui
-
     app = QApplication.instance() or QApplication([])
     current = version("mouthkeys-linux")
     status = {"phase": "idle", "message": "Ready", "seconds": 0, "version": current}
@@ -180,9 +180,6 @@ def test_settings_show_app_and_running_service_versions(monkeypatch):
 
 
 def test_offscreen_controller_renders_history_and_saves_settings(monkeypatch):
-
-    from mouthkeys import gui
-    from mouthkeys.config import Config
 
     app = QApplication.instance() or QApplication([])
 
@@ -236,9 +233,6 @@ def test_offscreen_controller_renders_history_and_saves_settings(monkeypatch):
 
 def test_dropdowns_preserve_existing_custom_settings(monkeypatch):
 
-    from mouthkeys import gui
-    from mouthkeys.config import Config
-
     app = QApplication.instance() or QApplication([])
     Config(model="org/custom-model", language="xx", audio_source="custom_source").save()
     monkeypatch.setattr(gui.Window, "poll", lambda self: None)
@@ -266,9 +260,6 @@ def test_dropdowns_preserve_existing_custom_settings(monkeypatch):
 )
 def test_model_dropdown_uses_specific_names_for_saved_aliases(monkeypatch, model, expected):
 
-    from mouthkeys import gui
-    from mouthkeys.config import Config
-
     app = QApplication.instance() or QApplication([])
     Config(model=model).save()
     monkeypatch.setattr(gui.Window, "poll", lambda self: None)
@@ -293,9 +284,6 @@ def test_model_dropdown_uses_specific_names_for_saved_aliases(monkeypatch, model
 @pytest.mark.parametrize("model", ["large", "turbo"])
 def test_model_dropdown_preserves_local_directory_named_like_alias(monkeypatch, tmp_path, model):
 
-    from mouthkeys import gui
-    from mouthkeys.config import Config
-
     app = QApplication.instance() or QApplication([])
     monkeypatch.chdir(tmp_path)
     (tmp_path / model).mkdir()
@@ -312,9 +300,6 @@ def test_model_dropdown_preserves_local_directory_named_like_alias(monkeypatch, 
 
 
 def test_microphone_choices_use_discovery_without_capture(monkeypatch):
-    import subprocess
-
-    from mouthkeys import desktop_input, settings_choices
 
     monkeypatch.setattr(desktop_input, "session", lambda: "x11")
 
@@ -328,9 +313,6 @@ def test_microphone_choices_use_discovery_without_capture(monkeypatch):
 
 
 def test_missing_pactl_keeps_manual_microphone_selection(monkeypatch):
-    import subprocess
-
-    from mouthkeys import desktop_input, settings_choices
 
     monkeypatch.setattr(desktop_input, "session", lambda: "x11")
 
@@ -342,12 +324,8 @@ def test_missing_pactl_keeps_manual_microphone_selection(monkeypatch):
 
 
 def test_every_config_is_editable_in_settings_and_new_options_roundtrip(monkeypatch):
-    from dataclasses import asdict
 
-    from PySide6.QtWidgets import QApplication, QScrollArea
-
-    from mouthkeys import gui
-    from mouthkeys.config import Config
+    from PySide6.QtWidgets import QApplication, QScrollArea  # noqa: PLC0415 - optional Qt test
 
     app = QApplication.instance() or QApplication([])
     monkeypatch.setattr(gui.Window, "poll", lambda self: None)
@@ -370,9 +348,6 @@ def test_every_config_is_editable_in_settings_and_new_options_roundtrip(monkeypa
 
 
 def test_settings_source_change_applies_active_service_and_float_vocabulary(monkeypatch):
-    from mouthkeys import gui
-    from mouthkeys.config import Config
-    from mouthkeys.vocabulary import VocabularyStore
 
     monkeypatch.setattr(gui.Window, "poll", lambda self: None)
     window = gui.Window()
@@ -399,8 +374,6 @@ def test_settings_source_change_applies_active_service_and_float_vocabulary(monk
 
 
 def test_dictionary_editor_preserves_imported_rule_id_when_editing(monkeypatch):
-    from mouthkeys import gui
-    from mouthkeys.dictionary import Dictionary
 
     monkeypatch.setattr(gui.Window, "poll", lambda self: None)
     data = Dictionary.defaults()

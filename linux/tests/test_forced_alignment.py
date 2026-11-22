@@ -59,7 +59,7 @@ def aligner(monkeypatch):
 
 
 def test_forced_alignment_uses_real_segment_bounds_and_preserves_text_and_score(aligner):
-    value, model, calls = aligner
+    value, _model, calls = aligner
     segment = SimpleNamespace(start=0.5, end=1.5, text="Hello", avg_logprob=-0.2)
     result, warning = value.align(np.zeros(32000), [segment], config())
     assert not warning

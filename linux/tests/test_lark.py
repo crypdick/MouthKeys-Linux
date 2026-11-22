@@ -6,9 +6,11 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from PySide6.QtWidgets import QApplication
 
 from mouthkeys import lark, lark_monitor
 from mouthkeys.config import Config
+from mouthkeys.overlay import Overlay
 
 DESCRIPTOR = bytes([0x06, 0x12, 0xFF, 0x85, 5, 0xB1, 2])
 REPLY = bytes([5, 3, 0xBB, 0xDD, 0x1F, 0, 4, 1, 0, 87, 99])
@@ -116,9 +118,6 @@ def test_battery_identifies_receiver_behind_remapped_source_without_name_guessin
 
 
 def test_compact_overlay_has_real_shorter_layout_without_windows():
-    from PySide6.QtWidgets import QApplication
-
-    from mouthkeys.overlay import Overlay
 
     app = QApplication.instance() or QApplication([])
     panel = Overlay()

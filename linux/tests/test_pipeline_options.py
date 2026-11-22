@@ -1,5 +1,6 @@
 import threading
 import time
+import uuid
 from dataclasses import replace
 
 from mouthkeys import assistance
@@ -383,7 +384,6 @@ def test_old_preview_cannot_arm_a_new_recording(monkeypatch):
 
 
 def test_history_disabled_latest_copy_does_not_resurrect_older_saved_text():
-    import uuid
 
     Config(save_history="off").save()
     app = controller("New private text")

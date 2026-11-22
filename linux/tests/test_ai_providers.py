@@ -9,10 +9,11 @@ import pytest
 
 from mouthkeys import ai_providers, profiles
 from mouthkeys.config import Config
+from mouthkeys.profiles import PROFILE_FIELDS, resolve_profile, save_profiles
 
 
 @pytest.mark.parametrize(
-    "provider,response,header",
+    ("provider", "response", "header"),
     [
         ("compatible", {"choices": [{"message": {"content": " Cleaned."}}]}, "Authorization"),
         (
@@ -99,7 +100,7 @@ def test_native_protocols(provider, response, header, monkeypatch):
 )
 def test_bad_endpoint_rejected_before_request(url):
     config = replace(Config(), ai_enabled="on", ai_model="model", ai_endpoint=url)
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=r"AI endpoint|Keep AI API keys"):
         ai_providers.request_completion(
             "Raw", config, opener=lambda *a, **kw: pytest.fail("Network access")
         )
@@ -139,7 +140,7 @@ def test_errors_never_echo_response_or_key(monkeypatch):
 
 
 @pytest.mark.parametrize(
-    "provider,payload",
+    ("provider", "payload"),
     [
         ("anthropic", {"stop_reason": "max_tokens", "content": [{"type": "text", "text": "Cut"}]}),
         (
@@ -202,7 +203,7 @@ def test_profiles_roundtrip_and_resolution():
 
 
 @pytest.mark.parametrize(
-    "field,value",
+    ("field", "value"),
     [
         ("api_key", "literal-secret"),
         ("ai_key_env", "sk-literal-secret"),
@@ -216,7 +217,7 @@ def test_profile_validation_precedes_write(field, value):
     original = profile()
     profiles.save_profiles([original])
     invalid = {**original, field: value}
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=r"AI profile|Remote AI endpoints"):
         profiles.save_profiles([invalid])
     assert profiles.load_profiles() == [original]
 
@@ -228,11 +229,6 @@ def test_missing_selected_profile_does_not_fall_back_to_another_provider():
 
 
 def test_local_profile_can_explicitly_omit_key_environment():
-    import uuid
-    from dataclasses import asdict
-
-    from mouthkeys.config import Config
-    from mouthkeys.profiles import PROFILE_FIELDS, resolve_profile, save_profiles
 
     values = asdict(Config(ai_key_env="", ai_model="local-model"))
     profile = {
@@ -308,7 +304,7 @@ def test_history_size_is_utf8_bytes_and_has_message_bound():
 
 
 @pytest.mark.parametrize(
-    "provider,data",
+    ("provider", "data"),
     [
         (
             "compatible",

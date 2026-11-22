@@ -2,12 +2,15 @@ import sys
 from dataclasses import replace
 from types import ModuleType, SimpleNamespace
 
+import huggingface_hub
 import numpy as np
 import pytest
 
-from mouthkeys import native_asr, nemo_asr, transformers_asr
+from mouthkeys import native_asr, nemo_asr, transcribe, transformers_asr
 from mouthkeys.config import Config
+from mouthkeys.model_progress import progress_tqdm
 from mouthkeys.transcribe import Transcriber, download
+from mouthkeys.vocabulary import VocabularyStore
 
 from .native_asr_fakes import backend_fixture, streaming_backend, torch_fake
 
@@ -28,7 +31,6 @@ def test_native_models_are_local_only_builtin_loaders(monkeypatch, tmp_path, fam
 
 
 def test_qwen_uses_native_hotword_context(monkeypatch, tmp_path):
-    from mouthkeys.vocabulary import VocabularyStore
 
     VocabularyStore.save(["MouthKeys", "Qwen"])
     backend, config, processor, *_ = backend_fixture(monkeypatch, tmp_path, "qwen3_asr")
@@ -52,7 +54,6 @@ def test_native_language_contracts_not_silently_ignored(monkeypatch, tmp_path):
 
 
 def test_download_explicit_revision_filters_out_remote_python(monkeypatch):
-    import huggingface_hub
 
     calls = []
 
@@ -128,7 +129,6 @@ def test_native_final_short_tail_is_padded_not_dropped(monkeypatch):
 
 
 def test_transcriber_routes_native_live_and_final_to_same_session(monkeypatch, tmp_path):
-    from mouthkeys import transcribe
 
     calls = []
     model = SimpleNamespace(stream=lambda *a, **kw: calls.append((a, kw)) or "native")
@@ -153,7 +153,6 @@ def test_transcriber_routes_native_live_and_final_to_same_session(monkeypatch, t
 
 
 def test_nemo_uses_real_weighted_graph_scores_and_restores_disabled_decoder(monkeypatch, tmp_path):
-    from mouthkeys.vocabulary import VocabularyStore
 
     VocabularyStore.save_entries(
         [
@@ -259,7 +258,6 @@ def test_download_artifact_validation_rejects_missing_companions_before_ready(tm
 
 
 def test_machine_progress_reports_actual_file_counts():
-    from mouthkeys.model_progress import progress_tqdm
 
     events = []
     progress = progress_tqdm(events.append)(total=3, unit="file", desc="Fetching")

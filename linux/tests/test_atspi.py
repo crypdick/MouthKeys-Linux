@@ -1,5 +1,8 @@
+import json
+import threading
 import time
 from copy import deepcopy
+from types import SimpleNamespace
 
 import pytest
 
@@ -38,10 +41,12 @@ class FakeBus:
             return (23 if ref == self.window_ref else self.role,)
         if method == "GetState":
             if ref == self.window_ref:
-                return ([1 << self.active_state if self.active else 0],)
-            return (
-                [1 << self.editable_state | ((1 << self.focused_state) if self.focused else 0)],
-            )
+                state = 1 << self.active_state if self.active else 0
+            else:
+                state = 1 << self.editable_state | (
+                    (1 << self.focused_state) if self.focused else 0
+                )
+            return ([state],)
         if method == "GetText":
             return (self.text[args[0] : args[1]],)
         if method == "GetNSelections":
@@ -51,16 +56,15 @@ class FakeBus:
         if method == "GrabFocus":
             self.writes.append("focus")
             self.focused = True
-            return (True,)
-        if method == "InsertText":
+        elif method == "InsertText":
             self.writes.append(("insert", args))
             self.text = self.text[: args[0]] + args[1] + self.text[args[0] :]
-            return (True,)
-        if method == "SetCaretOffset":
+        elif method == "SetCaretOffset":
             self.caret = args[0]
             self.selection = (self.caret, self.caret)
-            return (True,)
-        raise AssertionError(method)
+        else:
+            raise AssertionError(method)
+        return (True,)
 
 
 def test_snapshot_identity_is_unique_bus_and_object_not_names():
@@ -227,7 +231,7 @@ def test_verified_paste_uses_same_field_and_exact_expected_text(monkeypatch):
     adapter = delivery.Delivery()
     monkeypatch.setattr(adapter, "focus", lambda: "42")
     calls = []
-    monkeypatch.setattr(adapter, "copy", lambda text: calls.append(text))
+    monkeypatch.setattr(adapter, "copy", calls.append)
 
     def paste(config):
         current["text"] = "hello new world"
@@ -260,7 +264,7 @@ def test_wayland_verified_field_send_releases_modifiers_and_blocks_later_typing(
     adapter.last_verified = deepcopy(current)
     monkeypatch.setattr(accessibility, "read_snapshot", lambda _: current)
     calls = []
-    monkeypatch.setattr(desktop_input, "run", lambda args: calls.append(args))
+    monkeypatch.setattr(desktop_input, "run", calls.append)
     config = Config(
         delivery="wayland",
         paste_backend="wtype",
@@ -299,7 +303,6 @@ def test_spoken_send_refuses_caret_or_selection_changes_without_text_change(monk
 
 
 def test_cancel_during_slow_field_probe_is_checked_at_actual_send_boundary(monkeypatch):
-    import threading
 
     monkeypatch.setattr(desktop_input, "session", lambda: "wayland")
     target = field_target()
@@ -382,7 +385,7 @@ def test_explicit_send_only_uses_unchanged_captured_field_without_prior_insertio
     monkeypatch.setattr(accessibility, "read_snapshot", lambda _: current)
     adapter = delivery.Delivery()
     calls = []
-    monkeypatch.setattr(desktop_input, "run", lambda args: calls.append(args))
+    monkeypatch.setattr(desktop_input, "run", calls.append)
     config = Config(delivery="wayland", paste_backend="wtype", spoken_send="on")
     assert adapter.send_key(config, target, allow_without_insert=True) is (change is None)
     assert len(calls) == int(change is None)
@@ -413,8 +416,6 @@ def test_large_document_keeps_field_identity_with_bounded_window_but_refuses_who
 
 
 def test_native_wayland_metadata_reads_actual_compositor_ids(monkeypatch):
-    import json
-    from types import SimpleNamespace
 
     monkeypatch.setattr(desktop_input, "session", lambda: "wayland")
     tree = {
@@ -437,7 +438,7 @@ def test_wayland_container_spoken_send_rechecks_native_focus(monkeypatch):
     focus = iter(["sway:77", "sway:77"])
     monkeypatch.setattr(adapter, "focus", lambda: next(focus))
     calls = []
-    monkeypatch.setattr(desktop_input, "run", lambda args: calls.append(args))
+    monkeypatch.setattr(desktop_input, "run", calls.append)
     config = Config(
         delivery="wayland",
         paste_backend="wtype",

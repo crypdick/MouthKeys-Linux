@@ -54,9 +54,9 @@ def build_tiny(family, path):
     if family == "nemotron":
         build_tiny_nemotron(path)
         return
-    import torch
-    from tokenizers import Tokenizer, models, pre_tokenizers
-    from transformers import PreTrainedTokenizerFast
+    import torch  # noqa: PLC0415 - selected native engine only
+    from tokenizers import Tokenizer, models, pre_tokenizers  # noqa: PLC0415 - selected native engine only
+    from transformers import PreTrainedTokenizerFast  # noqa: PLC0415 - selected native engine only
 
     torch.manual_seed(1)
     tokens = tiny_fixture("qwen_cohere_tokens")
@@ -77,7 +77,7 @@ def build_tiny(family, path):
         },
     )
     if family == "qwen":
-        from transformers import (
+        from transformers import (  # noqa: PLC0415 - selected native engine only
             Qwen3ASRConfig,
             Qwen3ASREncoderConfig,
             Qwen3ASRFeatureExtractor,
@@ -115,7 +115,7 @@ def build_tiny(family, path):
         )
         model = Qwen3ASRForConditionalGeneration(config)
     else:
-        from transformers import (
+        from transformers import (  # noqa: PLC0415 - selected native engine only
             CohereAsrConfig,
             CohereAsrFeatureExtractor,
             CohereAsrForConditionalGeneration,
@@ -153,9 +153,9 @@ def build_tiny(family, path):
 
 def build_tiny_nemotron(path):
     """Exercise real RNNT durations with a tiny model, not recognition accuracy."""
-    import torch
-    from tokenizers import Tokenizer, decoders, models, pre_tokenizers
-    from transformers import (
+    import torch  # noqa: PLC0415 - selected native engine only
+    from tokenizers import Tokenizer, decoders, models, pre_tokenizers  # noqa: PLC0415 - selected native engine only
+    from transformers import (  # noqa: PLC0415 - selected native engine only
         NemotronAsrStreamingConfig,
         NemotronAsrStreamingEncoderConfig,
         NemotronAsrStreamingFeatureExtractor,
@@ -209,10 +209,10 @@ def build_tiny_nemotron(path):
 
 
 def build_tiny_nemo(path):
-    import sentencepiece as spm
-    import torch
-    from nemo.collections.asr.models import EncDecRNNTBPEModel
-    from omegaconf import OmegaConf
+    import sentencepiece as spm  # noqa: PLC0415 - selected native engine only
+    import torch  # noqa: PLC0415 - selected native engine only
+    from nemo.collections.asr.models import EncDecRNNTBPEModel  # noqa: PLC0415 - selected native engine only
+    from omegaconf import OmegaConf  # noqa: PLC0415 - selected native engine only
 
     torch.manual_seed(1)
     path.mkdir()
@@ -284,7 +284,7 @@ def main():
     args = parser.parse_args()
     # Import/build and worker execution are both offline, even if an installed
     # processor happens to attempt an auxiliary network request.
-    from mouthkeys.native_worker import isolate_network
+    from mouthkeys.native_worker import isolate_network  # noqa: PLC0415 - load inside the smoke run
 
     os.environ.update(
         HF_HUB_OFFLINE="1",
@@ -301,10 +301,10 @@ def main():
         raise ValueError("Weighted vocabulary smoke requires --engine nemo")
     if args.stream_repeat > 1 and not args.stream:
         raise ValueError("Repeated input requires --stream")
-    from mouthkeys.audio import read_audio_from
-    from mouthkeys.config import Config
-    from mouthkeys.native_asr import speech_spans
-    from mouthkeys.native_worker import NativeWorkerBackend
+    from mouthkeys.audio import read_audio_from  # noqa: PLC0415 - load inside the smoke run
+    from mouthkeys.config import Config  # noqa: PLC0415 - load inside the smoke run
+    from mouthkeys.native_asr import speech_spans  # noqa: PLC0415 - load inside the smoke run
+    from mouthkeys.native_worker import NativeWorkerBackend  # noqa: PLC0415 - load inside the smoke run
 
     audio = read_audio_from(args.fixture)
     if not speech_spans(audio):
@@ -326,7 +326,7 @@ def main():
         if args.build_tiny:
             build_tiny(args.build_tiny, args.artifact)
         if args.vocabulary_word:
-            from mouthkeys.vocabulary import VocabularyStore
+            from mouthkeys.vocabulary import VocabularyStore  # noqa: PLC0415 - load inside the smoke run
 
             VocabularyStore.save_entries(
                 [{"text": word, "weight": 8, "aliases": []} for word in args.vocabulary_word]
@@ -357,7 +357,7 @@ def main():
         greetings = {}
         try:
             if args.stream:
-                import numpy as np
+                import numpy as np  # noqa: PLC0415 - load inside the smoke run
 
                 stream_audio = audio
                 cuts = [len(audio) // 2]

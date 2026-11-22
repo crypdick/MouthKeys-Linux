@@ -1,6 +1,5 @@
 import io
 import os
-import pathlib
 import shutil
 import signal
 import subprocess
@@ -122,7 +121,7 @@ def test_recorder_uses_supervised_ffmpeg_and_finishes_wav(monkeypatch, tmp_path)
             assert before_input[before_input.index("-probesize") + 1] == "32"
             assert kwargs["stdin"] == subprocess.PIPE
             assert kwargs["start_new_session"]
-            self.stdin = pathlib.Path(os.devnull).open("wb")
+            self.stdin = io.BytesIO()
             self.pid = 999999
             with wave.open(str(tmp_path / "recording.wav"), "wb") as wav:
                 wav.setnchannels(1)
@@ -151,7 +150,7 @@ def test_recorder_requires_samples_before_reporting_ready(monkeypatch, tmp_path,
 
     class FakeProcess:
         def __init__(self, args, **kwargs):
-            self.stdin = pathlib.Path(os.devnull).open("wb")
+            self.stdin = io.BytesIO()
             self.pid = 999999
             self.errors = kwargs["stderr"]
             processes.append(self)

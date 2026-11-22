@@ -153,11 +153,10 @@ class Controller:
     def _locked_command(
         self, action: str, data: Mapping[str, object], focus_gate: FocusGate
     ) -> object:
-        if action == "status":
-            return self.status()
-        if action == "release_hold":
+        if action in ("status", "release_hold"):
             if (
-                self.job
+                action == "release_hold"
+                and self.job
                 and self.phase in ("starting", "recording", "switching")
                 and data.get("id") == self.job.item_id
             ):
@@ -175,9 +174,11 @@ class Controller:
             return result
         if self.interrupted:
             raise ValueError("Service is shutting down")
-        if action == "cancel":
-            return self._cancel_command()
-        if action == "stop":
+        if action in ("cancel", "stop"):
+            if data.get("id") is not None and (not self.job or data["id"] != self.job.item_id):
+                return self.status()
+            if action == "cancel":
+                return self._cancel_command()
             return self._stop_command(data, focus_gate)
         return self._idle_command(action)
 
@@ -205,8 +206,6 @@ class Controller:
         return self.status()
 
     def _stop_command(self, data: Mapping[str, object], focus_gate: FocusGate) -> dict[str, object]:
-        if data.get("id") is not None and (not self.job or data["id"] != self.job.item_id):
-            return self.status()
         if self.phase == "starting":
             self.job.cancelled = True
             self.job.cancel_event.set()

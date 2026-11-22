@@ -63,3 +63,14 @@ def test_cancel_cannot_claim_success_after_send_has_been_reserved():
         release.set()
         finish(controller)
     assert controller.history.rows()[0]["text"] == "Hello world"
+
+
+def test_targeted_cancel_ignores_retired_recording():
+    controller = app()
+    identity = controller.command("start")["id"]
+    assert controller.command("cancel", id="retired")["phase"] == "recording"
+    assert not controller.job.cancel_event.is_set()
+    controller.command("cancel", id=identity)
+    finish(controller)
+    assert controller.history.rows()[0]["status"] == "cancelled"
+    assert not controller.delivery.calls

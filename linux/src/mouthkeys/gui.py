@@ -190,7 +190,7 @@ class Window(QWidget):
         tabs.addWidget(self.setup_page)
         from .learning_ui import LearningPage
 
-        self.learning_page = LearningPage(self)
+        self.learning_page = LearningPage(self.send)
         self.dictionary_page.vocabulary_changed.connect(self.learning_page.refresh_words)
         learning_scroll = QScrollArea()
         learning_scroll.setWidgetResizable(True)

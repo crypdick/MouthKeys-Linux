@@ -1,7 +1,12 @@
 import numpy as np
 import pytest
 
-from mouthkeys.pronunciation import PronunciationStore, acoustic_distance, acoustic_features
+from mouthkeys.pronunciation import (
+    FEATURE_VERSION,
+    PronunciationStore,
+    acoustic_distance,
+    acoustic_features,
+)
 
 
 def utterance(base=150, seconds=0.8, speed=1, noise=0):
@@ -96,3 +101,40 @@ def test_invalid_labels_rejected_before_enrollment(label):
     with pytest.raises(ValueError, match="labels"):
         PronunciationStore.enroll(label, utterance())
     assert not PronunciationStore.path().exists()
+
+
+@pytest.mark.parametrize(
+    ("payload", "message"),
+    [
+        (None, "At most 50"),
+        ([{}], "Invalid pronunciation profile"),
+        ([{"label": "", "version": FEATURE_VERSION, "samples": []}], "printable characters"),
+        ([{"label": "Word", "version": "older", "samples": []}], "incompatible"),
+        ([{"label": "Word", "version": FEATURE_VERSION, "samples": []}], "1–10 samples"),
+        (
+            [{"label": "Word", "version": FEATURE_VERSION, "samples": [{}]}],
+            "Invalid pronunciation sample",
+        ),
+    ],
+)
+def test_invalid_pronunciation_profiles_do_not_replace_saved_data(payload, message):
+    valid = [
+        {
+            "label": "Valid",
+            "version": FEATURE_VERSION,
+            "samples": [{"duration": 0.5, "features": [[0.0] * 12]}],
+        },
+    ]
+    PronunciationStore.save(valid)
+    with pytest.raises(ValueError, match=message):
+        PronunciationStore.save(payload)
+    assert PronunciationStore.load() == valid
+
+
+def test_pronunciation_loader_checks_store_size_before_parsing():
+    path = PronunciationStore.path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("wb") as store:
+        store.truncate(16 * 1024 * 1024 + 1)
+    with pytest.raises(ValueError, match="exceeds 16 MiB"):
+        PronunciationStore.load()

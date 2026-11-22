@@ -202,26 +202,6 @@
 5	src/mouthkeys/lark.py	FBT003	Boolean positional value in function call
 1	src/mouthkeys/learning.py	PLR0911	Too many return statements (7 > 6)
 2	src/mouthkeys/learning.py	TRY004	Prefer `TypeError` exception for invalid type
-1	src/mouthkeys/learning_ui.py	ANN001	Missing type annotation for function argument `_checked`
-1	src/mouthkeys/learning_ui.py	ANN001	Missing type annotation for function argument `accept`
-1	src/mouthkeys/learning_ui.py	ANN001	Missing type annotation for function argument `entry`
-1	src/mouthkeys/learning_ui.py	ANN001	Missing type annotation for function argument `response`
-1	src/mouthkeys/learning_ui.py	ANN001	Missing type annotation for function argument `status`
-1	src/mouthkeys/learning_ui.py	ANN001	Missing type annotation for function argument `window`
-1	src/mouthkeys/learning_ui.py	ANN201	Missing return type annotation for public function `add_word`
-1	src/mouthkeys/learning_ui.py	ANN201	Missing return type annotation for public function `delete_pronunciation`
-1	src/mouthkeys/learning_ui.py	ANN201	Missing return type annotation for public function `enroll`
-1	src/mouthkeys/learning_ui.py	ANN201	Missing return type annotation for public function `refresh_profiles`
-1	src/mouthkeys/learning_ui.py	ANN201	Missing return type annotation for public function `refresh_words`
-1	src/mouthkeys/learning_ui.py	ANN201	Missing return type annotation for public function `remove_word`
-1	src/mouthkeys/learning_ui.py	ANN201	Missing return type annotation for public function `review`
-1	src/mouthkeys/learning_ui.py	ANN201	Missing return type annotation for public function `save_words`
-1	src/mouthkeys/learning_ui.py	ANN201	Missing return type annotation for public function `update_status`
-1	src/mouthkeys/learning_ui.py	ANN202	Missing return type annotation for private function `started`
-1	src/mouthkeys/learning_ui.py	ANN204	Missing return type annotation for special method `__init__`
-1	src/mouthkeys/learning_ui.py	FBT002	Boolean default positional argument in function definition
-2	src/mouthkeys/learning_ui.py	FBT003	Boolean positional value in function call
-5	src/mouthkeys/learning_ui.py	PLC0415	`import` should be at the top-level of a file
 1	src/mouthkeys/literal_formatting.py	FBT001	Boolean-typed positional argument in function definition
 3	src/mouthkeys/local_api.py	PLC0415	`import` should be at the top-level of a file
 1	src/mouthkeys/microphone_ui.py	ANN001	Missing type annotation for function argument `combo`
@@ -342,10 +322,9 @@
 1	src/mouthkeys/pronunciation.py	ANN001	Missing type annotation for function argument `candidate`
 1	src/mouthkeys/pronunciation.py	ANN001	Missing type annotation for function argument `end`
 1	src/mouthkeys/pronunciation.py	ANN001	Missing type annotation for function argument `enrolled`
-2	src/mouthkeys/pronunciation.py	ANN001	Missing type annotation for function argument `label`
+1	src/mouthkeys/pronunciation.py	ANN001	Missing type annotation for function argument `label`
 1	src/mouthkeys/pronunciation.py	ANN001	Missing type annotation for function argument `margin`
 1	src/mouthkeys/pronunciation.py	ANN001	Missing type annotation for function argument `max_seconds`
-2	src/mouthkeys/pronunciation.py	ANN001	Missing type annotation for function argument `profiles`
 1	src/mouthkeys/pronunciation.py	ANN001	Missing type annotation for function argument `start`
 1	src/mouthkeys/pronunciation.py	ANN001	Missing type annotation for function argument `store`
 1	src/mouthkeys/pronunciation.py	ANN001	Missing type annotation for function argument `text`
@@ -355,13 +334,8 @@
 1	src/mouthkeys/pronunciation.py	ANN202	Missing return type annotation for private function `close`
 1	src/mouthkeys/pronunciation.py	ANN202	Missing return type annotation for private function `read`
 1	src/mouthkeys/pronunciation.py	ANN204	Missing return type annotation for special method `__init__`
-1	src/mouthkeys/pronunciation.py	ANN205	Missing return type annotation for staticmethod `path`
-1	src/mouthkeys/pronunciation.py	ANN205	Missing return type annotation for staticmethod `validate`
-1	src/mouthkeys/pronunciation.py	ANN206	Missing return type annotation for classmethod `delete`
 1	src/mouthkeys/pronunciation.py	ANN206	Missing return type annotation for classmethod `enroll`
-1	src/mouthkeys/pronunciation.py	ANN206	Missing return type annotation for classmethod `load`
 1	src/mouthkeys/pronunciation.py	ANN206	Missing return type annotation for classmethod `match`
-1	src/mouthkeys/pronunciation.py	ANN206	Missing return type annotation for classmethod `save`
 1	src/mouthkeys/pronunciation.py	C901	`_correct_spans` is too complex (36 > 15)
 1	src/mouthkeys/pronunciation.py	PLC0415	`import` should be at the top-level of a file
 1	src/mouthkeys/pronunciation.py	PLR0912	Too many branches (36 > 12)

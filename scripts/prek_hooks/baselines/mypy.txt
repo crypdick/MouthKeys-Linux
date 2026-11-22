@@ -74,27 +74,14 @@
 1	src/mouthkeys/formatting.py	no-untyped-call	Call to untyped function "neighbor" in typed context
 6	src/mouthkeys/formatting.py	no-untyped-def	Function is missing a type annotation
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "AssistantPage" in typed context
-1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "LearningPage" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "MicrophonePage" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "ModelBrowser" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "SetupPage" in typed context
 2	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "preview_sound" in typed context
 2	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "save" in typed context
-3	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "update_status" in typed context
+2	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "update_status" in typed context
 4	src/mouthkeys/gui.py	no-untyped-def	Function is missing a return type annotation
 2	src/mouthkeys/gui.py	no-untyped-def	Function is missing a type annotation
-2	src/mouthkeys/learning_ui.py	attr-defined	"Callable[[], QWidget]" has no attribute "send"
-2	src/mouthkeys/learning_ui.py	attr-defined	"QWidget" has no attribute "text"
-1	src/mouthkeys/learning_ui.py	method-assign	Cannot assign to a method
-1	src/mouthkeys/learning_ui.py	no-untyped-call	Call to untyped function "add_word" in typed context
-1	src/mouthkeys/learning_ui.py	no-untyped-call	Call to untyped function "delete" of "PronunciationStore" in typed context
-1	src/mouthkeys/learning_ui.py	no-untyped-call	Call to untyped function "load" of "PronunciationStore" in typed context
-3	src/mouthkeys/learning_ui.py	no-untyped-call	Call to untyped function "refresh_profiles" in typed context
-2	src/mouthkeys/learning_ui.py	no-untyped-call	Call to untyped function "refresh_words" in typed context
-2	src/mouthkeys/learning_ui.py	no-untyped-call	Call to untyped function "review" in typed context
-6	src/mouthkeys/learning_ui.py	no-untyped-def	Function is missing a return type annotation
-5	src/mouthkeys/learning_ui.py	no-untyped-def	Function is missing a type annotation
-2	src/mouthkeys/learning_ui.py	union-attr	Item "None" of "QTableWidgetItem | None" has no attribute "text"
 1	src/mouthkeys/local_api.py	no-untyped-call	Call to untyped function "statistics" in typed context
 1	src/mouthkeys/local_api.py	no-untyped-call	Call to untyped function "transcribe_file" in typed context
 3	src/mouthkeys/microphone_ui.py	arg-type	Argument 1 to "append" of "list" has incompatible type "QPushButton"; expected "QComboBox"
@@ -144,11 +131,8 @@
 1	src/mouthkeys/operations.py	no-untyped-call	Call to untyped function "backup_export" in typed context
 1	src/mouthkeys/operations.py	no-untyped-call	Call to untyped function "backup_import" in typed context
 1	src/mouthkeys/operations.py	no-untyped-call	Call to untyped function "export" in typed context
-1	src/mouthkeys/operations.py	no-untyped-call	Call to untyped function "load" of "PronunciationStore" in typed context
 1	src/mouthkeys/operations.py	no-untyped-call	Call to untyped function "restore" in typed context
-1	src/mouthkeys/operations.py	no-untyped-call	Call to untyped function "save" of "PronunciationStore" in typed context
 1	src/mouthkeys/operations.py	no-untyped-call	Call to untyped function "statistics" in typed context
-1	src/mouthkeys/operations.py	no-untyped-call	Call to untyped function "validate" of "PronunciationStore" in typed context
 1	src/mouthkeys/operations.py	no-untyped-call	Call to untyped function "validate_entries" of "AssistantHistory" in typed context
 6	src/mouthkeys/operations.py	no-untyped-def	Function is missing a type annotation
 1	src/mouthkeys/operations.py	var-annotated	Need type annotation for "apps"
@@ -169,14 +153,10 @@
 1	src/mouthkeys/pronunciation.py	no-untyped-call	Call to untyped function "_correct_spans" in typed context
 1	src/mouthkeys/pronunciation.py	no-untyped-call	Call to untyped function "_span_distance" in typed context
 3	src/mouthkeys/pronunciation.py	no-untyped-call	Call to untyped function "close" in typed context
-3	src/mouthkeys/pronunciation.py	no-untyped-call	Call to untyped function "load" of "PronunciationStore" in typed context
 1	src/mouthkeys/pronunciation.py	no-untyped-call	Call to untyped function "match" of "PronunciationStore" in typed context
-2	src/mouthkeys/pronunciation.py	no-untyped-call	Call to untyped function "path" of "PronunciationStore" in typed context
 1	src/mouthkeys/pronunciation.py	no-untyped-call	Call to untyped function "read" in typed context
-2	src/mouthkeys/pronunciation.py	no-untyped-call	Call to untyped function "save" of "PronunciationStore" in typed context
-2	src/mouthkeys/pronunciation.py	no-untyped-call	Call to untyped function "validate" of "PronunciationStore" in typed context
-3	src/mouthkeys/pronunciation.py	no-untyped-def	Function is missing a return type annotation
-9	src/mouthkeys/pronunciation.py	no-untyped-def	Function is missing a type annotation
+1	src/mouthkeys/pronunciation.py	no-untyped-def	Function is missing a return type annotation
+6	src/mouthkeys/pronunciation.py	no-untyped-def	Function is missing a type annotation
 1	src/mouthkeys/pronunciation.py	var-annotated	Need type annotation for "chosen" (hint: "chosen: list[<type>] = ...")
 1	src/mouthkeys/provider_tools.py	no-untyped-call	Call to untyped function "_completion" in typed context
 1	src/mouthkeys/provider_tools.py	no-untyped-call	Call to untyped function "_request_payload" in typed context

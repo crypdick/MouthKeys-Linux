@@ -73,7 +73,7 @@ patch = ["subprocess"]
 
 [tool.coverage.report]
 # Headless baseline. Raise as coverage improves; hardware checks are tracked in PARITY.md.
-fail_under = 97.3
+fail_under = 97.6
 precision = 2
 skip_empty = true
 

@@ -71,6 +71,8 @@ reply before stopping the server.
   Transcript history (`history_ui`), activity (`stats_view`), backup review (`backup_ui`), and
   diagnostics (`help_ui`) own their Settings pages. `dictionary_ui` owns editing and voice training
   drafts; saving compares the editor's snapshot under the same lock used to write the dictionary.
+  `learning_ui` sends take controls for its acknowledged recording only. Vocabulary writes compare
+  the editor snapshot under the same lock used by automatic learning.
   Settings waits for backup previews and reviews before closing. `prompt_profiles_ui` owns the
   profile editor, application overrides, and draft prompt tests. Recorded tests keep the draft
   that was active when recording started and never enter the desktop delivery path.

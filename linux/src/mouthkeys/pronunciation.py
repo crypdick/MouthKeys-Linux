@@ -26,11 +26,11 @@ _LOCK = threading.RLock()
 
 class PronunciationStore:
     @staticmethod
-    def path():
+    def path() -> Path:
         return config_path().with_name("pronunciations.json")
 
     @staticmethod
-    def validate(profiles):
+    def validate(profiles: object) -> list[dict[str, Any]]:
         if not isinstance(profiles, list) or len(profiles) > 50:
             raise ValueError("At most 50 pronunciation phrases can be enrolled")
         seen = set()
@@ -70,7 +70,7 @@ class PronunciationStore:
         return profiles
 
     @classmethod
-    def load(cls):
+    def load(cls) -> list[dict[str, Any]]:
         with _LOCK:
             path = cls.path()
             if not path.exists():
@@ -80,13 +80,13 @@ class PronunciationStore:
             return cls.validate(json.loads(path.read_text()))
 
     @classmethod
-    def save(cls, profiles):
+    def save(cls, profiles: object) -> list[dict[str, Any]]:
         with _LOCK:
-            cls.validate(profiles)
+            validated = cls.validate(profiles)
             path = cls.path()
             private_dir(path.parent)
-            write_private(path, json.dumps(profiles, ensure_ascii=False).encode())
-            return profiles
+            write_private(path, json.dumps(validated, ensure_ascii=False).encode())
+            return validated
 
     @classmethod
     def enroll(cls, label, audio):
@@ -120,7 +120,7 @@ class PronunciationStore:
             }
 
     @classmethod
-    def delete(cls, label):
+    def delete(cls, label: str) -> list[dict[str, Any]]:
         with _LOCK:
             return cls.save(
                 [item for item in cls.load() if item["label"].casefold() != label.casefold()]

@@ -110,8 +110,14 @@ class VocabularyStore:
         return [entry["text"] for entry in cls.entries()]
 
     @classmethod
-    def save_entries(cls, entries: object) -> list[VocabularyEntry]:
+    def save_entries(
+        cls, entries: object, *, expected: list[VocabularyEntry] | None = None
+    ) -> list[VocabularyEntry]:
         with dictionary_lock():
+            if expected is not None and cls.entries() != expected:
+                raise ValueError(
+                    "Vocabulary changed (possibly learned a correction). Refresh before saving."
+                )
             cleaned = cls.validate_entries(entries)
             path = cls.path()
             private_dir(path.parent)

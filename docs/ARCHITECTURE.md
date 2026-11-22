@@ -21,7 +21,9 @@ then dispatches local work or uses `control` to contact the private Unix socket 
   `desktop_input` probes compositor window identity and runs clipboard and keyboard commands.
   `delivery` decides whether to use those commands and rechecks the destination before sending.
   Cancellation before delivery wins; unverified destination identity falls back to copy.
-  `recording_cleanup` runs configured AI cleanup with the recording's cancellation event.
+  `recording_transcript` prepares dictated text for delivery: pronunciation, Spoken Send parsing,
+  and local formatting. `recording_cleanup` runs configured AI cleanup with the recording's
+  cancellation event.
   `recording_delivery` receives committed text and owns the cancellable Spoken Send review
   window. The key reservation uses the same lock as cancel and new-recording commands.
   `recording_edit` validates captured selection evidence and reserves replacement once for

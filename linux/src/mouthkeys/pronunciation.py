@@ -12,6 +12,7 @@ import threading
 import time
 import wave
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 
@@ -145,7 +146,15 @@ class PronunciationStore:
         return {"label": label, "confidence": round(1 - distance, 4), "distance": distance}
 
     @classmethod
-    def correct_spans(cls, text, audio, alignment, *, budget=2000, max_seconds=2.0):
+    def correct_spans(
+        cls,
+        text: str,
+        audio: object,
+        alignment: object,
+        *,
+        budget: object = 2000,
+        max_seconds: object = 2.0,
+    ) -> dict[str, Any]:
         """Correct bounded, real word-timed spans without rewriting their neighbors.
 
         `alignment` contains exact `text`, `source` (recording path), and actual
@@ -160,10 +169,13 @@ class PronunciationStore:
         `truncated` explicitly reports incomplete coverage. Alignment/source
         mismatches fail closed and leave the transcript unchanged.
         """
-        return _correct_spans(cls, text, audio, alignment, budget=budget, max_seconds=max_seconds)
+        result: dict[str, Any] = _correct_spans(
+            cls, text, audio, alignment, budget=budget, max_seconds=max_seconds
+        )
+        return result
 
     @classmethod
-    def correct(cls, text, audio):
+    def correct(cls, text: str, audio: object) -> str:
         # Never replace a sentence/paragraph using an isolated-phrase matcher.
         if not text.strip() or len(text.split()) > 5 or len(text) > 128:
             return text
@@ -171,7 +183,8 @@ class PronunciationStore:
             match = cls.match(audio)
         except ValueError:
             return text  # Long/no-speech captures are outside this matcher's contract.
-        return match["label"] if match else text
+        corrected: str = match["label"] if match else text
+        return corrected
 
 
 class _AudioWindow:

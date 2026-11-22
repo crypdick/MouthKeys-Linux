@@ -312,23 +312,16 @@
 1	src/mouthkeys/forced_alignment.py	ANN202	Missing return type annotation for private function `_words`
 1	src/mouthkeys/forced_alignment.py	ANN204	Missing return type annotation for special method `__init__`
 4	src/mouthkeys/forced_alignment.py	PLC0415	`import` should be at the top-level of a file
-1	src/mouthkeys/formatting.py	ANN001	Missing type annotation for function argument `app_id`
-1	src/mouthkeys/formatting.py	ANN001	Missing type annotation for function argument `app_name`
 1	src/mouthkeys/formatting.py	ANN001	Missing type annotation for function argument `at`
-1	src/mouthkeys/formatting.py	ANN001	Missing type annotation for function argument `config`
-1	src/mouthkeys/formatting.py	ANN001	Missing type annotation for function argument `context`
 1	src/mouthkeys/formatting.py	ANN001	Missing type annotation for function argument `data`
-1	src/mouthkeys/formatting.py	ANN001	Missing type annotation for function argument `dictionary`
 1	src/mouthkeys/formatting.py	ANN001	Missing type annotation for function argument `direction`
 1	src/mouthkeys/formatting.py	ANN001	Missing type annotation for function argument `literal_prefix`
 1	src/mouthkeys/formatting.py	ANN001	Missing type annotation for function argument `prefix`
 1	src/mouthkeys/formatting.py	ANN001	Missing type annotation for function argument `rule`
-5	src/mouthkeys/formatting.py	ANN001	Missing type annotation for function argument `text`
+4	src/mouthkeys/formatting.py	ANN001	Missing type annotation for function argument `text`
 1	src/mouthkeys/formatting.py	ANN001	Missing type annotation for function argument `upper`
-1	src/mouthkeys/formatting.py	ANN001	Missing type annotation for function argument `window_title`
 1	src/mouthkeys/formatting.py	ANN201	Missing return type annotation for public function `apply_question_mark_shortcut`
 1	src/mouthkeys/formatting.py	ANN201	Missing return type annotation for public function `apply_spoken_punctuation`
-1	src/mouthkeys/formatting.py	ANN201	Missing return type annotation for public function `format_text`
 1	src/mouthkeys/formatting.py	ANN202	Missing return type annotation for private function `_ending_question`
 1	src/mouthkeys/formatting.py	ANN202	Missing return type annotation for private function `_first_letter_case`
 1	src/mouthkeys/formatting.py	ANN202	Missing return type annotation for private function `_punctuation_spacing`
@@ -586,19 +579,19 @@
 4	src/mouthkeys/profiles.py	PLC0415	`import` should be at the top-level of a file
 1	src/mouthkeys/profiles.py	PLR0912	Too many branches (22 > 12)
 2	src/mouthkeys/profiles.py	TRY004	Prefer `TypeError` exception for invalid type
-2	src/mouthkeys/pronunciation.py	ANN001	Missing type annotation for function argument `alignment`
-6	src/mouthkeys/pronunciation.py	ANN001	Missing type annotation for function argument `audio`
-2	src/mouthkeys/pronunciation.py	ANN001	Missing type annotation for function argument `budget`
+1	src/mouthkeys/pronunciation.py	ANN001	Missing type annotation for function argument `alignment`
+4	src/mouthkeys/pronunciation.py	ANN001	Missing type annotation for function argument `audio`
+1	src/mouthkeys/pronunciation.py	ANN001	Missing type annotation for function argument `budget`
 1	src/mouthkeys/pronunciation.py	ANN001	Missing type annotation for function argument `candidate`
 1	src/mouthkeys/pronunciation.py	ANN001	Missing type annotation for function argument `end`
 1	src/mouthkeys/pronunciation.py	ANN001	Missing type annotation for function argument `enrolled`
 2	src/mouthkeys/pronunciation.py	ANN001	Missing type annotation for function argument `label`
 1	src/mouthkeys/pronunciation.py	ANN001	Missing type annotation for function argument `margin`
-2	src/mouthkeys/pronunciation.py	ANN001	Missing type annotation for function argument `max_seconds`
+1	src/mouthkeys/pronunciation.py	ANN001	Missing type annotation for function argument `max_seconds`
 2	src/mouthkeys/pronunciation.py	ANN001	Missing type annotation for function argument `profiles`
 1	src/mouthkeys/pronunciation.py	ANN001	Missing type annotation for function argument `start`
 1	src/mouthkeys/pronunciation.py	ANN001	Missing type annotation for function argument `store`
-3	src/mouthkeys/pronunciation.py	ANN001	Missing type annotation for function argument `text`
+1	src/mouthkeys/pronunciation.py	ANN001	Missing type annotation for function argument `text`
 1	src/mouthkeys/pronunciation.py	ANN001	Missing type annotation for function argument `threshold`
 1	src/mouthkeys/pronunciation.py	ANN202	Missing return type annotation for private function `_correct_spans`
 1	src/mouthkeys/pronunciation.py	ANN202	Missing return type annotation for private function `_span_distance`
@@ -607,8 +600,6 @@
 1	src/mouthkeys/pronunciation.py	ANN204	Missing return type annotation for special method `__init__`
 1	src/mouthkeys/pronunciation.py	ANN205	Missing return type annotation for staticmethod `path`
 1	src/mouthkeys/pronunciation.py	ANN205	Missing return type annotation for staticmethod `validate`
-1	src/mouthkeys/pronunciation.py	ANN206	Missing return type annotation for classmethod `correct_spans`
-1	src/mouthkeys/pronunciation.py	ANN206	Missing return type annotation for classmethod `correct`
 1	src/mouthkeys/pronunciation.py	ANN206	Missing return type annotation for classmethod `delete`
 1	src/mouthkeys/pronunciation.py	ANN206	Missing return type annotation for classmethod `enroll`
 1	src/mouthkeys/pronunciation.py	ANN206	Missing return type annotation for classmethod `load`
@@ -663,11 +654,11 @@
 1	src/mouthkeys/service.py	ANN202	Missing return type annotation for private function `_wait_for_predecessors`
 1	src/mouthkeys/service.py	ANN202	Missing return type annotation for private function `_warmup`
 1	src/mouthkeys/service.py	ANN204	Missing return type annotation for special method `__init__`
-1	src/mouthkeys/service.py	C901	`_finish` is too complex (42 > 15)
+1	src/mouthkeys/service.py	C901	`_finish` is too complex (33 > 15)
 5	src/mouthkeys/service.py	PLC0415	`import` should be at the top-level of a file
 1	src/mouthkeys/service.py	PLR0911	Too many return statements (12 > 6)
-1	src/mouthkeys/service.py	PLR0912	Too many branches (46 > 12)
-1	src/mouthkeys/service.py	PLR0915	Too many statements (144 > 50)
+1	src/mouthkeys/service.py	PLR0912	Too many branches (36 > 12)
+1	src/mouthkeys/service.py	PLR0915	Too many statements (124 > 50)
 1	src/mouthkeys/service.py	SIM105	Use `contextlib.suppress(Exception)` instead of `try`-`except`-`pass`
 1	src/mouthkeys/setup_languages.py	ANN001	Missing type annotation for function argument `engine`
 1	src/mouthkeys/setup_languages.py	ANN001	Missing type annotation for function argument `label`

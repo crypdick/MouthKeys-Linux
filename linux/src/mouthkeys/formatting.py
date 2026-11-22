@@ -8,6 +8,7 @@ No desktop effects here.
 import re
 import unicodedata
 
+from .config import Config
 from .dictionary import Dictionary, phrase_pattern
 from .format_whitespace import NEWLINES, horizontal, rstrip_horizontal
 from .literal_formatting import apply_literal_formatting as apply_literal_formatting
@@ -76,8 +77,15 @@ def apply_question_mark_shortcut(text, literal_prefix="literal"):
 
 
 def format_text(
-    text, config, dictionary=None, context=None, *, app_name=None, app_id=None, window_title=None
-):
+    text: str,
+    config: Config,
+    dictionary: object = None,
+    context: str | None = None,
+    *,
+    app_name: str | None = None,
+    app_id: str | None = None,
+    window_title: str | None = None,
+) -> str:
     app_context = dict(app_name=app_name, app_id=app_id, window_title=window_title)
     if enabled(config, "vocabulary_boosting"):
         from .vocabulary import VocabularyStore

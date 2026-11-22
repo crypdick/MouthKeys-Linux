@@ -11,13 +11,13 @@ from .audio import CaptureSession, CaptureTeardownError, check_audio, is_short_s
 from .config import Config, private_dir, runtime_dir
 from .delivery import Delivery, Target
 from .desktop import MediaSession, choose_source, play_sound
-from .formatting import enabled, format_text, parse_send
+from .formatting import enabled
 from .microphone import MicrophoneSelection, Recording, SwitchOutcome, selection
 from .profiles import PromptProfile
 from .pronunciation import PronunciationStore
 from .recording_assistant import InlineContext, RecordingAssistant, inline_context
 from .recording_cleanup import cleanup_transcript
-from .recording_delivery import DeliveryRequest, RecordingDelivery
+from .recording_delivery import DeliveryRequest, RecordingDelivery, delivery_message
 from .recording_destination import snapshot_for_stop
 from .recording_edit import (
     EditReplacement,
@@ -29,6 +29,7 @@ from .recording_edit import (
 from .recording_job import DictationJob, recording_input
 from .recording_learning import RecordingLearning
 from .recording_preview import PreviewWork, RecordingPreview, reset_owned_stream
+from .recording_transcript import format_dictation
 from .routing import PromptRoute
 from .storage import History
 from .transcribe import Transcriber
@@ -773,9 +774,8 @@ class Controller:
     ) -> None:
         text = ""
         alignment = None
-        pronunciation_warning = ""
         ai_warning = ""
-        assistant_error = ""
+        assistant_error: str | None = None
         config = job.config
         path = job.audio_path
         try:
@@ -865,42 +865,10 @@ class Controller:
                 text = proposal["text"]
                 self._publish_proposal(job, config, proposal, ai_warning)
                 return
-            if enabled(config, "pronunciation_matching"):
-                if isinstance(alignment, dict) and alignment.get("words"):
-                    correction = PronunciationStore.correct_spans(
-                        text, path, alignment, budget=config.pronunciation_span_budget
-                    )
-                    text = correction["text"]
-                    if correction.get("truncated"):
-                        pronunciation_warning = (
-                            "Pronunciation matching budget reached; unmatched ASR text retained"
-                        )
-                    elif correction.get("skipped_reason"):
-                        pronunciation_warning = (
-                            f"Pronunciation spans skipped: {correction['skipped_reason']}"
-                        )
-                else:
-                    text = PronunciationStore.correct(text, path)
-                if isinstance(alignment, dict) and alignment.get("warning"):
-                    pronunciation_warning = ". ".join(
-                        warning
-                        for warning in (pronunciation_warning, alignment["warning"])
-                        if warning
-                    )
-            plan = parse_send(
-                text,
-                config.spoken_send_phrase,
-                active=enabled(config, "spoken_send") and target is not None,
-                literal_prefix=config.literal_prefix,
+            formatted = format_dictation(
+                job, config, text, alignment, has_target=target is not None
             )
-            text = format_text(
-                plan.text,
-                config,
-                context=job.context,
-                app_name=job.metadata.get("app", ""),
-                app_id=job.metadata.get("app_id", job.metadata.get("app", "")),
-                window_title=job.metadata.get("window", ""),
-            )
+            text = formatted.text
             cleanup = cleanup_transcript(
                 text, config, job.cancel_event, lambda partial: self._publish_cleanup(job, partial)
             )
@@ -930,42 +898,24 @@ class Controller:
                     ai_processing_model=config.ai_model if cleanup.applied else "",
                 )
                 self._job_status(job, "delivering", "Delivering transcript")
-            outcome = self.recording_delivery.deliver(
-                job, DeliveryRequest(text, config, target, auto_paste_expected, plan.should_send)
+            request = DeliveryRequest(
+                text, config, target, auto_paste_expected, formatted.should_send
             )
-            result, paste_warning, send_warning = (
-                outcome.status,
-                outcome.paste_warning,
-                outcome.send_warning,
-            )
+            outcome = self.recording_delivery.deliver(job, request)
             with self.lock:
                 if self.interrupted:
                     return
-                self._update(job, result, text, error=send_warning)
-                message = (
-                    "Send requested — no text inserted"
-                    if result == "send_requested"
-                    else "No text to deliver"
-                    if not text
-                    else "Copied — paste into your app"
-                    if result == "copied"
-                    else (
-                        "Insertion requested — transcript saved in history"
-                        if config.save_history == "on"
-                        else "Insertion requested — history disabled"
-                    )
+                self._update(job, outcome.status, text, error=outcome.send_warning)
+                message = delivery_message(request, outcome)
+                if outcome.paste_warning and self.job is job and not ai_warning:
+                    self.report_error(message, kind="paste")
+                notices = (
+                    message,
+                    ai_warning,
+                    formatted.pronunciation_warning,
+                    outcome.send_warning,
                 )
-                if paste_warning:
-                    message = f"Copied — auto-paste skipped. {paste_warning}"
-                    if self.job is job and not ai_warning:
-                        self.report_error(message, kind="paste")
-                if ai_warning:
-                    message += f". {ai_warning}"
-                if pronunciation_warning:
-                    message += f". {pronunciation_warning}"
-                if send_warning:
-                    message += f". {send_warning}"
-                self._job_status(job, "idle", message)
+                self._job_status(job, "idle", ". ".join(filter(None, notices)))
         # The job or IPC response reports the failure; avoid duplicating private data in logs.
         except Exception as exc:  # allow: exception-handling  # noqa: BLE001
             with self.lock:
@@ -978,7 +928,7 @@ class Controller:
                 else:
                     if self.job is job:
                         self.preview_text = text
-                        if job.mode in ("command", "edit"):
+                        if assistant_error is not None:
                             self.report_error(f"AI {job.mode} request failed: {exc}", kind="ai")
                     self._update(
                         job,

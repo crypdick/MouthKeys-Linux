@@ -5,7 +5,7 @@ from dataclasses import asdict, replace
 
 import pytest
 
-from mouthkeys import assistance
+from mouthkeys import assistance, routing
 from mouthkeys.config import Config
 from mouthkeys.learning import CorrectionLearner
 from mouthkeys.profiles import PROFILE_FIELDS, save_profiles
@@ -146,6 +146,25 @@ def test_voice_command_cancel_event_interrupts_provider_without_late_proposal(mo
     assert app.assistant_proposal is None
     assert app.history.rows()[0]["status"] == "cancelled"
     assert not app.delivery.calls
+
+
+def test_prompt_routing_failure_keeps_local_dictation(monkeypatch):
+    Config(ai_enabled="on", ai_model="model", lowercase_first="on").save()
+    app = controller("Local text")
+
+    def broken_route(*args, **kwargs):
+        raise ValueError("Profile not available")
+
+    monkeypatch.setattr(routing, "select_prompt", broken_route)
+    app.command("start")
+    app.command("stop")
+    finish(app)
+    row = app.history.rows()[0]
+    warning = "Prompt routing failed (Profile not available); using original transcription"
+    assert (row["raw_text"], row["text"]) == ("Local text", "local text")
+    assert row["was_ai_processed"] == 0
+    assert row["ai_processing_error"] == warning
+    assert app.status()["notice"]["message"] == warning
 
 
 def test_return_to_start_captures_start_even_with_stop_policy():

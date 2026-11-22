@@ -297,7 +297,7 @@ def test_real_synthetic_ffmpeg_switch_keeps_both_sources(monkeypatch, tmp_path):
         return popen(args, **kwargs)
 
     monkeypatch.setattr(subprocess, "Popen", synthetic)
-    monkeypatch.setattr("mouthkeys.audio.bluetooth_capture_ready", lambda _: True)
+    monkeypatch.setattr("mouthkeys.capture_recorder.bluetooth_capture_ready", lambda _: True)
     path = tmp_path / "recording.wav"
     session = CaptureSession(Config(audio_source="first"), path, recorder=Recorder)
     try:

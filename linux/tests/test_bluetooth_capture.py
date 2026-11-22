@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from mouthkeys import audio
+from mouthkeys import capture_readiness, capture_recorder
 
 
 def node(name, **props):
@@ -27,13 +27,13 @@ def test_virtual_bluetooth_input_waits_for_physical_capture(monkeypatch):
             )
         return SimpleNamespace(stdout=json.dumps(nodes))
 
-    monkeypatch.setattr(audio.subprocess, "run", run)
-    assert not audio.bluetooth_capture_ready(source)
+    monkeypatch.setattr(capture_readiness.subprocess, "run", run)
+    assert not capture_readiness.bluetooth_capture_ready(source)
     nodes.append(target)
     target["info"]["state"] = "suspended"
-    assert not audio.bluetooth_capture_ready(source)
+    assert not capture_readiness.bluetooth_capture_ready(source)
     target["info"]["state"] = "running"
-    assert audio.bluetooth_capture_ready(source)
+    assert capture_readiness.bluetooth_capture_ready(source)
     assert ["pw-dump", "Node"] in calls
 
 
@@ -53,22 +53,24 @@ def test_default_bluetooth_source_is_resolved(monkeypatch):
             )
         )
 
-    monkeypatch.setattr(audio.subprocess, "run", run)
-    assert not audio.bluetooth_capture_ready("default")
+    monkeypatch.setattr(capture_readiness.subprocess, "run", run)
+    assert not capture_readiness.bluetooth_capture_ready("default")
 
 
 def test_non_bluetooth_input_needs_no_graph_probe(monkeypatch):
-    monkeypatch.setattr(audio.subprocess, "run", lambda *a, **kw: pytest.fail("Graph probe"))
-    assert audio.bluetooth_capture_ready("alsa_input.test")
+    monkeypatch.setattr(
+        capture_readiness.subprocess, "run", lambda *a, **kw: pytest.fail("Graph probe")
+    )
+    assert capture_readiness.bluetooth_capture_ready("alsa_input.test")
 
 
 def test_graph_failure_does_not_report_bluetooth_ready(monkeypatch):
     def run(*a, **kw):
-        raise audio.subprocess.TimeoutExpired("pw-dump", 0.5)
+        raise capture_readiness.subprocess.TimeoutExpired("pw-dump", 0.5)
 
-    monkeypatch.setattr(audio.subprocess, "run", run)
+    monkeypatch.setattr(capture_readiness.subprocess, "run", run)
     with pytest.raises(RuntimeError, match="Bluetooth"):
-        audio.bluetooth_capture_ready("bluez_input.test")
+        capture_readiness.bluetooth_capture_ready("bluez_input.test")
 
 
 @pytest.mark.parametrize("becomes_ready", [True, False])
@@ -105,19 +107,19 @@ def test_recorder_waits_for_bluetooth_even_when_virtual_samples_exist(
         nonlocal elapsed
         elapsed += seconds
 
-    monkeypatch.setattr(audio.subprocess, "Popen", Process)
-    monkeypatch.setattr(audio.time, "monotonic", lambda: elapsed)
-    monkeypatch.setattr(audio.time, "sleep", advance)
+    monkeypatch.setattr(capture_readiness.subprocess, "Popen", Process)
+    monkeypatch.setattr(capture_recorder.time, "monotonic", lambda: elapsed)
+    monkeypatch.setattr(capture_recorder.time, "sleep", advance)
     monkeypatch.setattr(
-        audio, "bluetooth_capture_ready", lambda _: becomes_ready and elapsed >= 1.5
+        capture_recorder, "bluetooth_capture_ready", lambda _: becomes_ready and elapsed >= 1.5
     )
     if becomes_ready:
-        recorder = audio.Recorder(Config(audio_source="bluez_input.test"), path)
+        recorder = capture_recorder.Recorder(Config(audio_source="bluez_input.test"), path)
         assert elapsed >= 1.5
         recorder.stop()
     else:
         with pytest.raises(RuntimeError, match="become ready"):
-            audio.Recorder(Config(audio_source="bluez_input.test"), path)
+            capture_recorder.Recorder(Config(audio_source="bluez_input.test"), path)
         assert elapsed <= 5.1
     assert processes[0].stdin.closed
 
@@ -127,8 +129,8 @@ def test_native_bluetooth_does_not_require_local_pipewire_graph(monkeypatch):
         assert args == ["pactl", "-f", "json", "list", "sources"]
         return SimpleNamespace(stdout=json.dumps([{"name": "bluez_input.test", "properties": {}}]))
 
-    monkeypatch.setattr(audio.subprocess, "run", run)
-    assert audio.bluetooth_capture_ready("bluez_input.test")
+    monkeypatch.setattr(capture_readiness.subprocess, "run", run)
+    assert capture_readiness.bluetooth_capture_ready("bluez_input.test")
 
 
 def test_virtual_bluetooth_missing_graph_tool_fails_clearly(monkeypatch):
@@ -141,6 +143,60 @@ def test_virtual_bluetooth_missing_graph_tool_fails_clearly(monkeypatch):
             )
         raise FileNotFoundError("pw-dump")
 
-    monkeypatch.setattr(audio.subprocess, "run", run)
+    monkeypatch.setattr(capture_readiness.subprocess, "run", run)
     with pytest.raises(RuntimeError, match="Bluetooth"):
-        audio.bluetooth_capture_ready("bluez_input.test")
+        capture_readiness.bluetooth_capture_ready("bluez_input.test")
+
+
+def test_malformed_bluetooth_snapshot_gives_readiness_error(monkeypatch):
+    monkeypatch.setattr(
+        capture_readiness.subprocess,
+        "run",
+        lambda *_args, **_opts: SimpleNamespace(stdout='{"unexpected": 1}'),
+    )
+    with pytest.raises(RuntimeError, match="Cannot verify Bluetooth microphone"):
+        capture_readiness.bluetooth_capture_ready("bluez_input.test")
+
+
+def test_default_lookup_failure_preserves_normal_capture_readiness(monkeypatch):
+    def run(args, **_options):
+        assert args == ["pactl", "get-default-source"]
+        raise FileNotFoundError("pactl")
+
+    monkeypatch.setattr(capture_readiness.subprocess, "run", run)
+    assert capture_readiness.bluetooth_capture_ready("default")
+
+
+@pytest.mark.parametrize(
+    ("graph", "ready"),
+    [
+        (None, False),
+        ([None, {"info": None}, node("unrelated")], False),
+        ([node("bluez_input.test")], True),
+        ([node("bluez_input.test", **{"bluez5.loopback": True})], False),
+    ],
+)
+def test_missing_or_changed_bluetooth_nodes_are_handled(monkeypatch, graph, ready):
+    def run(args, **_options):
+        if args[0] == "pactl":
+            payload = (
+                []
+                if graph is None
+                else [{"name": "bluez_input.test", "properties": {"bluez5.loopback": True}}]
+            )
+        else:
+            assert graph is not None
+            payload = graph
+        return SimpleNamespace(stdout=json.dumps(payload))
+
+    monkeypatch.setattr(capture_readiness.subprocess, "run", run)
+    assert capture_readiness.bluetooth_capture_ready("bluez_input.test") is ready
+
+
+def test_invalid_properties_do_not_mark_physical_capture_ready(monkeypatch):
+    def run(_args, **_options):
+        return SimpleNamespace(stdout='[{"name":"bluez_input.test","properties":[]}]')
+
+    monkeypatch.setattr(capture_readiness.subprocess, "run", run)
+    with pytest.raises(RuntimeError, match="Cannot verify Bluetooth microphone"):
+        capture_readiness.bluetooth_capture_ready("bluez_input.test")

@@ -12,11 +12,13 @@ from types import SimpleNamespace
 import pytest
 
 from mouthkeys import capture
+from mouthkeys.audio import Recorder
+from mouthkeys.config import Config
 
 
 @pytest.fixture(autouse=True)
 def fake_bluetooth_readiness(monkeypatch):
-    monkeypatch.setattr("mouthkeys.audio.bluetooth_capture_ready", lambda _: True)
+    monkeypatch.setattr("mouthkeys.capture_recorder.bluetooth_capture_ready", lambda _: True)
 
 
 def test_supervisor_passes_through_completed_child_status_without_signalling(monkeypatch):
@@ -109,9 +111,6 @@ def test_capture_lifeline_stops_child_on_stop_or_daemon_death(tmp_path, crash):
 
 
 def test_recorder_uses_supervised_ffmpeg_and_finishes_wav(monkeypatch, tmp_path):
-    from mouthkeys.audio import Recorder
-    from mouthkeys.config import Config
-
     class FakeProcess:
         def __init__(self, args, **kwargs):
             assert args[1:5] == ["-P", "-m", "mouthkeys.capture", "ffmpeg"]
@@ -146,9 +145,6 @@ def test_recorder_uses_supervised_ffmpeg_and_finishes_wav(monkeypatch, tmp_path)
 
 @pytest.mark.parametrize("outcome", ["ready", "exit", "stall"])
 def test_recorder_requires_samples_before_reporting_ready(monkeypatch, tmp_path, outcome):
-    from mouthkeys.audio import Recorder
-    from mouthkeys.config import Config
-
     path = tmp_path / "recording.wav"
     elapsed = 0
     processes = []
@@ -202,9 +198,6 @@ def test_recorder_requires_samples_before_reporting_ready(monkeypatch, tmp_path,
 
 @pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="FFmpeg is not installed")
 def test_ffmpeg_startup_streams_audio_and_preserves_first_buffer(monkeypatch, tmp_path):
-    from mouthkeys.audio import Recorder
-    from mouthkeys.config import Config
-
     raw = tmp_path / "source.pcm"
     first_buffer = b"\x34\x12" * 320
     raw.write_bytes(first_buffer + bytes(4 * 16000 * 2))
@@ -236,3 +229,97 @@ def test_ffmpeg_startup_streams_audio_and_preserves_first_buffer(monkeypatch, tm
         recorder.stop()
     with wave.open(str(path), "rb") as wav:
         assert wav.readframes(320) == first_buffer
+
+
+def test_recorder_reaps_process_that_exits_while_escalating_stop(monkeypatch, tmp_path):
+    path = tmp_path / "race.wav"
+    with wave.open(str(path), "wb") as wav:
+        wav.setparams((1, 2, 16000, 0, "NONE", "not compressed"))
+        wav.writeframes(bytes(640))
+    waits = []
+
+    def wait(timeout):
+        waits.append(timeout)
+        if len(waits) == 1:
+            raise subprocess.TimeoutExpired("capture", timeout)
+        return 0
+
+    def exited(_pid, _signal):
+        raise ProcessLookupError("Capture exited")
+
+    process = SimpleNamespace(stdin=io.BytesIO(), pid=999999, poll=lambda: None, wait=wait)
+    monkeypatch.setattr(subprocess, "Popen", lambda *_args, **_opts: process)
+    monkeypatch.setattr(os, "killpg", exited)
+    recorder = Recorder(Config(), path)
+    recorder.stop()
+    assert waits == [4, 3]
+    assert process.stdin.closed
+    assert recorder.errors.closed
+
+
+def test_cancelled_start_still_reaps_and_closes_the_error_stream(monkeypatch, tmp_path):
+    pipe = io.BytesIO()
+    waits = []
+    captured = []
+
+    def wait(timeout):
+        waits.append(timeout)
+        if len(waits) == 1:
+            raise subprocess.TimeoutExpired("capture", timeout)
+        return -signal.SIGKILL
+
+    def spawn(_args, **options):
+        captured.append(options["stderr"])
+        return SimpleNamespace(stdin=pipe, pid=999999, poll=lambda: None, wait=wait)
+
+    killed = []
+    monkeypatch.setattr(subprocess, "Popen", spawn)
+    monkeypatch.setattr(os, "killpg", lambda pid, stop: killed.append((pid, stop)))
+    with pytest.raises(RuntimeError, match="Microphone start cancelled"):
+        Recorder(Config(), tmp_path / "cancelled.wav", cancelled=lambda: True)
+    assert killed == [(999999, signal.SIGKILL)]
+    assert waits == [3, 1]
+    assert captured[0].closed
+    assert pipe.closed
+
+
+@pytest.mark.parametrize("stderr", [b"", b"Input failed"])
+def test_recorder_stop_reports_nonzero_exit(monkeypatch, tmp_path, stderr):
+    path = tmp_path / "recording.wav"
+    with wave.open(str(path), "wb") as wav:
+        wav.setparams((1, 2, 16000, 0, "NONE", "not compressed"))
+        wav.writeframes(bytes(640))
+
+    def spawn(_args, **options):
+        options["stderr"].write(stderr)
+        return SimpleNamespace(stdin=None, poll=lambda: None, wait=lambda timeout: 7)
+
+    monkeypatch.setattr(subprocess, "Popen", spawn)
+    recorder = Recorder(Config(), path)
+    message = "Input failed" if stderr else "exited with status 7"
+    with pytest.raises(RuntimeError, match=message):
+        recorder.stop()
+    assert recorder.errors.closed
+
+
+def test_forced_stop_discards_temporary_audio_after_reaping(monkeypatch, tmp_path):
+    path = tmp_path / "recording.wav"
+    with wave.open(str(path), "wb") as wav:
+        wav.setparams((1, 2, 16000, 0, "NONE", "not compressed"))
+        wav.writeframes(bytes(640))
+    killed = []
+
+    def wait(timeout):
+        if not killed:
+            raise subprocess.TimeoutExpired("capture", timeout)
+        assert timeout == 3
+        return -signal.SIGKILL
+
+    process = SimpleNamespace(stdin=io.BytesIO(), pid=999999, poll=lambda: None, wait=wait)
+    monkeypatch.setattr(subprocess, "Popen", lambda *_args, **_opts: process)
+    monkeypatch.setattr(os, "killpg", lambda pid, stop: killed.append((pid, stop)))
+    recorder = Recorder(Config(), path)
+    with pytest.raises(RuntimeError, match="temporary audio will be discarded"):
+        recorder.stop()
+    assert killed == [(999999, signal.SIGKILL)]
+    assert recorder.errors.closed

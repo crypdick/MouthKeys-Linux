@@ -32,25 +32,6 @@
 2	src/mouthkeys/atspi_helper.py	no-untyped-call	Call to untyped function "unchanged" in typed context
 6	src/mouthkeys/atspi_helper.py	no-untyped-def	Function is missing a type annotation
 1	src/mouthkeys/atspi_helper.py	var-annotated	Need type annotation for "visited" (hint: "visited: set[<type>] = ...")
-2	src/mouthkeys/audio.py	no-untyped-call	Call to untyped function "CaptureTeardownError" in typed context
-2	src/mouthkeys/audio.py	no-untyped-call	Call to untyped function "_cancelled" in typed context
-2	src/mouthkeys/audio.py	no-untyped-call	Call to untyped function "_close" in typed context
-3	src/mouthkeys/audio.py	no-untyped-call	Call to untyped function "_drain" in typed context
-2	src/mouthkeys/audio.py	no-untyped-call	Call to untyped function "_end_segment" in typed context
-2	src/mouthkeys/audio.py	no-untyped-call	Call to untyped function "_open" in typed context
-1	src/mouthkeys/audio.py	no-untyped-call	Call to untyped function "bluetooth_capture_ready" in typed context
-2	src/mouthkeys/audio.py	no-untyped-call	Call to untyped function "error" in typed context
-10	src/mouthkeys/audio.py	no-untyped-def	Function is missing a return type annotation
-6	src/mouthkeys/audio.py	no-untyped-def	Function is missing a type annotation
-2	src/mouthkeys/audio.py	no-untyped-def	Function is missing a type annotation for one or more parameters
-1	src/mouthkeys/audio.py	union-attr	Item "None" of "BufferedWriter[_BufferedWriterStream] | None" has no attribute "flush"
-1	src/mouthkeys/audio.py	union-attr	Item "None" of "IO[bytes] | Any | None" has no attribute "close"
-1	src/mouthkeys/audio.py	union-attr	Item "None" of "IO[bytes] | None" has no attribute "close"
-1	src/mouthkeys/audio.py	union-attr	Item "None" of "Popen[bytes] | None" has no attribute "pid"
-1	src/mouthkeys/audio.py	union-attr	Item "None" of "Popen[bytes] | None" has no attribute "poll"
-1	src/mouthkeys/audio.py	union-attr	Item "None" of "Popen[bytes] | None" has no attribute "stdin"
-2	src/mouthkeys/audio.py	union-attr	Item "None" of "Popen[bytes] | None" has no attribute "wait"
-1	src/mouthkeys/audio.py	union-attr	Item "None" of "Wave_write | None" has no attribute "writeframes"
 1	src/mouthkeys/benchmark.py	no-untyped-call	Call to untyped function "onnx_path" in typed context
 1	src/mouthkeys/benchmark.py	no-untyped-call	Call to untyped function "resolve_whisper" in typed context
 1	src/mouthkeys/benchmark.py	no-untyped-call	Call to untyped function "transcribe_file" in typed context
@@ -217,7 +198,6 @@
 3	src/mouthkeys/provider_tools.py	no-untyped-call	Call to untyped function "models_endpoint" in typed context
 2	src/mouthkeys/provider_tools.py	no-untyped-call	Call to untyped function "request_json" in typed context
 2	src/mouthkeys/provider_tools.py	no-untyped-def	Function is missing a type annotation
-1	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "CaptureSession" in typed context
 1	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "_command" in typed context
 1	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "enroll" of "PronunciationStore" in typed context
 1	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "handle_action" in typed context

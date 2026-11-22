@@ -7,7 +7,12 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any, TypedDict, cast
 
-from .ai_providers import PROVIDER_ENDPOINTS, endpoint_url
+from .ai_provider_settings import (
+    PROVIDER_ENDPOINTS,
+    endpoint_url,
+    models_endpoint,
+    reasoning_option,
+)
 from .config import Config, config_path, private_dir
 from .private_files import write_private
 
@@ -111,17 +116,12 @@ def validate_profiles(profiles: object) -> list[PromptProfile]:
             if not isinstance(profile[name], str):
                 raise ValueError(f"AI profile {name} must be text")
         if profile["ai_models_endpoint"]:
-            endpoint_url(profile["ai_models_endpoint"])
-            from types import SimpleNamespace
-
-            from .provider_tools import models_endpoint
-
-            models_endpoint(SimpleNamespace(**profile))
-        from types import SimpleNamespace
-
-        from .ai_providers import validate_reasoning
-
-        validate_reasoning(SimpleNamespace(**profile))
+            models_endpoint(
+                profile["ai_endpoint"],
+                profile["ai_provider"],
+                explicit=profile["ai_models_endpoint"],
+            )
+        reasoning_option(profile["ai_reasoning_parameter"], profile["ai_reasoning_value"])
         if profile["ai_streaming"] not in ("on", "off"):
             raise ValueError("AI profile streaming must be on or off")
         if profile["ai_credential_source"] not in ("environment", "secret-service"):

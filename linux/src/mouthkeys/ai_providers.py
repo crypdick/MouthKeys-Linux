@@ -1,117 +1,89 @@
 """Small native AI cleanup adapters; requests occur only after explicit opt-in."""
 
 import http.client
-import ipaddress
 import json
-import math
-import re
 import urllib.error
 import urllib.parse
 import urllib.request
-from typing import Any
+from collections.abc import Callable
+from threading import Event
+from typing import Any, BinaryIO, Never, Protocol, cast, runtime_checkable
+
+from .ai_provider_settings import PROVIDER_ENDPOINTS, ReasoningValue, endpoint_url, reasoning_option
+from .credentials import CredentialSettings, api_key
 
 MAX_RESPONSE = 1024 * 1024
 MAX_HISTORY_MESSAGES = 32
 MAX_HISTORY_BYTES = 256 * 1024
-PROVIDER_ENDPOINTS = {
-    "compatible": "http://localhost:11434/v1/chat/completions",
-    "anthropic": "https://api.anthropic.com/v1/messages",
-    "gemini": "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
-    "ollama": "http://localhost:11434/api/chat",
-}
+
+RequestOpener = Callable[..., BinaryIO]
+
+
+@runtime_checkable
+class _PayloadSettings(Protocol):
+    @property
+    def ai_prompt(self) -> str: ...
+
+    @property
+    def ai_model(self) -> str: ...
+
+
+@runtime_checkable
+class _CompletionSettings(_PayloadSettings, Protocol):
+    @property
+    def ai_enabled(self) -> str: ...
+
+    @property
+    def ai_endpoint(self) -> str: ...
+
+    @property
+    def ai_provider(self) -> str: ...
+
+    @property
+    def ai_timeout(self) -> float: ...
+
+
+class CompletionCancelledError(RuntimeError):
+    pass
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
-    def redirect_request(self, _req, _fp, _code, _msg, _headers, _newurl):
+    def redirect_request(
+        self,
+        _req: object,
+        _fp: object,
+        _code: object,
+        _msg: object,
+        _headers: object,
+        _newurl: object,
+    ) -> Never:
         raise ValueError("AI endpoint redirected; configure its final URL explicitly")
 
 
-def endpoint_url(value: str) -> str:
-    parsed = urllib.parse.urlsplit(value)
-    if (
-        parsed.scheme not in ("http", "https")
-        or not parsed.hostname
-        or parsed.username is not None
-        or parsed.password is not None
-        or any(character.isspace() for character in value)
-    ):
-        raise ValueError("AI endpoint must be an HTTP(S) URL without embedded credentials")
-    try:
-        loopback = ipaddress.ip_address(parsed.hostname).is_loopback
-    except ValueError:
-        loopback = parsed.hostname.lower() == "localhost"
-    if parsed.scheme == "http" and not loopback:
-        raise ValueError("Remote AI endpoints require HTTPS")
-    if parsed.fragment:
-        raise ValueError("AI endpoint must not contain a fragment")
-    if any(
-        name.lower() in {"key", "api_key", "api-key", "apikey", "token", "access_token"}
-        for name, _ in urllib.parse.parse_qsl(parsed.query)
-    ):
-        raise ValueError("Keep AI API keys in an environment variable, not the endpoint URL")
-    try:
-        _ = parsed.port
-    except ValueError:
-        raise ValueError("AI endpoint has an invalid port") from None
-    return value
+def validate_reasoning(config: object) -> tuple[str, ReasoningValue] | None:
+    return reasoning_option(
+        getattr(config, "ai_reasoning_parameter", ""), getattr(config, "ai_reasoning_value", "")
+    )
 
 
-def validate_reasoning(config):
-    parameter = getattr(config, "ai_reasoning_parameter", "")
-    value = getattr(config, "ai_reasoning_value", "")
-    if not parameter:
-        if value:
-            raise ValueError("Choose a reasoning parameter before setting its value")
-        return None
-    nested = {
-        "chat_template_kwargs.enable_thinking",
-        "generationConfig.thinkingConfig.thinkingBudget",
-        "generationConfig.thinkingConfig.thinkingLevel",
-        "generationConfig.thinkingConfig.includeThoughts",
-        "output_config.effort",
-        "options.think",
-        "thinking.type",
-        "thinking.budget_tokens",
-    }
-    if not isinstance(parameter, str) or (
-        parameter not in nested
-        and not re.fullmatch(
-            r"(?:reasoning|thinking|think|enable_thinking)(?:_[A-Za-z0-9]+)*", parameter
-        )
-    ):
-        raise ValueError("Reasoning parameter must name a supported thinking/reasoning field")
-    if not isinstance(value, str) or not value or len(value) > 256:
-        raise ValueError("Reasoning value must contain a JSON scalar or short string")
-    try:
-        parsed = json.loads(value)
-    except ValueError:
-        parsed = value
-    if not isinstance(parsed, str | int | float | bool) and parsed is not None:
-        raise ValueError("Reasoning value must be a JSON scalar, never an object or array")
-    if isinstance(parsed, float) and not math.isfinite(parsed):
-        raise ValueError("Reasoning value must be finite")
-    return parameter, parsed
-
-
-def _apply_reasoning(body, config):
+def _apply_reasoning(body: dict[str, object], config: object) -> dict[str, object]:
     option = validate_reasoning(config)
     if option:
         path, value = option
         destination = body
         parts = path.split(".")
         for part in parts[:-1]:
-            destination = destination.setdefault(part, {})
-            if not isinstance(destination, dict):
+            child = destination.setdefault(part, {})
+            if not isinstance(child, dict):
                 raise ValueError("Reasoning parameter conflicts with request structure")
+            destination = child
         destination[parts[-1]] = value
     return body
 
 
-def request_headers(config, provider):
-    from .credentials import api_key
-
+def request_headers(config: object, provider: str) -> dict[str, str]:
     headers = {"Content-Type": "application/json"}
-    key = api_key(config)
+    key = api_key(cast("CredentialSettings", config))
     if provider == "anthropic":
         headers["anthropic-version"] = "2023-06-01"
         if key:
@@ -124,7 +96,13 @@ def request_headers(config, provider):
     return headers
 
 
-def request_json(endpoint, config, *, body=None, opener=None):
+def request_json(
+    endpoint: str,
+    config: object,
+    *,
+    body: dict[str, object] | None = None,
+    opener: RequestOpener | None = None,
+) -> object:
     provider = getattr(config, "ai_provider", "compatible")
     payload = json.dumps(body).encode() if body is not None else None
     if payload is not None and len(payload) > MAX_RESPONSE:
@@ -146,9 +124,10 @@ def request_json(endpoint, config, *, body=None, opener=None):
     if len(raw) > MAX_RESPONSE:
         raise ValueError("AI cleanup response exceeds 1 MB")
     try:
-        return json.loads(raw)
+        data: object = json.loads(raw)
     except (ValueError, TypeError):
         raise ValueError("AI endpoint returned invalid JSON") from None
+    return data
 
 
 def validate_history(history: object) -> list[dict[str, str]]:
@@ -181,7 +160,9 @@ def validate_history(history: object) -> list[dict[str, str]]:
     return messages
 
 
-def _base_payload(text, config, provider, history=None):
+def _base_payload(
+    text: object, config: _PayloadSettings, provider: str, history: object = None
+) -> dict[str, object]:
     if not isinstance(text, str) or not text.strip():
         raise ValueError("AI input must be nonempty text")
     conversation = [*validate_history(history), {"role": "user", "content": text}]
@@ -207,7 +188,7 @@ def _base_payload(text, config, provider, history=None):
             ],
             "generationConfig": {"maxOutputTokens": limit},
         }
-    body = {"model": config.ai_model, "messages": messages, "stream": False}
+    body: dict[str, object] = {"model": config.ai_model, "messages": messages, "stream": False}
     if provider == "ollama":
         body["options"] = {"num_predict": limit}
     # Compatible providers differ on output-token parameter names. Leave it out
@@ -215,7 +196,9 @@ def _base_payload(text, config, provider, history=None):
     return body
 
 
-def _request_payload(text, config, provider, history=None):
+def _request_payload(
+    text: object, config: _PayloadSettings, provider: str, history: object = None
+) -> dict[str, object]:
     return _apply_reasoning(_base_payload(text, config, provider, history), config)
 
 
@@ -261,7 +244,9 @@ def thinking_text(data: dict[str, Any], provider: str, *, streaming: bool = Fals
     return "".join(values)
 
 
-def _completion(data, provider):
+def _completion(data: object, provider: str) -> object:
+    if not isinstance(data, dict):
+        raise ValueError("AI endpoint returned no text completion")  # noqa: TRY004 - provider payload
     if provider == "anthropic":
         if data.get("stop_reason") == "max_tokens":
             raise ValueError("AI completion truncated; increase AI maximum output tokens")
@@ -286,8 +271,15 @@ def _completion(data, provider):
 
 
 def request_completion(
-    text, config, *, opener=None, on_delta=None, cancel_event=None, history=None, on_thinking=None
-):
+    text: str,
+    config: _CompletionSettings,
+    *,
+    opener: RequestOpener | None = None,
+    on_delta: Callable[[str], None] | None = None,
+    cancel_event: Event | None = None,
+    history: object = None,
+    on_thinking: Callable[[str], None] | None = None,
+) -> str:
     """Return final text; optional history is completed text-only conversation pairs.
 
     on_thinking receives only explicitly tagged external-provider text, separately
@@ -297,9 +289,7 @@ def request_completion(
     if config.ai_enabled != "on":
         return text
     if cancel_event is not None and cancel_event.is_set():
-        from .ai_stream import CompletionCancelled
-
-        raise CompletionCancelled("AI cleanup cancelled")
+        raise CompletionCancelledError("AI cleanup cancelled")
     if not config.ai_model.strip():
         raise ValueError("Choose an AI cleanup model first")
     provider = getattr(config, "ai_provider", "compatible")
@@ -323,16 +313,16 @@ def request_completion(
         endpoint, config, body=_request_payload(text, config, provider, history), opener=opener
     )
     if cancel_event is not None and cancel_event.is_set():
-        from .ai_stream import CompletionCancelled
-
-        raise CompletionCancelled("AI cleanup cancelled")
+        raise CompletionCancelledError("AI cleanup cancelled")
     try:
         result = _completion(data, provider)
-        thinking = thinking_text(data, provider) if on_thinking is not None else ""
+        thinking = (
+            thinking_text(cast("dict[str, Any]", data), provider) if on_thinking is not None else ""
+        )
     except (KeyError, IndexError, TypeError, AttributeError):
         raise ValueError("AI endpoint returned no text completion") from None
     if not isinstance(result, str) or not result.strip():
         raise ValueError("AI endpoint returned an empty completion")
-    if thinking:
+    if thinking and on_thinking is not None:
         on_thinking(thinking)
     return result.strip()

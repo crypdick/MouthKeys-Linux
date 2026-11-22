@@ -10,7 +10,7 @@ import os
 import subprocess
 from typing import Literal, Protocol, runtime_checkable
 
-from .ai_providers import endpoint_url
+from .ai_provider_settings import endpoint_url
 
 
 @runtime_checkable

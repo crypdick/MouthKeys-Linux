@@ -1,33 +1,6 @@
-1	src/mouthkeys/ai_providers.py	ANN001	Missing type annotation for function argument `_code`
-1	src/mouthkeys/ai_providers.py	ANN001	Missing type annotation for function argument `_fp`
-1	src/mouthkeys/ai_providers.py	ANN001	Missing type annotation for function argument `_headers`
-1	src/mouthkeys/ai_providers.py	ANN001	Missing type annotation for function argument `_msg`
-1	src/mouthkeys/ai_providers.py	ANN001	Missing type annotation for function argument `_newurl`
-1	src/mouthkeys/ai_providers.py	ANN001	Missing type annotation for function argument `_req`
-2	src/mouthkeys/ai_providers.py	ANN001	Missing type annotation for function argument `body`
-1	src/mouthkeys/ai_providers.py	ANN001	Missing type annotation for function argument `cancel_event`
-7	src/mouthkeys/ai_providers.py	ANN001	Missing type annotation for function argument `config`
-1	src/mouthkeys/ai_providers.py	ANN001	Missing type annotation for function argument `data`
-1	src/mouthkeys/ai_providers.py	ANN001	Missing type annotation for function argument `endpoint`
-3	src/mouthkeys/ai_providers.py	ANN001	Missing type annotation for function argument `history`
-1	src/mouthkeys/ai_providers.py	ANN001	Missing type annotation for function argument `on_delta`
-1	src/mouthkeys/ai_providers.py	ANN001	Missing type annotation for function argument `on_thinking`
-2	src/mouthkeys/ai_providers.py	ANN001	Missing type annotation for function argument `opener`
-4	src/mouthkeys/ai_providers.py	ANN001	Missing type annotation for function argument `provider`
-3	src/mouthkeys/ai_providers.py	ANN001	Missing type annotation for function argument `text`
-1	src/mouthkeys/ai_providers.py	ANN201	Missing return type annotation for public function `redirect_request`
-1	src/mouthkeys/ai_providers.py	ANN201	Missing return type annotation for public function `request_completion`
-1	src/mouthkeys/ai_providers.py	ANN201	Missing return type annotation for public function `request_headers`
-1	src/mouthkeys/ai_providers.py	ANN201	Missing return type annotation for public function `request_json`
-1	src/mouthkeys/ai_providers.py	ANN201	Missing return type annotation for public function `validate_reasoning`
-1	src/mouthkeys/ai_providers.py	ANN202	Missing return type annotation for private function `_apply_reasoning`
-1	src/mouthkeys/ai_providers.py	ANN202	Missing return type annotation for private function `_base_payload`
-1	src/mouthkeys/ai_providers.py	ANN202	Missing return type annotation for private function `_completion`
-1	src/mouthkeys/ai_providers.py	ANN202	Missing return type annotation for private function `_request_payload`
-4	src/mouthkeys/ai_providers.py	PLC0415	`import` should be at the top-level of a file
+1	src/mouthkeys/ai_providers.py	PLC0415	`import` should be at the top-level of a file
 1	src/mouthkeys/ai_providers.py	PLR0913	Too many arguments in function definition (7 > 5)
 1	src/mouthkeys/ai_providers.py	TRY004	Prefer `TypeError` exception for invalid type
-1	src/mouthkeys/ai_stream.py	N818	Exception name `CompletionCancelled` should be named with an Error suffix
 1	src/mouthkeys/ai_stream.py	PLR0913	Too many arguments in function definition (7 > 5)
 1	src/mouthkeys/assistance.py	ANN001	Missing type annotation for function argument `process`
 1	src/mouthkeys/assistance.py	ANN202	Missing return type annotation for private function `_kill_group`
@@ -100,7 +73,6 @@
 1	src/mouthkeys/clipboard.py	PLR0915	Too many statements (56 > 50)
 1	src/mouthkeys/clipboard.py	SIM105	Use `contextlib.suppress(BrokenPipeError)` instead of `try`-`except`-`pass`
 1	src/mouthkeys/clipboard.py	TRY300	Consider moving this statement to an `else` block
-2	src/mouthkeys/config.py	PLC0415	`import` should be at the top-level of a file
 1	src/mouthkeys/config.py	TRY004	Prefer `TypeError` exception for invalid type
 1	src/mouthkeys/delivery.py	PLR0911	Too many return statements (7 > 6)
 1	src/mouthkeys/delivery.py	PLR0911	Too many return statements (9 > 6)
@@ -265,17 +237,8 @@
 1	src/mouthkeys/postprocess.py	ANN201	Missing return type annotation for public function `render_dictation_user_message`
 1	src/mouthkeys/postprocess.py	PLC0415	`import` should be at the top-level of a file
 1	src/mouthkeys/profiles.py	C901	`validate_profiles` is too complex (23 > 15)
-4	src/mouthkeys/profiles.py	PLC0415	`import` should be at the top-level of a file
 1	src/mouthkeys/profiles.py	PLR0912	Too many branches (22 > 12)
 2	src/mouthkeys/profiles.py	TRY004	Prefer `TypeError` exception for invalid type
-1	src/mouthkeys/provider_tools.py	ANN001	Missing type annotation for function argument `config`
-1	src/mouthkeys/provider_tools.py	ANN001	Missing type annotation for function argument `endpoint`
-1	src/mouthkeys/provider_tools.py	ANN003	Missing type annotation for `**values`
-1	src/mouthkeys/provider_tools.py	ANN201	Missing return type annotation for public function `models_endpoint`
-1	src/mouthkeys/provider_tools.py	ANN202	Missing return type annotation for private function `_with_query`
-1	src/mouthkeys/provider_tools.py	C901	`list_models` is too complex (18 > 15)
-1	src/mouthkeys/provider_tools.py	PLR0912	Too many branches (19 > 12)
-3	src/mouthkeys/provider_tools.py	TRY004	Prefer `TypeError` exception for invalid type
 1	src/mouthkeys/routing.py	PLC0415	`import` should be at the top-level of a file
 1	src/mouthkeys/routing.py	PLR0913	Too many arguments in function definition (6 > 5)
 1	src/mouthkeys/setup_languages.py	ANN001	Missing type annotation for function argument `engine`

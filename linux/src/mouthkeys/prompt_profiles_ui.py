@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from .ai_providers import PROVIDER_ENDPOINTS
+from .ai_provider_settings import PROVIDER_ENDPOINTS
 from .config import CHOICES, RANGES, Config
 from .postprocess import process
 from .profiles import PROFILE_FIELDS, PromptProfile, load_profiles, save_profiles

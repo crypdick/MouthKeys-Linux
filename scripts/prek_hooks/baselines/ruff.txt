@@ -66,25 +66,7 @@
 2	src/mouthkeys/learning.py	TRY004	Prefer `TypeError` exception for invalid type
 1	src/mouthkeys/literal_formatting.py	FBT001	Boolean-typed positional argument in function definition
 3	src/mouthkeys/local_api.py	PLC0415	`import` should be at the top-level of a file
-1	src/mouthkeys/models_ui.py	ANN001	Missing type annotation for function argument `event`
-1	src/mouthkeys/models_ui.py	ANN001	Missing type annotation for function argument `response`
-1	src/mouthkeys/models_ui.py	ANN001	Missing type annotation for function argument `window`
-1	src/mouthkeys/models_ui.py	ANN002	Missing type annotation for `*_`
-1	src/mouthkeys/models_ui.py	ANN201	Missing return type annotation for public function `activate`
-1	src/mouthkeys/models_ui.py	ANN201	Missing return type annotation for public function `benchmark`
-1	src/mouthkeys/models_ui.py	ANN201	Missing return type annotation for public function `choose`
-1	src/mouthkeys/models_ui.py	ANN201	Missing return type annotation for public function `closeEvent`
-1	src/mouthkeys/models_ui.py	ANN201	Missing return type annotation for public function `delete`
-1	src/mouthkeys/models_ui.py	ANN201	Missing return type annotation for public function `download`
-1	src/mouthkeys/models_ui.py	ANN201	Missing return type annotation for public function `filter_rows`
-1	src/mouthkeys/models_ui.py	ANN201	Missing return type annotation for public function `refresh`
-1	src/mouthkeys/models_ui.py	ANN201	Missing return type annotation for public function `update_resident`
-1	src/mouthkeys/models_ui.py	ANN202	Missing return type annotation for private function `finished`
-1	src/mouthkeys/models_ui.py	ANN202	Missing return type annotation for private function `received`
-1	src/mouthkeys/models_ui.py	ANN204	Missing return type annotation for special method `__init__`
 1	src/mouthkeys/models_ui.py	ISC004	Unparenthesized implicit string concatenation in collection
-1	src/mouthkeys/models_ui.py	N802	Function name `closeEvent` should be lowercase
-4	src/mouthkeys/models_ui.py	PLC0415	`import` should be at the top-level of a file
 4	src/mouthkeys/native_asr.py	PLC0415	`import` should be at the top-level of a file
 1	src/mouthkeys/native_asr.py	TRY004	Prefer `TypeError` exception for invalid type
 2	src/mouthkeys/native_worker.py	PLC0415	`import` should be at the top-level of a file

@@ -64,6 +64,7 @@ class Window(QWidget):
         self.setMinimumSize(820, 560)
         self.jobs: set[QThread] = set()
         self.polling = False
+        self.loaded_model: dict[str, object] | None = None
         root = QHBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)

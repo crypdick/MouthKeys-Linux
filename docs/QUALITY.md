@@ -23,9 +23,9 @@ available outside disposable feature worktrees. To run a single gate:
   message changes as the score falls, replace its baseline entry with the lower measurement
   explicitly.
 - **Size:** New Python files are limited to 400 code-containing lines. Existing oversized files
-  may shrink, not grow. Prioritize `assistant_ui` and `service`; extract complete workflows without
-  changing signal ownership, locking, cancellation, or delivery order.
-- **Coverage:** The combined headless line and branch coverage floor is 92.2%, with 100% as the target.
+  may shrink, not grow. In `service`, extract complete workflows without changing locking,
+  cancellation, or delivery order.
+- **Coverage:** The combined headless line and branch coverage floor is 92.7%, with 100% as the target.
   The gate includes Python subprocesses started by the tests. Raise the floor when measured coverage
   improves. Desktop and optional pretrained-model checks remain separate; see
   [the parity ledger](../linux/PARITY.md). Don't count manual checks as automated coverage.

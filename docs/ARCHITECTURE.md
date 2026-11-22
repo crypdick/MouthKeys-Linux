@@ -39,6 +39,8 @@ then dispatches local work or uses `control` to contact the private Unix socket 
   window owns persistence and recording-service requests; `gui_launch` starts it and the
   configured desktop integrations. `provider_settings_ui` owns explicit provider and keyring
   actions. `regional_ui` shares the same save path between the inline banner and Settings prompt.
+  `assistant_chats` handles conversation selection and history, including an opt-out during a
+  pending request. `assistant_editor` displays proposals and forwards explicit review actions.
   Transcript history (`history_ui`), activity (`stats_view`), backup review (`backup_ui`), and
   diagnostics (`help_ui`) own their Settings pages. `dictionary_ui` owns editing and voice training
   drafts; saving compares the editor's snapshot under the same lock used to write the dictionary.

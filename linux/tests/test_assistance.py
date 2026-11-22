@@ -173,11 +173,11 @@ def test_assistant_ui_requires_review_of_exact_command(monkeypatch):
     page.show_proposal(
         {"mode": "command", "instruction": "List", "text": "Lists files", "command": "ls"}
     )
-    page.command.setPlainText("ls -la /reviewed")
+    page.editor.command.setPlainText("ls -la /reviewed")
     confirmations = []
     tasks = []
     monkeypatch.setattr(
-        page, "confirm_command", lambda command: confirmations.append(command) or False
+        page.editor, "confirm_command", lambda command: confirmations.append(command) or False
     )
     monkeypatch.setattr(
         page, "_task", lambda function, callback, *args, **kwargs: tasks.append(function)
@@ -185,7 +185,7 @@ def test_assistant_ui_requires_review_of_exact_command(monkeypatch):
     page.run_command()
     assert confirmations == [f"Working directory: {Path.cwd()}\n\nls -la /reviewed"]
     assert tasks == []
-    monkeypatch.setattr(page, "confirm_command", lambda command: True)
+    monkeypatch.setattr(page.editor, "confirm_command", lambda command: True)
     monkeypatch.setattr(assistant_ui, "execute_command", lambda command, **kwargs: command)
     page.run_command()
     assert len(tasks) == 1

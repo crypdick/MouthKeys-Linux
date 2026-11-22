@@ -23,12 +23,18 @@ class FileSegment(TypedDict):
     speaker: NotRequired[int | None]
 
 
+class SpeakerTurn(TypedDict):
+    start: float
+    end: float
+    speaker: int
+
+
 class FileResult(TypedDict):
     text: str
     duration: float
     processing_seconds: float
     segments: NotRequired[list[FileSegment]]
-    speaker_turns: NotRequired[list[dict[str, object]] | None]
+    speaker_turns: NotRequired[list[SpeakerTurn] | None]
     confidence: NotRequired[float | None]
 
 

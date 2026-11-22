@@ -150,7 +150,7 @@ def request_json(endpoint, config, *, body=None, opener=None):
         raise ValueError("AI endpoint returned invalid JSON") from None
 
 
-def validate_history(history):
+def validate_history(history: object) -> list[dict[str, str]]:
     """Copy bounded completed text-only turns, never tools or provider reasoning."""
     if history is None:
         return []

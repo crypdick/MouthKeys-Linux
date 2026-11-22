@@ -64,7 +64,7 @@ def test_voice_assistant_follows_prior_turns_without_retaining_thinking(monkeypa
         session = AssistantHistory().get(current["session_id"])
     else:
         assert not (state_dir() / "assistant.sqlite3").exists()
-        session = app.assistant_memory["command"]
+        session = app.recording_assistant.memory["command"]
     assert len(session["messages"]) == 4
     assert "External provider thought" not in json.dumps(session)
     assert not app.delivery.calls
@@ -211,7 +211,7 @@ def test_invalid_inline_context_is_rejected_before_recording_or_state_mutation()
     assert app.phase == "idle"
     assert app.job is None
     assert app.recorder is None
-    assert not app.assistant_memory
+    assert not app.recording_assistant.memory
     assert not (state_dir() / "assistant.sqlite3").exists()
 
 

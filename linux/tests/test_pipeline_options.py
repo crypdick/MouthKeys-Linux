@@ -109,7 +109,9 @@ def test_ai_history_records_actual_success_even_when_text_unchanged(monkeypatch)
 def test_edit_delivery_failure_is_not_recorded_as_ai_failure(monkeypatch):
     Config(ai_enabled="on", ai_model="model", edit_delivery="replace").save()
     app = controller("Edit instruction")
-    monkeypatch.setattr(app, "_propose_assistant", lambda *a: {"mode": "edit", "text": "Edited"})
+    monkeypatch.setattr(
+        app.recording_assistant, "propose", lambda *a: {"mode": "edit", "text": "Edited"}
+    )
     monkeypatch.setattr(app, "_edit_target_matches", lambda job: True)
 
     def failed_delivery(*args, **kwargs):

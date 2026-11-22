@@ -44,6 +44,9 @@ then dispatches local work or uses `control` to contact the private Unix socket 
   actions. `regional_ui` shares the same save path between the inline banner and Settings prompt.
   `assistant_chats` handles conversation selection and history, including an opt-out during a
   pending request. `assistant_editor` displays proposals and forwards explicit review actions.
+  `recording_assistant` binds voice jobs to their starting conversation, retains execution
+  receipts, and publishes bounded status snapshots. Only the active request round can publish
+  incremental output.
   Transcript history (`history_ui`), activity (`stats_view`), backup review (`backup_ui`), and
   diagnostics (`help_ui`) own their Settings pages. `dictionary_ui` owns editing and voice training
   drafts; saving compares the editor's snapshot under the same lock used to write the dictionary.

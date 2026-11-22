@@ -16,7 +16,7 @@ MAX_EXECUTIONS = 100
 MAX_EXECUTION_BYTES = 512 * 1024
 
 
-def validate_execution(result):
+def validate_execution(result: object) -> dict[str, Any]:
     fields = {"command", "working_directory", "returncode", "output", "truncated", "timed_out"}
     if not isinstance(result, dict) or not fields <= set(result) <= fields | {"cancelled"}:
         raise ValueError("Invalid command execution receipt")
@@ -43,7 +43,7 @@ def validate_execution(result):
     return dict(result)
 
 
-def validate_executions(events, message_count):
+def validate_executions(events: object, message_count: int) -> list[dict[str, Any]]:
     if not isinstance(events, list) or len(events) > MAX_EXECUTIONS:
         raise ValueError("Invalid command execution events")
     for event in events:
@@ -61,13 +61,13 @@ def validate_executions(events, message_count):
     return events
 
 
-def pending_executions(session):
+def pending_executions(session: dict[str, Any]) -> list[dict[str, Any]]:
     messages = validate_messages(session["messages"])
     events = validate_executions(session.get("executions", []), len(messages))
     return [dict(event["result"]) for event in events if event["message_count"] >= len(messages)]
 
 
-def record_private_execution(session, result):
+def record_private_execution(session: dict[str, Any], result: object) -> dict[str, Any]:
     """Record an observed outcome in bounded runtime memory, without opening SQLite."""
     validate_messages(session["messages"])
     events = [
@@ -115,7 +115,7 @@ def validate_messages(messages: object) -> list[dict[str, str]]:
     return messages
 
 
-def context_messages(messages):
+def context_messages(messages: object) -> list[dict[str, str]]:
     """Keep complete recent messages within the provider context budget."""
     result, size = [], 0
     for message in reversed(validate_messages(messages)[-32:]):
@@ -265,7 +265,7 @@ class AssistantHistory:
                 (title, time.time(), json.dumps(combined, ensure_ascii=False), item_id),
             )
 
-    def record_execution(self, item_id, result):
+    def record_execution(self, item_id: str, result: object) -> None:
         receipt = validate_execution(result)
         with self.connect() as db:
             db.execute("BEGIN IMMEDIATE")

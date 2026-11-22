@@ -6,9 +6,13 @@ import selectors
 import signal
 import subprocess
 import time
+from collections.abc import Callable
 from pathlib import Path
+from threading import Event
+from typing import Any, BinaryIO
 
 from .ai_providers import request_completion
+from .config import Config
 
 MAX_OUTPUT = 64 * 1024
 COMMAND_PROMPT = (
@@ -32,7 +36,7 @@ EDIT_PROMPT = (
 )
 
 
-def requires_confirmation(command, policy="on"):
+def requires_confirmation(command: str, policy: str = "on") -> bool:
     """Upstream's convenience heuristic, not a shell parser or security boundary."""
     if policy == "on":
         return True
@@ -234,18 +238,18 @@ class _CommandExplanationStream:
 
 
 def propose(
-    instruction,
-    config,
-    mode,
-    selected_text="",
+    instruction: object,
+    config: Config,
+    mode: str,
+    selected_text: object = "",
     *,
-    opener=None,
-    resolved_config=False,
-    on_delta=None,
-    cancel_event=None,
-    history=None,
-    on_thinking=None,
-):
+    opener: Callable[..., BinaryIO] | None = None,
+    resolved_config: bool = False,
+    on_delta: Callable[[str], None] | None = None,
+    cancel_event: Event | None = None,
+    history: object = None,
+    on_thinking: Callable[[str], None] | None = None,
+) -> dict[str, str]:
     if mode not in ("command", "edit"):
         raise ValueError("Assistant mode must be command or edit")
     if not resolved_config:
@@ -261,7 +265,7 @@ def propose(
     payload = json.dumps(
         {"instruction": instruction, "selected_text": selected_text}, ensure_ascii=False
     )
-    options = {"opener": opener}
+    options: dict[str, Any] = {"opener": opener}
     if on_delta is not None:
         options["on_delta"] = (
             _CommandExplanationStream(on_delta).feed if mode == "command" else on_delta
@@ -316,14 +320,14 @@ def _kill_group(process):
 
 
 def execute_command(
-    command,
+    command: object,
     *,
-    working_directory="",
-    timeout=30,
-    max_output=MAX_OUTPUT,
-    popen=None,
-    cancel_event=None,
-):
+    working_directory: object = "",
+    timeout: float = 30,
+    max_output: int = MAX_OUTPUT,
+    popen: Callable[..., Any] | None = None,
+    cancel_event: Event | None = None,
+) -> dict[str, int | str | bool]:
     """Run a command authorized by concrete review or configured automatic policy."""
     if (
         not isinstance(command, str)
@@ -343,7 +347,7 @@ def execute_command(
         or not Path(working_directory).is_dir()
     ):
         raise ValueError("Working directory must be an existing absolute directory")
-    launch = popen or subprocess.Popen
+    launch: Callable[..., Any] = popen or subprocess.Popen
     options = {"cwd": working_directory} if working_directory else {}
     process = launch(
         ["/bin/sh", "-c", command],

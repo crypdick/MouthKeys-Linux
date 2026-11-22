@@ -7,6 +7,7 @@ import uuid
 from collections.abc import Mapping
 from functools import partial
 from pathlib import Path
+from typing import Any
 
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
@@ -207,7 +208,7 @@ class AssistantPage(QWidget):
         def on_delta(piece):
             self.streamed.emit(request_id, piece)
 
-        options = {}
+        options: dict[str, Any] = {}
         if history:
             options["history"] = history
         if config.ai_show_thinking == "on":
@@ -425,10 +426,11 @@ class AssistantPage(QWidget):
             elif self.command_steps >= 20:
                 self.feedback.setText("20-step limit reached; review results before continuing.")
 
-        options = {"working_directory": directory} if directory else {}
         cancelled = threading.Event()
-        options["cancel_event"] = cancelled
         self.request_task = self._task(
-            lambda: execute_command(command, **options), complete, cancelled, accept_cancelled=True
+            lambda: execute_command(command, working_directory=directory, cancel_event=cancelled),
+            complete,
+            cancelled,
+            accept_cancelled=True,
         )
         self.editor.cancel_request_button.setEnabled(True)

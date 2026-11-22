@@ -8,7 +8,7 @@ from typing import cast
 
 from .data_lock import dictionary_lock
 from .dictionary import Dictionary, DictionaryData, Replacement
-from .operations import write_private
+from .private_files import write_private
 from .vocabulary import VocabularyStore
 
 MAX_TRANSFER_BYTES = 16 * 1024 * 1024

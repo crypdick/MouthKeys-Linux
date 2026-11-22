@@ -9,7 +9,7 @@ from typing import NotRequired, TypedDict, cast
 
 from .config import config_path, private_dir
 from .data_lock import dictionary_lock
-from .operations import write_private
+from .private_files import write_private
 
 
 class Replacement(TypedDict):

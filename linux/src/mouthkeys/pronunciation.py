@@ -15,7 +15,7 @@ import numpy as np
 
 from .acoustic_features import AcousticFeatures, acoustic_distance, acoustic_features
 from .config import config_path, private_dir
-from .operations import write_private
+from .private_files import write_private
 from .pronunciation_spans import PronunciationProfile, SpanResult, correct_spans, search_budget
 
 FEATURE_VERSION = "cepstral-dtw-16k-v1"

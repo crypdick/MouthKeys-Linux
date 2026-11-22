@@ -33,7 +33,7 @@ public_modules = [
   "mouthkeys",
   "mouthkeys.api_dictionary", "mouthkeys.ai_providers", "mouthkeys.ai_stream", "mouthkeys.ai_stream_events", "mouthkeys.assistance", "mouthkeys.command_preview",
   "mouthkeys.assistant_chats", "mouthkeys.assistant_editor", "mouthkeys.assistant_history", "mouthkeys.assistant_ui", "mouthkeys.audio",
-  "mouthkeys.backup_ui", "mouthkeys.benchmark", "mouthkeys.benchmark_reports", "mouthkeys.capture_recorder", "mouthkeys.cli", "mouthkeys.config", "mouthkeys.control", "mouthkeys.daemon", "mouthkeys.credentials",
+  "mouthkeys.backup", "mouthkeys.backup_ui", "mouthkeys.benchmark", "mouthkeys.benchmark_reports", "mouthkeys.capture_recorder", "mouthkeys.cli", "mouthkeys.config", "mouthkeys.control", "mouthkeys.daemon", "mouthkeys.credentials",
   "mouthkeys.data_lock", "mouthkeys.delivery", "mouthkeys.desktop_entry", "mouthkeys.desktop_input", "mouthkeys.dictionary", "mouthkeys.dictionary_transfer", "mouthkeys.dictionary_ui",
   "mouthkeys.engines", "mouthkeys.file_history", "mouthkeys.file_speakers", "mouthkeys.file_transcription", "mouthkeys.file_transcription_ui",
   "mouthkeys.forced_alignment", "mouthkeys.formatting", "mouthkeys.gui", "mouthkeys.gui_launch", "mouthkeys.help_ui", "mouthkeys.history_ui", "mouthkeys.hotkeys",
@@ -44,7 +44,7 @@ public_modules = [
   "mouthkeys.pronunciation", "mouthkeys.pronunciation_spans", "mouthkeys.qt_control", "mouthkeys.provider_settings_ui", "mouthkeys.provider_tools",
   "mouthkeys.recording_assistant", "mouthkeys.recording_cleanup", "mouthkeys.recording_delivery", "mouthkeys.recording_destination", "mouthkeys.recording_edit", "mouthkeys.recording_inference", "mouthkeys.recording_job",
   "mouthkeys.recording_learning", "mouthkeys.recording_preview", "mouthkeys.recording_setup", "mouthkeys.recording_transcript", "mouthkeys.regional", "mouthkeys.regional_ui", "mouthkeys.routing",
-  "mouthkeys.service", "mouthkeys.settings_choices", "mouthkeys.settings_fields", "mouthkeys.settings_form", "mouthkeys.setup_languages", "mouthkeys.shortcut_capture", "mouthkeys.stats_view", "mouthkeys.storage",
+  "mouthkeys.service", "mouthkeys.settings_choices", "mouthkeys.settings_fields", "mouthkeys.settings_form", "mouthkeys.setup_languages", "mouthkeys.shortcut_capture", "mouthkeys.statistics", "mouthkeys.stats_view", "mouthkeys.storage",
   "mouthkeys.transcribe", "mouthkeys.transcript_window", "mouthkeys.transformers_asr", "mouthkeys.tray", "mouthkeys.tray_status", "mouthkeys.upstream_backup", "mouthkeys.vocabulary", "mouthkeys.window_theme",
 ]
 
@@ -131,3 +131,9 @@ name = "repository_tools"
 root = "scripts.prek_hooks"
 role = "tools"
 public_modules = ["scripts.prek_hooks.architecture.api"]
+
+[[packages]]
+name = "private_files"
+root = "mouthkeys.private_files"
+role = "primitives"
+public_modules = ["mouthkeys.private_files"]

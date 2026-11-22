@@ -2,7 +2,6 @@
 
 import json
 import re
-import tempfile
 import uuid
 from dataclasses import replace
 from pathlib import Path
@@ -10,6 +9,7 @@ from typing import Any, TypedDict, cast
 
 from .ai_providers import PROVIDER_ENDPOINTS, endpoint_url
 from .config import Config, config_path, private_dir
+from .private_files import write_private
 
 
 class PromptProfile(TypedDict):
@@ -153,15 +153,7 @@ def save_profiles(profiles: object) -> None:
     validated = validate_profiles(profiles)
     path = profiles_path()
     private_dir(path.parent)
-    temporary = None
-    try:
-        with tempfile.NamedTemporaryFile(mode="w", dir=path.parent, delete=False) as stream:
-            temporary = Path(stream.name)
-            json.dump(validated, stream, indent=2, ensure_ascii=False)
-        temporary.replace(path)
-    finally:
-        if temporary:
-            temporary.unlink(missing_ok=True)
+    write_private(path, json.dumps(validated, indent=2, ensure_ascii=False).encode())
 
 
 def resolve_profile(config: Config, profiles: list[PromptProfile] | None = None) -> Config:

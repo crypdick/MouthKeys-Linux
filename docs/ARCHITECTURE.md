@@ -91,9 +91,11 @@ reply before stopping the server.
   discards frames read after cancellation or timeout. Imports, status, and Settings opening must
   not contact providers or download models.
 - **State:** `config.Config.from_mapping` loads settings at the JSON boundary, including old files.
-  `operations` prepares and applies backups. `upstream_backup` converts upstream dictionaries and
-  prompt drafts; `upstream_backup_sections` parses settings and transcript records without writing
-  state. `word_alignment`
+  `operations` dispatches history and backup actions; `statistics` summarizes history without
+  writing to it. `backup` validates a restore plan before applying it. `upstream_backup` converts
+  upstream dictionaries and prompt drafts; `upstream_backup_sections` parses settings and
+  transcript records without writing state. `private_files` atomically replaces private files.
+  `word_alignment`
   parses timed tokens into character-aware spans; character offsets are not time values.
 
 [Import policy](../architecture.toml) keeps primitives independent and prevents the desktop

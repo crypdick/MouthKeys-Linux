@@ -320,7 +320,7 @@ def test_unbound_voice_job_fails_before_requesting_a_proposal(history, tmp_path)
     app = controller()
     job = DictationJob("fixture", config, (), tmp_path / "recording.wav", mode="edit")
     with pytest.raises(ValueError, match="Assistant session no longer exists"):
-        app.recording_assistant.propose(job, config, "Instruction", lambda _: False)
+        app.recording_assistant.propose(job, config, "Instruction")
     assert not (state_dir() / "assistant.sqlite3").exists()
 
 
@@ -336,6 +336,6 @@ def test_bound_voice_job_cancelled_before_inference_never_reaches_provider(monke
 
     monkeypatch.setattr(assistance, "propose", unexpected)
     with pytest.raises(ValueError, match="Assistant request cancelled"):
-        app.recording_assistant.propose(job, config, "Instruction", lambda _: False)
+        app.recording_assistant.propose(job, config, "Instruction")
     assert app.recording_assistant.stream_status() is None
     assert not (state_dir() / "assistant.sqlite3").exists()

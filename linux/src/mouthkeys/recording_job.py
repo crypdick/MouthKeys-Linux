@@ -10,6 +10,8 @@ from .config import Config
 from .profiles import PromptProfile
 from .routing import PromptRoute
 
+MAX_SELECTION_LENGTH = 100000
+
 
 @dataclass
 class DictationJob:
@@ -51,7 +53,7 @@ def recording_input(data: Mapping[str, object]) -> tuple[str, str, str]:
     ):
         raise ValueError("Unknown recording mode")
     selected = data.get("selected_text", "")
-    if not isinstance(selected, str) or len(selected) > 100000:
+    if not isinstance(selected, str) or len(selected) > MAX_SELECTION_LENGTH:
         raise ValueError("Selected text exceeds 100000 characters")
     label = data.get("label", "")
     if mode != "pronunciation":

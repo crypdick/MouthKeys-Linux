@@ -12,6 +12,7 @@ from . import assistance, assistant_history
 from .ai_providers import validate_history
 from .config import Config
 from .control import MAX_MESSAGE
+from .recording_edit import can_replace_edit
 from .recording_job import DictationJob
 
 STREAM_LIMIT = 131072
@@ -238,13 +239,7 @@ class RecordingAssistant:
         if self._cancelled(job):
             raise ValueError("Assistant command cancelled; execution receipt retained")
 
-    def propose(
-        self,
-        job: DictationJob,
-        config: Config,
-        text: str,
-        can_replace: Callable[[DictationJob], bool],
-    ) -> dict[str, Any]:
+    def propose(self, job: DictationJob, config: Config, text: str) -> dict[str, Any]:
         session = _Session.open(job, config)
         executions = 0
         for step in range(STEP_LIMIT):
@@ -277,6 +272,6 @@ class RecordingAssistant:
         if executions:
             proposal["execution_count"] = executions
         if job.mode == "edit":
-            proposal.update(edit_id=job.item_id, can_accept_edit=can_replace(job))
+            proposal.update(edit_id=job.item_id, can_accept_edit=can_replace_edit(job))
         _bound_proposal(proposal)
         return proposal

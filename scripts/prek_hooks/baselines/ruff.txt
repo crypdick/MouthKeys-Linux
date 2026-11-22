@@ -640,26 +640,22 @@
 1	src/mouthkeys/routing.py	PLR0913	Too many arguments in function definition (6 > 5)
 1	src/mouthkeys/service.py	ANN001	Missing type annotation for function argument `_focus_gate`
 3	src/mouthkeys/service.py	ANN001	Missing type annotation for function argument `action`
-1	src/mouthkeys/service.py	ANN001	Missing type annotation for function argument `auto_paste_expected`
-2	src/mouthkeys/service.py	ANN001	Missing type annotation for function argument `data`
+1	src/mouthkeys/service.py	ANN001	Missing type annotation for function argument `data`
 1	src/mouthkeys/service.py	ANN001	Missing type annotation for function argument `delivery`
 1	src/mouthkeys/service.py	ANN001	Missing type annotation for function argument `error`
 1	src/mouthkeys/service.py	ANN001	Missing type annotation for function argument `history`
-5	src/mouthkeys/service.py	ANN001	Missing type annotation for function argument `job`
+3	src/mouthkeys/service.py	ANN001	Missing type annotation for function argument `job`
 1	src/mouthkeys/service.py	ANN001	Missing type annotation for function argument `message`
 1	src/mouthkeys/service.py	ANN001	Missing type annotation for function argument `phase`
 1	src/mouthkeys/service.py	ANN001	Missing type annotation for function argument `recorder`
 1	src/mouthkeys/service.py	ANN001	Missing type annotation for function argument `status`
-1	src/mouthkeys/service.py	ANN001	Missing type annotation for function argument `target`
 1	src/mouthkeys/service.py	ANN001	Missing type annotation for function argument `text`
 1	src/mouthkeys/service.py	ANN001	Missing type annotation for function argument `transcriber`
 2	src/mouthkeys/service.py	ANN003	Missing type annotation for `**data`
 1	src/mouthkeys/service.py	ANN003	Missing type annotation for `**metadata`
 1	src/mouthkeys/service.py	ANN201	Missing return type annotation for public function `command`
 1	src/mouthkeys/service.py	ANN201	Missing return type annotation for public function `interrupt`
-1	src/mouthkeys/service.py	ANN202	Missing return type annotation for private function `_accept_edit`
 1	src/mouthkeys/service.py	ANN202	Missing return type annotation for private function `_command`
-1	src/mouthkeys/service.py	ANN202	Missing return type annotation for private function `_finish`
 1	src/mouthkeys/service.py	ANN202	Missing return type annotation for private function `_job_status`
 1	src/mouthkeys/service.py	ANN202	Missing return type annotation for private function `_manual_delivery`
 1	src/mouthkeys/service.py	ANN202	Missing return type annotation for private function `_pending_jobs`
@@ -667,12 +663,11 @@
 1	src/mouthkeys/service.py	ANN202	Missing return type annotation for private function `_wait_for_predecessors`
 1	src/mouthkeys/service.py	ANN202	Missing return type annotation for private function `_warmup`
 1	src/mouthkeys/service.py	ANN204	Missing return type annotation for special method `__init__`
-1	src/mouthkeys/service.py	ANN205	Missing return type annotation for staticmethod `_edit_target_matches`
-1	src/mouthkeys/service.py	C901	`_finish` is too complex (47 > 15)
+1	src/mouthkeys/service.py	C901	`_finish` is too complex (42 > 15)
 5	src/mouthkeys/service.py	PLC0415	`import` should be at the top-level of a file
-1	src/mouthkeys/service.py	PLR0911	Too many return statements (15 > 6)
-1	src/mouthkeys/service.py	PLR0912	Too many branches (51 > 12)
-1	src/mouthkeys/service.py	PLR0915	Too many statements (166 > 50)
+1	src/mouthkeys/service.py	PLR0911	Too many return statements (12 > 6)
+1	src/mouthkeys/service.py	PLR0912	Too many branches (46 > 12)
+1	src/mouthkeys/service.py	PLR0915	Too many statements (144 > 50)
 1	src/mouthkeys/service.py	SIM105	Use `contextlib.suppress(Exception)` instead of `try`-`except`-`pass`
 1	src/mouthkeys/setup_languages.py	ANN001	Missing type annotation for function argument `engine`
 1	src/mouthkeys/setup_languages.py	ANN001	Missing type annotation for function argument `label`
@@ -819,7 +814,6 @@
 1	tests/test_provider_tools.py	PT011	`pytest.raises(ValueError)` is too broad, set the `match` parameter or use a more specific exception
 17	tests/test_remaining_parity.py	PLC0415	`import` should be at the top-level of a file
 3	tests/test_remaining_parity.py	PT011	`pytest.raises(ValueError)` is too broad, set the `match` parameter or use a more specific exception
-1	tests/test_service_learning.py	PLC0415	`import` should be at the top-level of a file
 1	tests/test_service_learning.py	PT006	Wrong type passed to first argument of `pytest.mark.parametrize`; expected `tuple`
 1	tests/test_service_sessions.py	PT011	`pytest.raises(ValueError)` is too broad, set the `match` parameter or use a more specific exception
 6	tests/test_setup.py	PLC0415	`import` should be at the top-level of a file

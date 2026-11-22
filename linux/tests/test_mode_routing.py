@@ -2,7 +2,6 @@ import json
 import threading
 import uuid
 from dataclasses import asdict, replace
-from types import SimpleNamespace
 
 import pytest
 
@@ -10,6 +9,7 @@ from mouthkeys import assistance
 from mouthkeys.config import Config
 from mouthkeys.learning import CorrectionLearner
 from mouthkeys.profiles import PROFILE_FIELDS, save_profiles
+from mouthkeys.recording_edit import matches_edit_selection
 from mouthkeys.routing import save_routes, select_prompt
 from mouthkeys.service import Controller
 from mouthkeys.storage import History
@@ -176,9 +176,7 @@ def test_partial_snapshots_never_seed_learning_or_automatic_edit():
     learner = CorrectionLearner(Config(automatic_learning="on"))
     assert not learner.begin("Original", snapshot)
     field = {**snapshot, "selection_start": 0}
-    assert not Controller._edit_target_matches(
-        SimpleNamespace(start_target={"field": field}, selected_text="Original")
-    )
+    assert not matches_edit_selection({"field": field}, "Original")
 
 
 def test_cancel_after_completed_native_preview_releases_cache_for_file_inference():

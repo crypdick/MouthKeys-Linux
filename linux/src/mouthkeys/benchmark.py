@@ -150,7 +150,7 @@ def _sample_worker(
     return peak, samples
 
 
-def run_benchmark(
+def run_benchmark(  # noqa: PLR0913 - independent fixture and benchmark options
     config: Config,
     fixture: str | Path,
     *,
@@ -222,7 +222,7 @@ def matching_measurement(
     if not reports:
         return None
 
-    from .native_asr import effective_revision
+    from .native_asr import effective_revision  # noqa: PLC0415 - load benchmark dependencies only for this operation
 
     revision = (
         effective_revision(config.model, config.model_revision, config.engine)
@@ -271,8 +271,8 @@ def matching_measurement(
 
 
 def _local_config(config: Config) -> tuple[Config, Path]:
-    from .engines import READY, managed_path, onnx_path, resolve_whisper
-    from .native_asr import local_artifact
+    from .engines import READY, managed_path, onnx_path, resolve_whisper  # noqa: PLC0415 - load benchmark dependencies only for this operation
+    from .native_asr import local_artifact  # noqa: PLC0415 - load benchmark dependencies only for this operation
 
     if config.engine == "whisper":
         path = Path(resolve_whisper(config))
@@ -327,9 +327,9 @@ def _copy_fixture(source: Path, destination: Path) -> str:
 
 
 def _measure(request: dict[str, Any]) -> dict[str, Any]:
-    from .file_transcription import transcribe_file
-    from .native_asr import effective_revision
-    from .transcribe import Transcriber
+    from .file_transcription import transcribe_file  # noqa: PLC0415 - load benchmark dependencies only for this operation
+    from .native_asr import effective_revision  # noqa: PLC0415 - load benchmark dependencies only for this operation
+    from .transcribe import Transcriber  # noqa: PLC0415 - load benchmark dependencies only for this operation
 
     original = Config.from_mapping(request["config"])
     config, artifact = _local_config(original)
@@ -397,7 +397,7 @@ def worker_main() -> None:
     sys.stdout = sys.stderr
     os.dup2(sys.stderr.fileno(), 1)
     try:
-        from .native_worker import isolate_network
+        from .native_worker import isolate_network  # noqa: PLC0415 - load benchmark dependencies only for this operation
 
         isolate_network()  # Fail closed before any model/library loading.
         raw = sys.stdin.buffer.read(2 * 1024 * 1024 + 1)

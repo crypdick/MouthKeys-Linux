@@ -122,10 +122,13 @@ class Delivery:
         if not current or current.get("text") != field.get("text"):
             return False
         try:
-            if window and (not desktop_input.activate_window(window) or self.focus() != window):
-                return False
-            return accessibility.focus_target(field) and bool(
-                self._field_current(target, unchanged=True)
+            window_ready = not window or (
+                desktop_input.activate_window(window) and self.focus() == window
+            )
+            return (
+                window_ready
+                and accessibility.focus_target(field)
+                and bool(self._field_current(target, unchanged=True))
             )
         except (OSError, RuntimeError, subprocess.SubprocessError):
             return False
@@ -143,10 +146,7 @@ class Delivery:
             or target["field"].get("terminal")
             or not self.prepare_target(config, target)
         ):
-            if cancel_event is not None and cancel_event.is_set():
-                return "cancelled"
-            self.copy(text)
-            return "copied"
+            return self._copy_unless_cancelled(text, cancel_event)
         return self._deliver_field(
             text,
             replace(config, delivery=desktop_input.session(), insertion_mode="direct"),
@@ -169,6 +169,12 @@ class Delivery:
         self.copy(text)
         return "insert_requested"
 
+    def _copy_unless_cancelled(self, text: str, cancel_event: Event | None) -> str:
+        if cancel_event is not None and cancel_event.is_set():
+            return "cancelled"
+        self.copy(text)
+        return "copied"
+
     def _deliver_field(
         self, text: str, config: Config, target: CapturedField, *, cancel_event: Event | None = None
     ) -> str:
@@ -176,10 +182,7 @@ class Delivery:
         if cancel_event is not None and cancel_event.is_set():
             return "cancelled"
         if config.delivery != desktop_input.session() or not self.prepare_target(config, target):
-            if cancel_event is not None and cancel_event.is_set():
-                return "cancelled"
-            self.copy(text)
-            return "copied"
+            return self._copy_unless_cancelled(text, cancel_event)
         if cancel_event is not None and cancel_event.is_set():
             return "cancelled"
         field = target["field"]
@@ -196,6 +199,17 @@ class Delivery:
             if cancel_event is not None and cancel_event.is_set():
                 return "cancelled"
             self.copy(text)
+        return self._paste_field(text, config, target, finish_paste, cancel_event=cancel_event)
+
+    def _paste_field(
+        self,
+        text: str,
+        config: Config,
+        target: CapturedField,
+        finish_paste: Callable[[bool], bool] | None,
+        *,
+        cancel_event: Event | None,
+    ) -> str:
         verified = None
         try:
             if not self._field_current(target, unchanged=True):
@@ -204,7 +218,7 @@ class Delivery:
                 return "cancelled"
             self.paste_key(config)
             if config.verify_paste == "on":
-                verified = _verify_field_paste(field, text)
+                verified = _verify_field_paste(target["field"], text)
                 self.last_verified = verified
             return "pasted" if verified is not None else "paste_requested"
         finally:

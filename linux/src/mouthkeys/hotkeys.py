@@ -250,7 +250,7 @@ def launch() -> int:
         try:
             ensure_daemon()
             if config.shortcut_backend == "portal":
-                from .portal_shortcuts import launch as portal
+                from .portal_shortcuts import launch as portal  # noqa: PLC0415 - portal backend is explicitly selected
 
                 return portal()
             return _run_x11(config)

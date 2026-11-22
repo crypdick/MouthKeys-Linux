@@ -60,7 +60,7 @@ def save_routes(routes: object) -> None:
     write_private(path, json.dumps(validate_routes(routes), indent=2).encode())
 
 
-def select_prompt(
+def select_prompt(  # noqa: PLR0913 - keep routing precedence inputs explicit
     config: Config,
     app: str = "",
     override: object = None,
@@ -107,7 +107,7 @@ def select_prompt(
     if config.ai_enabled == "on":
         config = replace(resolve_profile(config, profiles), ai_profile="")
     if mode != "dictation" and not custom_profile:
-        from .assistance import COMMAND_PROMPT, EDIT_PROMPT
+        from .assistance import COMMAND_PROMPT, EDIT_PROMPT  # noqa: PLC0415 - assistant proposals also depend on routing
 
         explicit = getattr(config, mode + "_prompt", "")
         config = replace(

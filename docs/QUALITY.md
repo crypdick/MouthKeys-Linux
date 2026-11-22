@@ -12,19 +12,13 @@ Run `prek install` from the control checkout to enable commit checks. Use a prek
 available outside disposable feature worktrees. To run a single gate:
 `uv run --project linux --locked prek run HOOK --all-files`.
 
-## Existing debt
+## Required checks
 
 - **Types and lint:** Strict mypy checks production code. Ruff checks production and tests;
-  complexity limit is 15. Existing diagnostics are counted by path, rule and message in
-  [baselines](../scripts/prek_hooks/baselines). No new diagnostic or increase in its count is
-  allowed. Line edits do not reset debt. After reducing it, run
-  `uv run --project linux --locked --extra gui python -m scripts.prek_hooks.check_quality_budget TOOL --prune`
-  for `ruff`, `mypy`, or `file-length`. Pruning rejects growth. Review baseline changes with the
-  corresponding code: identical messages in one file share a count. If a complexity diagnostic's
-  message changes as the score falls, replace its baseline entry with the lower measurement
-  explicitly.
-- **Size:** Python files are limited to 400 code-containing lines. Extract complete workflows
-  without changing locking, cancellation, or delivery order.
+  cyclomatic complexity is limited to 15. The tracked [baselines](../scripts/prek_hooks/baselines)
+  are empty: fix new diagnostics rather than adding exceptions to the baselines.
+- **Size:** Python files are limited to 400 code-containing lines, with no grandfathered files.
+  Extract complete workflows without changing locking, cancellation, or delivery order.
 - **Coverage:** The headless suite requires 100% line and branch coverage, including Python
   subprocesses started by the tests. Desktop and optional pretrained-model checks remain separate; see
   [the parity ledger](../linux/PARITY.md). Don't count manual checks as automated coverage.

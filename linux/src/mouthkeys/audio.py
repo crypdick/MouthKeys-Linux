@@ -67,7 +67,7 @@ class CaptureSession:
             descriptor = os.open(self.path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
             self.output = self._files.enter_context(os.fdopen(descriptor, "wb"))
             os.fchmod(descriptor, 0o600)
-            self.writer = self._files.enter_context(wave.open(self.output, "wb"))
+            self.writer = self._files.enter_context(wave.open(self.output, "wb"))  # noqa: SIM115 - capture owns the descriptor through its ExitStack
             self.writer.setparams((1, 2, 16000, 0, "NONE", "not compressed"))
             self.writer.writeframes(b"")
             self.output.flush()

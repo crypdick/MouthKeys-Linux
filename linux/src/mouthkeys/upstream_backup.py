@@ -67,7 +67,7 @@ def read_backup(
         raise ValueError("Backup exceeds 100 MiB")
     data = json.loads(raw)
     if not isinstance(data, dict):
-        raise ValueError("Backup must be a JSON object")
+        raise ValueError("Backup must be a JSON object")  # noqa: TRY004 - backup payload validation
     return (data, hashlib.sha256(raw).hexdigest()) if with_digest else data
 
 
@@ -80,7 +80,7 @@ def _provider(settings: dict[str, object]) -> Config | None:
     base = saved.get("baseURL") if saved else PROVIDERS.get(provider_id)
     models = settings.get("selectedModelByProvider", {})
     if not isinstance(models, dict):
-        raise ValueError("Invalid upstream selectedModelByProvider")
+        raise ValueError("Invalid upstream selectedModelByProvider")  # noqa: TRY004 - backup payload validation
     model = models.get(provider_id) or models.get("custom:" + provider_id)
     if not isinstance(base, str) or not isinstance(model, str) or not model.strip():
         return None
@@ -318,7 +318,7 @@ def _pending_bindings(
     return pending_bindings
 
 
-def _convert_upstream_backup(
+def _convert_upstream_backup(  # noqa: PLR0913 - explicit snapshots of each store used in migration
     document: object,
     base_config: Config,
     current_dictionary: object,
@@ -403,7 +403,7 @@ def _convert_upstream_backup(
     return backup, report
 
 
-def convert_upstream_backup(
+def convert_upstream_backup(  # noqa: PLR0913 - explicit snapshots of each store used in migration
     document: object,
     base_config: Config,
     current_dictionary: object,

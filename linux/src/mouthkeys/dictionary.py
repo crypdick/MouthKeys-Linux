@@ -221,13 +221,13 @@ class Dictionary:
 
     @classmethod
     def import_file(cls, path: str | Path, mode: str = "replace") -> DictionaryData:
-        from .dictionary_transfer import import_file
+        from .dictionary_transfer import import_file  # noqa: PLC0415 - transfer uses the dictionary store
 
         return import_file(path, mode)
 
     @classmethod
     def export_file(cls, path: str | Path, format: str = "native") -> None:  # noqa: A002 - transfer keyword
-        from .dictionary_transfer import export_file
+        from .dictionary_transfer import export_file  # noqa: PLC0415 - transfer uses the dictionary store
 
         export_file(path, format)
 

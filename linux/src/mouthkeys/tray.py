@@ -60,7 +60,7 @@ class Tray(QSystemTrayIcon):
 
     def open_window(self) -> None:
         if self.window is None:
-            from .gui import Window
+            from .gui import Window  # noqa: PLC0415 - open the settings window only on request
 
             self.window = Window()
         self.window.show()

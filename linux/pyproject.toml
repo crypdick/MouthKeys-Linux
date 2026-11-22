@@ -72,7 +72,7 @@ source = ["mouthkeys"]
 patch = ["subprocess"]
 
 [tool.coverage.report]
-# Headless baseline. Raise as coverage improves; hardware checks are tracked in PARITY.md.
+# Hardware and desktop checks are tracked separately in PARITY.md.
 fail_under = 100
 precision = 2
 skip_empty = true

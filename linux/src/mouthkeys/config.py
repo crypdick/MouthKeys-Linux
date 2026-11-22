@@ -201,7 +201,7 @@ class Config:
     @classmethod
     def from_mapping(cls, values: object) -> Self:
         if not isinstance(values, dict):
-            raise ValueError("Configuration must be a JSON object")
+            raise ValueError("Configuration must be a JSON object")  # noqa: TRY004 - settings payload validation
         # Existing files/backups share this legacy-key migration.
         current = {
             key: value

@@ -62,12 +62,11 @@ def correction_candidate(
     if before == after:
         return None
     start, old_end, new_end = changed_range(before, after)
-    if start < inserted_start or old_end > inserted_end:
-        return None
-    # Inserting punctuation/another sentence after dictation is not a correction.
-    if start == old_end == inserted_end and any(
+    trailing_input = start == old_end == inserted_end and any(
         char.isspace() or char in _BOUNDARIES for char in after[start:new_end]
-    ):
+    )
+    # Edits outside the dictated span and trailing punctuation are not corrections.
+    if start < inserted_start or old_end > inserted_end or trailing_input:
         return None
     left, right = _token_range(before, start, old_end)
     if left < inserted_start or right > inserted_end:
@@ -124,7 +123,7 @@ class CorrectionLearner:
             raise ValueError("Learning policy file exceeds 256 KiB")
         data = json.loads(path.read_text())
         if not isinstance(data, dict) or not isinstance(data.get("pairs"), dict):
-            raise ValueError("Invalid learning policy file")
+            raise ValueError("Invalid learning policy file")  # noqa: TRY004 - persisted policy
         return data
 
     def _save(self, data: dict[str, Any]) -> None:
@@ -307,7 +306,7 @@ class CorrectionLearner:
             entries = VocabularyStore.validate_entries(entries)
             policy = self._load()
             if not isinstance(policy["pairs"].get(proposal["key"]), dict):
-                raise ValueError("Learning suggestion no longer exists")
+                raise ValueError("Learning suggestion no longer exists")  # noqa: TRY004 - stale ID
             policy["pairs"][proposal["key"]]["accepted"] = True
             Dictionary.save(data)
             VocabularyStore.save_entries(entries)

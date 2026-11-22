@@ -167,7 +167,7 @@ def _read_completion(
     return pieces, complete
 
 
-def stream_completion(
+def stream_completion(  # noqa: PLR0913 - stream callbacks and request context are independent
     endpoint: str,
     payload: Mapping[str, object],
     config: _StreamConfig,

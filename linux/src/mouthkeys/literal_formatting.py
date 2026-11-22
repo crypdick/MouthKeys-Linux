@@ -164,7 +164,9 @@ def apply_literal_formatting(
         if is_relaxed and not relaxed:
             continue
 
-        def mention(match: re.Match[str], is_relaxed: bool = is_relaxed, source: str = text) -> str:
+        def mention(
+            match: re.Match[str], *, is_relaxed: bool = is_relaxed, source: str = text
+        ) -> str:
             words = match[1].split(" ")
             if any(word.lower() in _MENTION_REJECTED for word in words):
                 return match[0]

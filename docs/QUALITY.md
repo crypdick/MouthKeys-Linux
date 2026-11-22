@@ -25,7 +25,7 @@ available outside disposable feature worktrees. To run a single gate:
   explicitly.
 - **Size:** Python files are limited to 400 code-containing lines. Extract complete workflows
   without changing locking, cancellation, or delivery order.
-- **Coverage:** The combined headless line and branch coverage floor is 98.6%, with 100% as the target.
+- **Coverage:** The combined headless line and branch coverage floor is 98.8%, with 100% as the target.
   The gate includes Python subprocesses started by the tests. Raise the floor when measured coverage
   improves. Desktop and optional pretrained-model checks remain separate; see
   [the parity ledger](../linux/PARITY.md). Don't count manual checks as automated coverage.

@@ -8,127 +8,106 @@ https://docs.ollama.com/api/tags
 """
 
 import urllib.parse
-from collections.abc import Callable
+from collections.abc import Iterator
 from dataclasses import replace
-from typing import BinaryIO
 
-from .ai_providers import _completion, _request_payload, endpoint_url, request_json
+from .ai_provider_settings import endpoint_url, models_endpoint
+from .ai_providers import RequestOpener, _completion, _request_payload, request_json
 from .config import Config
 from .profiles import resolve_profile
 
 
-def _origin(url: str) -> tuple[str, str, int]:
-    parsed = urllib.parse.urlsplit(endpoint_url(url))
-    hostname = parsed.hostname
-    if hostname is None:
-        raise ValueError("Missing provider hostname")
-    return (
-        parsed.scheme,
-        hostname.lower(),
-        parsed.port if parsed.port is not None else (443 if parsed.scheme == "https" else 80),
-    )
-
-
-def models_endpoint(config):
-    endpoint = endpoint_url(config.ai_endpoint)
-    explicit = getattr(config, "ai_models_endpoint", "")
-    if explicit:
-        explicit = endpoint_url(explicit)
-        if _origin(explicit) != _origin(endpoint):
-            raise ValueError("Model discovery endpoint must share completion endpoint origin")
-        return explicit
-    parsed = urllib.parse.urlsplit(endpoint)
-    path = parsed.path
-    provider = config.ai_provider
-    if provider == "compatible" and path.endswith("/chat/completions"):
-        path = path.removesuffix("/chat/completions") + "/models"
-    elif provider == "anthropic" and path.endswith("/messages"):
-        path = path.removesuffix("/messages") + "/models"
-    elif provider == "ollama" and path.endswith("/api/chat"):
-        path = path.removesuffix("/api/chat") + "/api/tags"
-    elif provider == "gemini" and "/models/" in path and path.endswith(":generateContent"):
-        path = path.rsplit("/models/", 1)[0] + "/models"
+def _model_identifier(item: dict[str, object], provider: str) -> str:
+    if provider == "gemini":
+        name = item.get("name")
+        if isinstance(name, str):
+            name = name.removeprefix("models/")
+    elif provider == "ollama":
+        name = item.get("name", item.get("model"))
     else:
-        raise ValueError("Custom completion route requires an explicit model discovery endpoint")
-    # Keep an explicit deployment/API-version query rather than inventing another provider.
-    return urllib.parse.urlunsplit(parsed._replace(path=path))
+        name = item.get("id")
+    if not isinstance(name, str) or not name or len(name) > 500 or not name.isprintable():
+        raise ValueError("Model discovery returned an invalid model identifier")
+    return name
 
 
-def _with_query(endpoint, **values):
+def _page_models(page: dict[str, object], provider: str) -> Iterator[str]:
+    items = page.get("models" if provider in ("gemini", "ollama") else "data")
+    if not isinstance(items, list):
+        raise ValueError("Model discovery returned no model list")  # noqa: TRY004 - provider payload
+    for item in items:
+        if not isinstance(item, dict):
+            raise ValueError("Model discovery returned an invalid model")  # noqa: TRY004 - provider payload
+        if provider == "gemini":
+            methods = item.get("supportedGenerationMethods", [])
+            if not isinstance(methods, list):
+                raise ValueError("Model discovery returned invalid model capabilities")
+            if "generateContent" not in methods:
+                continue
+        yield _model_identifier(item, provider)
+
+
+def _next_cursor(page: dict[str, object], provider: str) -> tuple[str, str] | None:
+    if provider == "gemini":
+        cursor = page.get("nextPageToken")
+        if cursor is None or cursor == "":
+            return None
+        if not isinstance(cursor, str) or len(cursor) > 2048:
+            raise ValueError("Model discovery returned an invalid page cursor")
+        return "pageToken", cursor
+    if provider == "anthropic" and page.get("has_more"):
+        cursor = page.get("last_id")
+        if not isinstance(cursor, str) or not cursor or len(cursor) > 500:
+            raise ValueError("Model discovery returned an invalid page cursor")
+        return "after_id", cursor
+    return None
+
+
+def _page_url(endpoint: str, key: str, cursor: str) -> str:
     parsed = urllib.parse.urlsplit(endpoint)
-    query = dict(urllib.parse.parse_qsl(parsed.query))
-    query.update(values)
+    query = [
+        (name, value)
+        for name, value in urllib.parse.parse_qsl(parsed.query, keep_blank_values=True)
+        if name != key
+    ]
+    query.append((key, cursor))
     return urllib.parse.urlunsplit(parsed._replace(query=urllib.parse.urlencode(query)))
 
 
-def list_models(config: Config, *, opener: Callable[..., BinaryIO] | None = None) -> list[str]:
+def list_models(config: Config, *, opener: RequestOpener | None = None) -> list[str]:
     """List server-visible models on explicit request, at most 1000 IDs/ten pages."""
     config = resolve_profile(config)
-    endpoint = models_endpoint(config)
     provider = config.ai_provider
-    found = []
-    seen_pages = set()
+    base = models_endpoint(config.ai_endpoint, provider, explicit=config.ai_models_endpoint)
+    endpoint = base
+    found: dict[str, None] = {}
+    seen: set[str] = set()
     for _ in range(10):
-        if endpoint in seen_pages:
+        if endpoint in seen:
             raise ValueError("Model discovery returned a repeated page cursor")
-        seen_pages.add(endpoint)
-        data = request_json(endpoint, config, opener=opener)
-        if not isinstance(data, dict):
-            raise ValueError("Model discovery returned no model list")
-        key = "models" if provider in ("gemini", "ollama") else "data"
-        items = data.get(key)
-        if not isinstance(items, list):
-            raise ValueError("Model discovery returned no model list")
-        for item in items:
-            if not isinstance(item, dict):
-                raise ValueError("Model discovery returned an invalid model")
-            if provider == "gemini":
-                if "generateContent" not in item.get("supportedGenerationMethods", []):
-                    continue
-                name = item.get("name", "")
-                if isinstance(name, str):
-                    name = name.removeprefix("models/")
-            elif provider == "ollama":
-                name = item.get("name", item.get("model", ""))
-            else:
-                name = item.get("id", "")
-            if (
-                not isinstance(name, str)
-                or not name
-                or len(name) > 500
-                or any(not c.isprintable() for c in name)
-            ):
-                raise ValueError("Model discovery returned an invalid model identifier")
-            if name not in found:
-                found.append(name)
+        seen.add(endpoint)
+        page = request_json(endpoint, config, opener=opener)
+        if not isinstance(page, dict):
+            raise ValueError("Model discovery returned no model list")  # noqa: TRY004 - provider payload
+        for name in _page_models(page, provider):
+            found[name] = None
             if len(found) > 1000:
                 raise ValueError("Model discovery exceeds 1000 models")
-        if provider == "gemini" and data.get("nextPageToken"):
-            cursor = data["nextPageToken"]
-            if not isinstance(cursor, str) or len(cursor) > 2048:
-                raise ValueError("Model discovery returned an invalid page cursor")
-            endpoint = _with_query(models_endpoint(config), pageToken=cursor)
-        elif provider == "anthropic" and data.get("has_more"):
-            cursor = data.get("last_id")
-            if not isinstance(cursor, str) or not cursor or len(cursor) > 500:
-                raise ValueError("Model discovery returned an invalid page cursor")
-            endpoint = _with_query(models_endpoint(config), after_id=cursor)
-        else:
-            return found
+        cursor = _next_cursor(page, provider)
+        if cursor is None:
+            return list(found)
+        endpoint = _page_url(base, *cursor)
     raise ValueError("Model discovery exceeds ten pages")
 
 
-def verify(
-    config: Config, *, opener: Callable[..., BinaryIO] | None = None
-) -> dict[str, str | bool]:
+def verify(config: Config, *, opener: RequestOpener | None = None) -> dict[str, str | bool]:
     """Explicit tiny completion checks credentials, selected model, and protocol.
 
     Only a fixed test prompt leaves the process. Provider content is discarded; the
     result never quotes untrusted provider text, diagnostic payloads, or credentials.
     """
-    config = resolve_profile(config)
     config = replace(
-        config,
+        resolve_profile(config),
         ai_enabled="on",
         ai_prompt="Return only the word OK.",
         ai_max_tokens=32,
@@ -138,13 +117,16 @@ def verify(
     model = urllib.parse.quote(config.ai_model.removeprefix("models/"), safe="")
     if not model:
         raise ValueError("Choose an AI cleanup model first")
-    payload = _request_payload("Connection test", config, config.ai_provider)
-    if config.ai_provider == "compatible":
+    provider = config.ai_provider
+    payload = _request_payload("Connection test", config, provider)
+    if provider == "compatible":
         payload["max_tokens"] = 32
     endpoint = endpoint_url(config.ai_endpoint.replace("{model}", model))
-    result = _completion(
-        request_json(endpoint, config, body=payload, opener=opener), config.ai_provider
-    )
+    data = request_json(endpoint, config, body=payload, opener=opener)
+    try:
+        result = _completion(data, provider)
+    except (KeyError, IndexError, TypeError, AttributeError):
+        raise ValueError("AI endpoint returned no text completion") from None
     if not isinstance(result, str) or not result.strip():
         raise ValueError("AI endpoint returned no text completion")
-    return {"ok": True, "provider": config.ai_provider, "model": config.ai_model}
+    return {"ok": True, "provider": provider, "model": config.ai_model}

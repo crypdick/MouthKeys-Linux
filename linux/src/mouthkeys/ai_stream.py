@@ -18,12 +18,11 @@ from contextlib import contextmanager, suppress
 from dataclasses import dataclass
 from typing import Any, Protocol, runtime_checkable
 
-from .ai_providers import MAX_RESPONSE, NoRedirect, endpoint_url, request_headers
+from .ai_provider_settings import endpoint_url
+from .ai_providers import MAX_RESPONSE, CompletionCancelledError, NoRedirect, request_headers
 from .ai_stream_events import read_delta
 
-
-class CompletionCancelled(RuntimeError):
-    pass
+CompletionCancelled = CompletionCancelledError
 
 
 @runtime_checkable
@@ -48,7 +47,7 @@ class _StreamLimit:
 
     def check(self) -> None:
         if self.cancelled is not None and self.cancelled.is_set():
-            raise CompletionCancelled("AI cleanup cancelled")
+            raise CompletionCancelledError("AI cleanup cancelled")
         if time.monotonic() >= self.deadline:
             raise RuntimeError("AI cleanup stream timed out")
 
@@ -179,7 +178,7 @@ def stream_completion(
     on_thinking: Callable[[str], None] | None = None,
 ) -> str:
     if cancel_event is not None and cancel_event.is_set():
-        raise CompletionCancelled("AI cleanup cancelled")
+        raise CompletionCancelledError("AI cleanup cancelled")
     request = _stream_request(endpoint, payload, config)
     open_request = opener or urllib.request.build_opener(NoRedirect()).open
     timeout = config.ai_timeout

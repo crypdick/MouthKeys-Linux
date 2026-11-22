@@ -7,6 +7,7 @@ from typing import Self
 
 from beartype.roar import BeartypeCallHintParamViolation
 
+from .ai_provider_settings import endpoint_url, models_endpoint, reasoning_option
 from .private_files import write_private
 
 
@@ -183,15 +184,11 @@ class Config:
                 continue
             if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,127}", getattr(self, key)):
                 raise ValueError(f"{key} must name an environment variable, not contain a secret")
-        from .ai_providers import endpoint_url, validate_reasoning
-
-        endpoint_url(self.ai_endpoint)
         if self.ai_models_endpoint:
-            endpoint_url(self.ai_models_endpoint)
-            from .provider_tools import models_endpoint
-
-            models_endpoint(self)
-        validate_reasoning(self)
+            models_endpoint(self.ai_endpoint, self.ai_provider, explicit=self.ai_models_endpoint)
+        else:
+            endpoint_url(self.ai_endpoint)
+        reasoning_option(self.ai_reasoning_parameter, self.ai_reasoning_value)
         return self
 
     @classmethod

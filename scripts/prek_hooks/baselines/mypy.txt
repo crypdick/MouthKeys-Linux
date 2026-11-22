@@ -1,14 +1,4 @@
-1	src/mouthkeys/ai_providers.py	no-untyped-call	Call to untyped function "_apply_reasoning" in typed context
-1	src/mouthkeys/ai_providers.py	no-untyped-call	Call to untyped function "_base_payload" in typed context
-1	src/mouthkeys/ai_providers.py	no-untyped-call	Call to untyped function "_completion" in typed context
-2	src/mouthkeys/ai_providers.py	no-untyped-call	Call to untyped function "_request_payload" in typed context
-1	src/mouthkeys/ai_providers.py	no-untyped-call	Call to untyped function "request_headers" in typed context
-1	src/mouthkeys/ai_providers.py	no-untyped-call	Call to untyped function "request_json" in typed context
-1	src/mouthkeys/ai_providers.py	no-untyped-call	Call to untyped function "validate_reasoning" in typed context
-9	src/mouthkeys/ai_providers.py	no-untyped-def	Function is missing a type annotation
-1	src/mouthkeys/ai_stream.py	no-untyped-call	Call to untyped function "request_headers" in typed context
 6	src/mouthkeys/assistance.py	no-untyped-call	Call to untyped function "_kill_group" in typed context
-1	src/mouthkeys/assistance.py	no-untyped-call	Call to untyped function "request_completion" in typed context
 1	src/mouthkeys/assistance.py	no-untyped-def	Function is missing a type annotation
 1	src/mouthkeys/assistant_history.py	var-annotated	Need type annotation for "result" (hint: "result: list[<type>] = ...")
 2	src/mouthkeys/assistant_ui.py	attr-defined	"Callable[[], QWidget]" has no attribute "jobs"
@@ -35,8 +25,6 @@
 2	src/mouthkeys/clipboard.py	union-attr	Item "None" of "IO[bytes] | None" has no attribute "flush"
 2	src/mouthkeys/clipboard.py	union-attr	Item "None" of "IO[bytes] | None" has no attribute "readline"
 2	src/mouthkeys/clipboard.py	union-attr	Item "None" of "IO[bytes] | None" has no attribute "write"
-1	src/mouthkeys/config.py	no-untyped-call	Call to untyped function "models_endpoint" in typed context
-1	src/mouthkeys/config.py	no-untyped-call	Call to untyped function "validate_reasoning" in typed context
 1	src/mouthkeys/delivery.py	no-untyped-call	Call to untyped function "ClipboardPaste" in typed context
 1	src/mouthkeys/dictionary_transfer.py	no-untyped-call	Call to untyped function "_merge_rules" in typed context
 2	src/mouthkeys/dictionary_transfer.py	no-untyped-call	Call to untyped function "custom_word_entries" in typed context
@@ -117,16 +105,7 @@
 1	src/mouthkeys/overlay_assistant.py	no-untyped-call	Call to untyped function "AssistantPage" in typed context
 1	src/mouthkeys/postprocess.py	no-untyped-call	Call to untyped function "dictation_prompt" in typed context
 1	src/mouthkeys/postprocess.py	no-untyped-call	Call to untyped function "render_dictation_user_message" in typed context
-1	src/mouthkeys/postprocess.py	no-untyped-call	Call to untyped function "request_completion" in typed context
 2	src/mouthkeys/postprocess.py	no-untyped-def	Function is missing a type annotation
-1	src/mouthkeys/profiles.py	no-untyped-call	Call to untyped function "models_endpoint" in typed context
-1	src/mouthkeys/profiles.py	no-untyped-call	Call to untyped function "validate_reasoning" in typed context
-1	src/mouthkeys/provider_tools.py	no-untyped-call	Call to untyped function "_completion" in typed context
-1	src/mouthkeys/provider_tools.py	no-untyped-call	Call to untyped function "_request_payload" in typed context
-2	src/mouthkeys/provider_tools.py	no-untyped-call	Call to untyped function "_with_query" in typed context
-3	src/mouthkeys/provider_tools.py	no-untyped-call	Call to untyped function "models_endpoint" in typed context
-2	src/mouthkeys/provider_tools.py	no-untyped-call	Call to untyped function "request_json" in typed context
-2	src/mouthkeys/provider_tools.py	no-untyped-def	Function is missing a type annotation
 9	src/mouthkeys/setup_languages.py	no-untyped-call	Call to untyped function "add" in typed context
 1	src/mouthkeys/setup_languages.py	no-untyped-call	Call to untyped function "languages" in typed context
 1	src/mouthkeys/setup_languages.py	no-untyped-def	Function is missing a return type annotation

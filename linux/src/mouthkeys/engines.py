@@ -1,13 +1,41 @@
 """Optional Linux ONNX engines and explicit, app-owned model management."""
 
-import hashlib
-import shutil
+import sys
+from collections.abc import Callable, Sequence
+from dataclasses import replace
 from pathlib import Path
+from types import ModuleType
+from typing import Any
 
 from .benchmark_reports import measurements
-from .config import cache_dir
+from .config import Config, cache_dir
+from .model_cache import (
+    READY,
+    delete_model,
+    managed_path,
+    onnx_path,
+    usable_whisper_snapshot,
+    whisper_cache_index,
+    whisper_repositories,
+    whisper_revision,
+)
+from .model_progress import DownloadProgress, progress_tqdm
 
-READY = ".mouthkeys-ready"
+__all__ = [
+    "ONNX_MODELS",
+    "READY",
+    "delete_model",
+    "download_onnx",
+    "load_onnx",
+    "managed_path",
+    "model_catalog",
+    "onnx_module",
+    "onnx_path",
+    "onnx_quantization",
+    "resolve_whisper",
+    "usable_whisper_snapshot",
+]
+
 
 # onnx-asr 0.12 supports these converted NeMo models on Linux CPUs.
 ONNX_MODELS = {
@@ -18,37 +46,16 @@ ONNX_MODELS = {
 }
 
 
-def managed_path(model: str, engine: str = "onnx") -> Path:
-    """Never interpret a model ID as a filesystem path when deleting cache data."""
-    digest = hashlib.sha256(model.encode()).hexdigest()[:24]
-    return cache_dir() / "models" / engine / digest
-
-
-def onnx_module():
+def onnx_module() -> ModuleType:
     try:
         import onnx_asr
     except ImportError:
         raise RuntimeError("Install the onnx extra: uv tool install './linux[gui,onnx]'") from None
-    return onnx_asr
+    module: ModuleType = onnx_asr
+    return module
 
 
-def onnx_path(model, revision="main"):
-    return managed_path(model if revision == "main" else f"{model}@{revision}")
-
-
-def usable_whisper_snapshot(path):
-    """Read-only completeness check, including the tokenizer's offline dependency."""
-    path = Path(path)
-    required = [path / name for name in ("model.bin", "config.json", "tokenizer.json")]
-    vocabulary = [
-        item for name in ("vocabulary.json", "vocabulary.txt") if (item := path / name).is_file()
-    ]
-    return bool(vocabulary) and all(
-        item.is_file() and item.stat().st_size > 0 for item in [*required, *vocabulary]
-    )
-
-
-def resolve_whisper(config):
+def resolve_whisper(config: Config) -> str:
     """Resolve and preflight locally before faster-whisper can fetch a tokenizer."""
     path = Path(config.model).expanduser()
     if not path.is_dir():
@@ -75,14 +82,18 @@ def resolve_whisper(config):
     return str(path)
 
 
-def _download_onnx_revision(model, path, quantization, revision, progress):
+def _download_onnx_revision(
+    model: str,
+    path: Path,
+    quantization: str | None,
+    revision: str,
+    progress: Callable[[DownloadProgress], None] | None,
+) -> None:
     # onnx-asr 0.12's downloader has no revision parameter. Use its pinned
     # resolver's file manifest, but perform the explicit Hub request ourselves.
     from huggingface_hub import hf_hub_download, snapshot_download
     from onnx_asr.loader import create_asr_resolver
     from onnx_asr.resolver import model_repos
-
-    from .model_progress import progress_tqdm
 
     repository = model_repos.get(model, model)
     hf_hub_download(repository, "config.json", revision=revision, local_dir=path)
@@ -102,7 +113,13 @@ def _download_onnx_revision(model, path, quantization, revision, progress):
     )
 
 
-def download_onnx(model, compute_type="default", progress=None, *, revision="main"):
+def download_onnx(
+    model: str,
+    compute_type: str = "default",
+    progress: Callable[[DownloadProgress], None] | None = None,
+    *,
+    revision: str = "main",
+) -> str:
     """Only this explicit action is allowed to fetch ONNX artifacts."""
     module = onnx_module()
     path = onnx_path(model, revision)
@@ -126,18 +143,18 @@ def download_onnx(model, compute_type="default", progress=None, *, revision="mai
     return str(path)
 
 
-def onnx_quantization(compute_type):
+def onnx_quantization(compute_type: str) -> str | None:
     if compute_type not in ("default", "auto", "float32", "int8"):
         raise ValueError("ONNX compute type must be default, auto, float32, or int8")
     return "int8" if compute_type == "int8" else None
 
 
-def load_onnx(config):
+def load_onnx(config: Config) -> object:
     module = onnx_module()
     path = Path(config.model).expanduser()
     local = path.is_dir()
     if not local:
-        path = onnx_path(config.model, getattr(config, "model_revision", "main"))
+        path = onnx_path(config.model, config.model_revision)
     if (not local and not (path / READY).is_file()) or not (
         managed_path("silero") / READY
     ).is_file():
@@ -161,7 +178,7 @@ def load_onnx(config):
     return model.with_vad(vad, max_speech_duration_s=25)
 
 
-def _model_catalog(engine="whisper", *, revision="main"):
+def _model_catalog(engine: str = "whisper", *, revision: str = "main") -> list[dict[str, Any]]:
     """Local-only catalog; no Hub queries or downloads."""
     if engine == "onnx":
         return [
@@ -216,55 +233,52 @@ def _model_catalog(engine="whisper", *, revision="main"):
         ]
     if engine != "whisper":
         raise ValueError("Unknown engine")
-    from faster_whisper.utils import _MODELS
-    from huggingface_hub import scan_cache_dir
-
-    root = cache_dir() / "models"
-    installed = {}
-    if root.is_dir():
-        installed = {repo.repo_id: repo for repo in scan_cache_dir(root).repos}
-
-    def has_revision(repository):
+    installed = whisper_cache_index()
+    rows = []
+    for name, repository in whisper_repositories().items():
         cached = installed.get(repository)
-        return bool(
-            cached
-            and any(
-                (revision == item.commit_hash or revision in item.refs)
-                and usable_whisper_snapshot(item.snapshot_path)
-                for item in cached.revisions
-            )
+        snapshot = whisper_revision(cached, revision)
+        path = (
+            str(cached.repo_path)
+            if cached is not None
+            and snapshot is not None
+            and usable_whisper_snapshot(snapshot.snapshot_path)
+            else ""
         )
-
-    return [
-        {
-            "model": name,
-            "name": name,
-            "languages": "English" if name.endswith(".en") or "distil" in name else "Multilingual",
-            "engine": engine,
-            "revision": revision,
-            "installed": has_revision(repo),
-            "path": str(installed[repo].repo_path) if has_revision(repo) else "",
-            "source": f"https://huggingface.co/{repo}",
-            "native_streaming": False,
-            "vocabulary": True,
-            "vocabulary_method": "bounded textual hotword hint",
-            "word_timing": True,
-        }
-        for name, repo in _MODELS.items()
-    ]
+        rows.append(
+            {
+                "model": name,
+                "name": name,
+                "languages": "English"
+                if name.endswith(".en") or "distil" in name
+                else "Multilingual",
+                "engine": engine,
+                "revision": revision,
+                "installed": bool(path),
+                "path": path,
+                "source": f"https://huggingface.co/{repository}",
+                "native_streaming": False,
+                "vocabulary": True,
+                "vocabulary_method": "bounded textual hotword hint",
+                "word_timing": True,
+            }
+        )
+    return rows
 
 
 def model_catalog(
-    engine="whisper", *, revision="main", measurement_config=None, measurement_context=None
-):
+    engine: str = "whisper",
+    *,
+    revision: str = "main",
+    measurement_config: Config | None = None,
+    measurement_context: Sequence[object] | None = None,
+) -> list[dict[str, Any]]:
     """Report capabilities and explicit unknowns, not Apple-hardware ratings.
 
     Parameter-memory estimates use the nominal model size in publisher names
     and four bytes per float32 parameter. They exclude inference workspace,
     activations and caches; archive size is not a runtime RAM measurement.
     """
-    from dataclasses import replace
-
     from .benchmark import matching_measurement
 
     measured = measurements()
@@ -321,48 +335,25 @@ def model_catalog(
             else None
         )
         if report:
-            settings = f"{report['device']}/{report['compute_type']} requested"
-            row["measurement"] = report
-            row["speed_note"] = (
-                f"{report['real_time_factor']:.3f}× real time; {settings}; "
-                f"fixture {report['fixture_sha256'][:8]} ({report['timestamp_utc'][:10]})"
-            )
-            scores = report.get("accuracy")
-            if isinstance(scores, dict) and type(scores.get("wer")) in (int, float):
-                row["accuracy_note"] = (
-                    f"{scores['wer']:.1%} WER on fixture {report['fixture_sha256'][:8]} only"
-                )
-            rss = report.get("sampled_peak_tree_rss_bytes")
-            if type(rss) is int and rss > 0:
-                row["memory_note"] += f"; sampled process-tree RSS {rss / 2**20:.0f} MiB"
+            _apply_measurement(row, report)
     return rows
 
 
-def delete_model(model: str, engine: str = "whisper", *, revision: str = "main") -> None:
-    """Delete only app-owned cache entries, never an entered local model directory."""
-    if Path(model).expanduser().exists():
-        raise ValueError("Local model paths must be managed outside MouthKeys")
-    if engine in ("onnx", "transformers", "nemo"):
-        if engine == "onnx":
-            path = onnx_path(model, revision)
-        else:
-            from .native_asr import artifact_path
-
-            path = artifact_path(model, engine, revision)
-        if path.is_symlink():
-            raise ValueError("Refusing linked model cache")
-        if path.is_dir():
-            shutil.rmtree(path)
-        return
-    if engine != "whisper":
-        raise ValueError("Unknown engine")
-    from faster_whisper.utils import _MODELS
-
-    repo = _MODELS.get(model, model)
-    if repo.count("/") != 1 or any(part in ("", ".", "..") for part in repo.split("/")):
-        raise ValueError("Expected model alias or Hugging Face owner/model ID")
-    path = cache_dir() / "models" / ("models--" + repo.replace("/", "--"))
-    if path.is_symlink():
-        raise ValueError("Refusing linked model cache")
-    if path.is_dir():
-        shutil.rmtree(path)
+def _apply_measurement(row: dict[str, Any], report: dict[str, Any]) -> None:
+    settings = f"{report['device']}/{report['compute_type']} requested"
+    row["measurement"] = report
+    row["speed_note"] = (
+        f"{report['real_time_factor']:.3f}× real time; {settings}; "
+        f"fixture {report['fixture_sha256'][:8]} ({report['timestamp_utc'][:10]})"
+    )
+    scores = report.get("accuracy")
+    wer = scores.get("wer") if isinstance(scores, dict) else None
+    if (
+        isinstance(wer, int | float)
+        and not isinstance(wer, bool)
+        and 0 <= wer <= sys.float_info.max / 100
+    ):
+        row["accuracy_note"] = f"{wer:.1%} WER on fixture {report['fixture_sha256'][:8]} only"
+    rss = report.get("sampled_peak_tree_rss_bytes")
+    if type(rss) is int and 0 < rss <= sys.float_info.max:
+        row["memory_note"] += f"; sampled process-tree RSS {rss / 2**20:.0f} MiB"

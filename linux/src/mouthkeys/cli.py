@@ -200,7 +200,7 @@ def _models(args: argparse.Namespace) -> int:
 
     config = Config.load()
     if args.command == "models":
-        print(json.dumps(model_catalog(config.engine), indent=2))
+        print(json.dumps(model_catalog(config.engine, revision=config.model_revision), indent=2))
     else:
         delete_model(args.model, config.engine, revision=config.model_revision)
         print("Cached model deleted")

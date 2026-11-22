@@ -140,29 +140,7 @@
 1	src/mouthkeys/dictionary_transfer.py	PLW2901	`for` loop variable `value` overwritten by assignment target
 1	src/mouthkeys/dictionary_transfer.py	RUF005	Consider `[*retained, merged]` instead of concatenation
 3	src/mouthkeys/dictionary_transfer.py	TRY004	Prefer `TypeError` exception for invalid type
-2	src/mouthkeys/engines.py	ANN001	Missing type annotation for function argument `compute_type`
-2	src/mouthkeys/engines.py	ANN001	Missing type annotation for function argument `config`
-2	src/mouthkeys/engines.py	ANN001	Missing type annotation for function argument `engine`
-1	src/mouthkeys/engines.py	ANN001	Missing type annotation for function argument `measurement_config`
-1	src/mouthkeys/engines.py	ANN001	Missing type annotation for function argument `measurement_context`
-3	src/mouthkeys/engines.py	ANN001	Missing type annotation for function argument `model`
-2	src/mouthkeys/engines.py	ANN001	Missing type annotation for function argument `path`
-2	src/mouthkeys/engines.py	ANN001	Missing type annotation for function argument `progress`
-1	src/mouthkeys/engines.py	ANN001	Missing type annotation for function argument `quantization`
-1	src/mouthkeys/engines.py	ANN001	Missing type annotation for function argument `repository`
-5	src/mouthkeys/engines.py	ANN001	Missing type annotation for function argument `revision`
-1	src/mouthkeys/engines.py	ANN201	Missing return type annotation for public function `download_onnx`
-1	src/mouthkeys/engines.py	ANN201	Missing return type annotation for public function `load_onnx`
-1	src/mouthkeys/engines.py	ANN201	Missing return type annotation for public function `model_catalog`
-1	src/mouthkeys/engines.py	ANN201	Missing return type annotation for public function `onnx_module`
-1	src/mouthkeys/engines.py	ANN201	Missing return type annotation for public function `onnx_path`
-1	src/mouthkeys/engines.py	ANN201	Missing return type annotation for public function `onnx_quantization`
-1	src/mouthkeys/engines.py	ANN201	Missing return type annotation for public function `resolve_whisper`
-1	src/mouthkeys/engines.py	ANN201	Missing return type annotation for public function `usable_whisper_snapshot`
-1	src/mouthkeys/engines.py	ANN202	Missing return type annotation for private function `_download_onnx_revision`
-1	src/mouthkeys/engines.py	ANN202	Missing return type annotation for private function `_model_catalog`
-1	src/mouthkeys/engines.py	ANN202	Missing return type annotation for private function `has_revision`
-14	src/mouthkeys/engines.py	PLC0415	`import` should be at the top-level of a file
+8	src/mouthkeys/engines.py	PLC0415	`import` should be at the top-level of a file
 1	src/mouthkeys/engines.py	SLF001	Private member accessed: `_get_model_files`
 1	src/mouthkeys/file_history.py	DTZ006	`datetime.datetime.fromtimestamp()` called without a `tz` argument
 3	src/mouthkeys/file_history.py	TRY004	Prefer `TypeError` exception for invalid type
@@ -477,7 +455,7 @@
 5	tests/test_delivery.py	PLW0108	Lambda may be unnecessary; consider inlining inner function
 5	tests/test_delivery.py	PT006	Wrong type passed to first argument of `pytest.mark.parametrize`; expected `tuple`
 21	tests/test_desktop.py	PLC0415	`import` should be at the top-level of a file
-9	tests/test_engines.py	PLC0415	`import` should be at the top-level of a file
+6	tests/test_engines.py	PLC0415	`import` should be at the top-level of a file
 2	tests/test_engines.py	RUF043	Pattern passed to `match=` contains metacharacters but is neither escaped nor raw
 1	tests/test_file_progress.py	N802	Function name `readAllStandardError` should be lowercase
 1	tests/test_file_progress.py	N802	Function name `readAllStandardOutput` should be lowercase

@@ -19,6 +19,8 @@ reply before stopping the server.
   commits results only if cancellation or logout has not won. `transcribe.Transcriber`
   uses engines in `engines` and `native_worker`. `native_asr` owns local artifact checks and common
   audio helpers; `transformers_asr` and `nemo_asr` load and decode inside the isolated worker.
+- **Benchmarks:** `benchmark` measures explicit WAV fixtures in an offline worker.
+  `benchmark_reports` validates and retains bounded local reports for the model catalog.
 - **Delivery:** `formatting` and `spoken_send` transform text without desktop effects. `storage.History`
   persists text before `delivery.Delivery` attempts insertion. `accessibility` calls the isolated
   `atspi_helper`; `clipboard` can own a temporary paste selection in a separate Qt process.

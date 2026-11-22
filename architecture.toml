@@ -45,7 +45,7 @@ public_modules = [
   "mouthkeys.recording_assistant", "mouthkeys.recording_cleanup", "mouthkeys.recording_delivery", "mouthkeys.recording_destination", "mouthkeys.recording_edit", "mouthkeys.recording_job",
   "mouthkeys.recording_learning", "mouthkeys.recording_preview", "mouthkeys.recording_transcript", "mouthkeys.regional", "mouthkeys.regional_ui", "mouthkeys.routing",
   "mouthkeys.service", "mouthkeys.settings_choices", "mouthkeys.settings_fields", "mouthkeys.settings_form", "mouthkeys.setup_languages", "mouthkeys.shortcut_capture", "mouthkeys.stats_view", "mouthkeys.storage",
-  "mouthkeys.transcribe", "mouthkeys.transformers_asr", "mouthkeys.tray", "mouthkeys.upstream_backup", "mouthkeys.vocabulary", "mouthkeys.window_theme",
+  "mouthkeys.transcribe", "mouthkeys.transformers_asr", "mouthkeys.tray", "mouthkeys.tray_status", "mouthkeys.upstream_backup", "mouthkeys.vocabulary", "mouthkeys.window_theme",
 ]
 
 [[packages]]

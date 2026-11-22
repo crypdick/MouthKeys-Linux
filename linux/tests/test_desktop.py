@@ -164,7 +164,7 @@ def test_tray_alerts_are_opt_in_deduplicated_and_do_not_claim_verified_paste(mon
     notices = []
     monkeypatch.setattr(tray, "showMessage", lambda *args: notices.append(args))
     initial = {"phase": "idle", "microphone": "default", "id": None}
-    tray.notify_status(initial)
+    tray.notify_status({"result": initial})
     Config(show_microphone_alerts="on", show_paste_alerts="on", delivery="x11").save()
     done = {
         "phase": "idle",
@@ -173,13 +173,13 @@ def test_tray_alerts_are_opt_in_deduplicated_and_do_not_claim_verified_paste(mon
         "preview": "hello",
         "message": "Insertion requested — transcript saved in history",
     }
-    tray.notify_status(done)
-    tray.notify_status(done)
+    tray.notify_status({"result": done})
+    tray.notify_status({"result": done})
     assert len(notices) == 2
     assert notices[0] == ("Microphone changed", "usb")
     assert "cannot be verified" in notices[1][1]
     Config().save()
-    tray.notify_status({**done, "id": "b", "microphone": "other"})
+    tray.notify_status({"result": {**done, "id": "b", "microphone": "other"}})
     assert len(notices) == 2
     tray.deleteLater()
     app.processEvents()
@@ -213,11 +213,11 @@ def test_ai_failure_notifications_have_independent_preference_and_deduplication(
         "phase": "idle",
         "notice": {"kind": "ai", "serial": "first", "message": "AI failed; raw text retained"},
     }
-    tray.notify_status(failed)
+    tray.notify_status({"result": failed})
     assert not notices
     Config(show_ai_alerts="on").save()
-    tray.notify_status({**failed, "notice": {**failed["notice"], "serial": "second"}})
-    tray.notify_status({**failed, "notice": {**failed["notice"], "serial": "second"}})
+    tray.notify_status({"result": {**failed, "notice": {**failed["notice"], "serial": "second"}}})
+    tray.notify_status({"result": {**failed, "notice": {**failed["notice"], "serial": "second"}}})
     assert notices == [("AI processing failed", "AI failed; raw text retained")]
 
 

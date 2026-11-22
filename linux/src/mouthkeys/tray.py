@@ -10,8 +10,10 @@ from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon, QWidget
 
 from .config import Config, runtime_dir
+from .control import ensure_daemon, ensure_overlay
 from .desktop import source_names
-from .qt_control import Request
+from .qt_control import Request, Response, ResponseHandler
+from .tray_status import TrayAlerts, TrayStatus, status_text
 
 
 class Tray(QSystemTrayIcon):
@@ -21,10 +23,7 @@ class Tray(QSystemTrayIcon):
         self.jobs: set[Request] = set()
         self.pending = False
         self.quitting = False
-        self.last_microphone = None
-        self.last_notice = None
-        self.completed_id = None
-        self.observed_status = False
+        self.alerts = TrayAlerts()
         menu = QMenu()
         self.status_action = menu.addAction("MouthKeys — Ready")
         self.status_action.setEnabled(False)
@@ -46,20 +45,20 @@ class Tray(QSystemTrayIcon):
         self.timer.start(1000)
         self.setToolTip("MouthKeys")
 
-    def request_quit(self):
+    def request_quit(self) -> None:
         if getattr(self.window, "busy", False):
             self.setToolTip("Wait for current settings operation before quitting")
             return
         self.quitting = True
         self.timer.stop()
-        if not self.jobs:
-            QApplication.instance().quit()
+        if not self.jobs and (app := QApplication.instance()) is not None:
+            app.quit()
 
-    def activate(self, reason):
+    def activate(self, reason: QSystemTrayIcon.ActivationReason) -> None:
         if reason == QSystemTrayIcon.ActivationReason.Trigger:
             self.open_window()
 
-    def open_window(self):
+    def open_window(self) -> None:
         if self.window is None:
             from .gui import Window
 
@@ -68,7 +67,7 @@ class Tray(QSystemTrayIcon):
         self.window.raise_()
         self.window.activateWindow()
 
-    def refresh_microphones(self):
+    def refresh_microphones(self) -> None:
         self.microphones.clear()
         config = Config.load()
         try:
@@ -87,107 +86,48 @@ class Tray(QSystemTrayIcon):
                 lambda _checked=False, name=name: replace(Config.load(), audio_source=name).save()
             )
 
-    def send(self, action, callback=None):
+    def send(self, action: str, callback: ResponseHandler | None = None) -> None:
         job = Request(action, parent=self)
         self.jobs.add(job)
 
-        def finished(response):
-            if "error" in response:
-                self.setToolTip("MouthKeys — " + response["error"])
+        def finished(response: Response) -> None:
+            if isinstance(error := response.get("error"), str):
+                self.setToolTip("MouthKeys — " + error)
             if callback:
                 callback(response)
 
         job.done.connect(finished)
 
-        def settled():
+        def settled() -> None:
             self.jobs.discard(job)
             job.deleteLater()
-            if self.quitting and not self.jobs:
-                QApplication.instance().quit()
+            if self.quitting and not self.jobs and (app := QApplication.instance()) is not None:
+                app.quit()
 
         job.finished.connect(settled)
         job.start()
 
-    def poll(self):
-        if self.pending:
-            return
-        self.pending = True
+    def poll(self) -> None:
+        if not self.pending:
+            self.pending = True
+            self.send("status", self.notify_status)
 
-        def received(response):
-            self.pending = False
-            result = response.get("result", {})
-            phase = result.get("phase", "disconnected")
-            text = "MouthKeys — " + result.get("message", response.get("error", "Unavailable"))
-            self.status_action.setText(text)
-            self.setToolTip(text)
-            self.toggle_action.setText(
-                "Cancel microphone start"
-                if phase == "starting"
-                else "Retry microphone stop"
-                if phase == "capture_failed"
-                else "Stop recording"
-                if phase in ("recording", "switching")
-                else "Record"
-            )
-            self.toggle_action.setEnabled(
-                result.get("can_record", phase == "idle")
-                or phase in ("starting", "recording", "switching", "capture_failed")
-            )
-            self.notify_status(result)
-
-        self.send("status", received)
-
-    def notify_status(self, result):
-        config = Config.load()
-        microphone = result.get("microphone")
-        if (
-            getattr(config, "show_microphone_alerts", "off") == "on"
-            and self.observed_status
-            and microphone
-            and self.last_microphone
-            and microphone != self.last_microphone
-        ):
-            self.showMessage("Microphone changed", microphone)
-        notice = result.get("notice") or {}
-        if (
-            getattr(config, "show_ai_alerts", "off") == "on"
-            and self.observed_status
-            and notice.get("kind") == "ai"
-            and notice.get("serial") != self.last_notice
-        ):
-            self.showMessage("AI processing failed", notice.get("message", ""))
-        if (
-            getattr(config, "show_microphone_alerts", "off") == "on"
-            and notice.get("serial") != self.last_notice
-            and any(word in notice.get("message", "").lower() for word in ("microphone", "source"))
-        ):
-            self.showMessage("Microphone unavailable", notice["message"])
-        item_id = result.get("id")
-        if result.get("phase") == "idle" and item_id != self.completed_id:
-            message = result.get("message", "")
-            if (
-                getattr(config, "show_paste_alerts", "off") == "on"
-                and self.observed_status
-                and item_id
-                and result.get("preview")
-            ):
-                if message.startswith(("Insertion requested", "Paste requested")):
-                    self.showMessage(
-                        "Paste requested",
-                        "Destination acceptance cannot be verified. "
-                        "Transcript remains available in History.",
-                    )
-                elif notice.get("kind") == "paste":
-                    self.showMessage("Manual paste needed", notice["message"])
-                elif message.startswith("Copied") and config.delivery != "clipboard":
-                    self.showMessage(
-                        "Manual paste needed",
-                        "Automatic insertion was not requested. Transcript copied to clipboard.",
-                    )
-            self.completed_id = item_id
-        self.last_microphone = microphone
-        self.last_notice = notice.get("serial")
-        self.observed_status = True
+    def notify_status(self, response: Response) -> None:
+        self.pending = False
+        status = TrayStatus.parse(response.get("result"))
+        if status is None:
+            message = status_text(response, "error", "Unavailable")
+            label, enabled = "Record", False
+        else:
+            message, label, enabled = status.message, status.record_label, status.can_record
+        text = "MouthKeys — " + message
+        self.status_action.setText(text)
+        self.setToolTip(text)
+        self.toggle_action.setText(label)
+        self.toggle_action.setEnabled(enabled)
+        if status is not None:
+            for title, detail in self.alerts.observe(Config.load(), status):
+                self.showMessage(title, detail)
 
 
 def create_tray(window: QWidget | None = None) -> Tray | None:
@@ -198,9 +138,7 @@ def create_tray(window: QWidget | None = None) -> Tray | None:
     return tray
 
 
-def launch():
-    from .control import ensure_daemon, ensure_overlay
-
+def launch() -> int:
     with (runtime_dir() / "tray.lock").open("w") as lock:
         try:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)

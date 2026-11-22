@@ -1,4 +1,4 @@
-"""Read optional desktop evidence without changing focus during recording shutdown."""
+"""Read optional desktop evidence without changing focus."""
 
 from dataclasses import dataclass
 
@@ -28,16 +28,24 @@ class StopDestination:
         return values if isinstance(values, dict) else None
 
 
-def _focused_target(delivery: object, config: Config) -> object:
+def _focused_target(delivery: object, config: Config, *, window_fallback: bool = True) -> object:
     try:
         snapshot = getattr(delivery, "capture_target", None)
         if callable(snapshot):
             return snapshot(config)
+        if not window_fallback:
+            return None
         focus = getattr(delivery, "focus", None)
         return focus() if callable(focus) else None
-    # Unknown focus disables automatic delivery without blocking capture shutdown.
+    # Unknown focus disables automatic delivery without blocking capture.
     except Exception:  # allow: exception-handling  # noqa: BLE001
         return None
+
+
+def snapshot_for_start(delivery: object, config: Config, mode: str) -> object:
+    if config.target_policy == "start" or config.return_to_start == "on" or mode == "edit":
+        return _focused_target(delivery, config, window_fallback=False)
+    return None
 
 
 def _formatting_context(config: Config) -> str | None:

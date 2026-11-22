@@ -6,10 +6,10 @@ import tempfile
 import uuid
 from dataclasses import replace
 from pathlib import Path
-from typing import TypedDict, cast
+from typing import Any, TypedDict, cast
 
 from .ai_providers import PROVIDER_ENDPOINTS, endpoint_url
-from .config import config_path, private_dir
+from .config import Config, config_path, private_dir
 
 
 class PromptProfile(TypedDict):
@@ -164,12 +164,12 @@ def save_profiles(profiles: object) -> None:
             temporary.unlink(missing_ok=True)
 
 
-def resolve_profile(config, profiles=None):
+def resolve_profile(config: Config, profiles: list[PromptProfile] | None = None) -> Config:
     if not getattr(config, "ai_profile", ""):
         return config
     available = load_profiles() if profiles is None else profiles
     profile = next((p for p in available if p["id"] == config.ai_profile), None)
     if profile is None:
         raise ValueError("Selected AI cleanup profile no longer exists")
-    values = dict(profile)
+    values: dict[str, Any] = dict(profile)
     return replace(config, **{field: values[field] for field in PROFILE_FIELDS}).validate()

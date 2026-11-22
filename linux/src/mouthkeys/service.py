@@ -8,29 +8,27 @@ from typing import Any, cast
 
 from . import __version__
 from .audio import CaptureSession, CaptureTeardownError, check_audio, is_short_silence
-from .config import Config, private_dir, runtime_dir
+from .config import Config, runtime_dir
 from .delivery import Delivery, Target
 from .desktop import MediaSession, choose_source, play_sound
 from .formatting import enabled
 from .microphone import MicrophoneSelection, Recording, SwitchOutcome, selection
-from .profiles import PromptProfile
 from .pronunciation import PronunciationStore
-from .recording_assistant import InlineContext, RecordingAssistant, inline_context
+from .recording_assistant import RecordingAssistant
 from .recording_cleanup import cleanup_transcript
 from .recording_delivery import DeliveryRequest, RecordingDelivery, delivery_message
 from .recording_destination import snapshot_for_stop
 from .recording_edit import (
     EditReplacement,
-    captured_selection,
     claim_edit,
     edit_message,
     reviewed_return_target,
 )
-from .recording_job import DictationJob, recording_input
+from .recording_job import DictationJob
 from .recording_learning import RecordingLearning
 from .recording_preview import PreviewWork, RecordingPreview, reset_owned_stream
+from .recording_setup import prepare_recording, routed_config
 from .recording_transcript import format_dictation
-from .routing import PromptRoute
 from .storage import History
 from .transcribe import Transcriber
 
@@ -85,7 +83,7 @@ class Controller:
         self.ai_warning = ""
         self.last_text = ""
         self.job = None
-        self.jobs = []
+        self.jobs: list[DictationJob] = []
         self.assistant_proposal = None
         self.recording_assistant = RecordingAssistant(
             self.lock,
@@ -349,78 +347,29 @@ class Controller:
                 raise ValueError("Service is shutting down")
             if self.phase not in ("idle", "transcribing", "queued", "delivering"):
                 raise ValueError(f"Busy ({self.phase}); wait or cancel before start")
-            from .profiles import load_profiles
-            from .routing import load_routes
+            pending = self._pending_jobs()
+            setup = prepare_recording(data, Config.load(), pending, self.microphone, self.delivery)
+            job = setup.job
+            self.recording_assistant.bind_session(job, setup.context)
+            if job.config.save_history == "on":
+                self.history.begin(job.item_id)
 
-            mode, selected_text, label = recording_input(data)
-            config = Config.load()
-            context = inline_context(data, mode, config)
-            if len(self._pending_jobs()) >= config.queue_limit:
-                raise ValueError("Dictation queue is full; wait for earlier recordings")
-            config = self.microphone.startup_config(config)
-            profiles = load_profiles()
-            routes = load_routes(profiles)
+            # Preparation and history can fail; do not supersede the old job until both succeed.
+            if self.job and self.job.edit_consumed:
+                self.job.cancel_event.set()
+            for previous in pending:
+                previous.suppress_send = True
+            self.item_id, self.job = job.item_id, job
+            self.jobs = [*pending, job]
+            self.config = setup.capture_config
             self.preview_text = ""
             self.live_preview.reset()
-            self.config = config
             self.learning.cancel()
-            if self.job and self.job.edit_consumed:
-                # A new recording supersedes an Edit waiting on desktop work.
-                self.job.cancel_event.set()
-            for previous in self._pending_jobs():
-                previous.suppress_send = True
-            self.item_id = str(uuid.uuid4())
-            job: DictationJob = self._new_job(
-                mode,
-                selected_text,
-                profiles=profiles,
-                routes=routes,
-                context=context,
-            )
-            job.held_activation = data.get("held") is True
-            job.label = label
-            self._capture_start_target(job)
-            self._select_recording_prompt(job, data.get("profile"))
             self.assistant_proposal = None
             self.recording_assistant.clear_stream()
             self.cancelled = False
-            if self.config.save_history == "on":
-                self.history.begin(self.item_id)
             self.phase, self.message = "starting", "Opening microphone"
-            job.phase = "starting"
-        return self._open_recording(job, config)
-
-    def _capture_start_target(self, job: DictationJob) -> None:
-        if not (
-            self.config.target_policy == "start"
-            or self.config.return_to_start == "on"
-            or job.mode == "edit"
-        ) or not hasattr(self.delivery, "capture_target"):
-            return
-        try:
-            job.start_target = self.delivery.capture_target(self.config)
-        # Unknown focus disables automatic delivery.
-        except Exception:  # allow: exception-handling  # noqa: BLE001
-            job.start_target = None
-        if job.mode == "edit" and not job.selected_text:
-            job.selected_text = captured_selection(job.start_target)
-
-    def _select_recording_prompt(self, job: DictationJob, override: object) -> None:
-        if override is None:
-            return
-        from .routing import select_prompt
-
-        try:
-            job.config = select_prompt(
-                self.config,
-                override=override,
-                mode=job.mode if job.mode in ("dictation", "edit", "command") else "dictation",
-                profiles=job.profiles,
-            )
-        except Exception:
-            job.done.set()
-            raise
-        job.prompt_override = cast("str", override)  # Validated by select_prompt.
+        return self._open_recording(job, setup.capture_config)
 
     def _open_recording(self, job: DictationJob, config: Config) -> dict[str, object]:
         def start(chosen: Config, timeout: float) -> Recording:
@@ -434,6 +383,7 @@ class Controller:
                 capture = factory(chosen, job.audio_path)
             return capture
 
+        failure: Exception | None = None
         try:
             self.media.pause(config)
             capture, chosen = self.microphone.open(
@@ -454,32 +404,21 @@ class Controller:
                     return self.status()
             capture.stop()
         # The job or IPC response reports the failure; avoid duplicating private data in logs.
-        except Exception as exc:  # allow: exception-handling
-            with self.lock:
-                cancelled = job.cancel_event.is_set() and not self.interrupted
-                if not self.interrupted:
-                    self._update(
-                        job,
-                        "cancelled" if cancelled else "failed",
-                        error="" if cancelled else str(exc),
-                    )
-                    self.message = "Microphone start cancelled" if cancelled else str(exc)
-                job.audio_path.unlink(missing_ok=True)
-                job.done.set()
-                if not self.interrupted:
-                    self.phase = "idle"
-            self.media.resume()
-            if not cancelled and not self.interrupted:
-                raise
-        else:
-            with self.lock:
-                if not self.interrupted:
-                    self._update(job, "cancelled")
-                job.audio_path.unlink(missing_ok=True)
-                job.done.set()
-                if not self.interrupted:
-                    self.phase, self.message = "idle", "Microphone start cancelled"
+        except Exception as exc:  # allow: exception-handling  # noqa: BLE001
+            failure = exc
+
+        with self.lock:
+            cancelled = job.cancel_event.is_set()
+            if not self.interrupted:
+                error = "" if cancelled else str(failure)
+                self._update(job, "cancelled" if cancelled else "failed", error=error)
+                self.phase = "idle"
+                self.message = "Microphone start cancelled" if cancelled else error
+            job.audio_path.unlink(missing_ok=True)
+            job.done.set()
         self.media.resume()
+        if failure is not None and not cancelled and not self.interrupted:
+            raise failure
         return self.status()
 
     def _owns_learning(self, recording_id: str) -> bool:
@@ -532,35 +471,12 @@ class Controller:
                     self._update(edit.job, result, edit.text)
                 self._job_status(edit.job, "idle", edit_message(result))
 
-    def _pending_jobs(self):
+    def _pending_jobs(self) -> list[DictationJob]:
         return [job for job in self.jobs if not job.done.is_set()]
 
-    def _new_job(
-        self,
-        mode: str,
-        selected_text: str,
-        profiles: list[PromptProfile],
-        routes: list[PromptRoute],
-        context: InlineContext | None,
-    ) -> DictationJob:
-        pending = self._pending_jobs()
-        audio_path = private_dir(runtime_dir() / "private-recordings") / f"{self.item_id}.wav"
-        job = DictationJob(
-            cast("str", self.item_id),
-            self.config,
-            tuple(job.done for job in pending),
-            audio_path,
-            mode=mode,
-            selected_text=selected_text,
-            profiles=profiles,
-            routes=routes,
-        )
-        self.recording_assistant.bind_session(job, context)
-        self.job = job
-        self.jobs = [*pending, job]
-        return job
-
-    def _update(self, job, status, text="", error="", **metadata):
+    def _update(
+        self, job: DictationJob, status: str, text: str = "", error: str = "", **metadata: object
+    ) -> None:
         # Explicit privacy opt-out overrides durable transcript-before-delivery.
         if job.config.save_history == "on":
             if status == "cancelled":
@@ -570,7 +486,7 @@ class Controller:
                 metadata["ai_processing_model"] = ""
             self.history.update(job.item_id, status, text, error, **{**job.metadata, **metadata})
 
-    def _job_status(self, job, phase, message):
+    def _job_status(self, job: DictationJob, phase: str, message: str) -> None:
         with self.lock:
             job.phase = phase
             if self.job is job and not self.interrupted:
@@ -598,7 +514,13 @@ class Controller:
                 job.cancel_event.set()
                 rows = self.history.rows(limit=10000)
                 row = next((r for r in rows if r["id"] == job.item_id), {})
-                self._update(job, "failed", row.get("text", ""), "Interrupted; audio discarded")
+                saved_text = row.get("text")
+                self._update(
+                    job,
+                    "failed",
+                    saved_text if isinstance(saved_text, str) else "",
+                    "Interrupted; audio discarded",
+                )
             self.phase, self.message = "interrupted", "Interrupted; audio discarded"
         if recorder is not None:
             try:
@@ -774,7 +696,6 @@ class Controller:
     ) -> None:
         text = ""
         alignment = None
-        ai_warning = ""
         assistant_error: str | None = None
         config = job.config
         path = job.audio_path
@@ -829,22 +750,10 @@ class Controller:
                     model=config.model,
                     language=config.language,
                 )
-            if job.prompt_override is None and job.mode in ("dictation", "edit", "command"):
-                try:
-                    from .routing import select_prompt
-
-                    config = select_prompt(
-                        config,
-                        job.metadata.get("app", ""),
-                        mode=job.mode,
-                        profiles=job.profiles,
-                        routes=job.routes,
-                    )
-                # The job or IPC response reports the failure; avoid duplicating private data in logs.
-                except Exception as exc:  # allow: exception-handling  # noqa: BLE001
-                    ai_warning = f"Prompt routing failed ({exc}); using original transcription"
-                    config = replace(config, ai_enabled="off")
-                    if self.job is job:
+            config, ai_warning = routed_config(job)
+            if ai_warning:
+                with self.lock:
+                    if self.job is job and not self.interrupted:
                         self.report_error(ai_warning, kind="ai")
             if job.mode != "dictation":
                 if job.mode == "training":

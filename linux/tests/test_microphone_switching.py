@@ -133,12 +133,12 @@ def test_invalid_start_does_not_open_or_persist_a_recording(data, message):
     assert app.job is None
 
 
-def test_invalid_profile_releases_pending_job_and_valid_pronunciation_still_starts():
+def test_invalid_profile_leaves_no_job_and_valid_pronunciation_still_starts():
     app = make_controller()
     with pytest.raises(ValueError, match="Prompt override must name a profile"):
         app.command("start", profile=123)
-    assert app.job.done.is_set()
-    assert not app.job.audio_path.exists()
+    assert app.job is None
+    assert app.status()["pending_jobs"] == 0
     assert app.history.rows() == []
     result = app.command("start", mode="pronunciation", label="  Café  ", profile="off")
     assert result["phase"] == "recording"
@@ -146,6 +146,50 @@ def test_invalid_profile_releases_pending_job_and_valid_pronunciation_still_star
     assert app.job.prompt_override == "off"
     app.command("cancel")
     finish(app)
+
+
+def test_stop_during_readiness_cancels_even_when_capture_then_fails(monkeypatch):
+    entered, release = threading.Event(), threading.Event()
+
+    def failed_capture(config, path):
+        FakeRecorder(config, path)
+        entered.set()
+        assert release.wait(3)
+        raise RuntimeError("Input disconnected")
+
+    app = make_controller(failed_capture)
+    pauses, resumes, result = [], [], []
+    monkeypatch.setattr(app.media, "pause", pauses.append)
+    monkeypatch.setattr(app.media, "resume", lambda: resumes.append(True))
+    worker = threading.Thread(target=lambda: result.append(app.command("start")))
+    worker.start()
+    try:
+        assert entered.wait(2)
+        active = app.status()
+        assert active["phase"] == "starting"
+        assert app.command("stop", id="older-job") == active
+        assert app.command("stop", id=active["id"])["message"] == "Cancelling microphone start"
+        assert app.job.cancel_event.is_set()
+    finally:
+        release.set()
+        worker.join(3)
+    assert not worker.is_alive()
+    assert result[0]["message"] == "Microphone start cancelled"
+    assert len(pauses) == 1
+    assert resumes == [True]
+    assert app.history.get(active["id"])["status"] == "cancelled"
+    assert app.history.get(active["id"])["error"] == ""
+    assert not app.job.audio_path.exists()
+    assert not app.delivery.calls
+
+
+def test_shutdown_rejects_new_start_without_opening_capture():
+    app = make_controller(lambda *_: pytest.fail("Capture started after shutdown"))
+    app.interrupt()
+    with pytest.raises(ValueError, match="Service is shutting down"):
+        app.command("start")
+    assert app.status()["phase"] == "interrupted"
+    assert app.history.rows() == []
 
 
 @pytest.mark.parametrize("unavailable", [True, False])

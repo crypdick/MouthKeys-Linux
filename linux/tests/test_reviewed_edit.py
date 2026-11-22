@@ -68,6 +68,38 @@ def test_review_accepts_exact_captured_voice_edit_once_without_state_lock(
         app.command("accept_edit", id=app.item_id, return_to_target=return_to_target)
 
 
+@pytest.mark.parametrize("failure", ["profile", "history"])
+def test_rejected_start_preserves_reviewable_edit(monkeypatch, failure):
+    app, target = captured_edit(monkeypatch)
+    previous = app.status()
+    rows = app.history.rows()
+    if failure == "history":
+
+        def cannot_begin(_item_id):
+            raise OSError("History is read-only")
+
+        monkeypatch.setattr(app.history, "begin", cannot_begin)
+        with pytest.raises(OSError, match="History is read-only"):
+            app.command("start")
+    else:
+        with pytest.raises(ValueError, match="badly formed hexadecimal UUID"):
+            app.command("start", profile="not-a-profile")
+
+    assert app.status() == previous
+    assert app.history.rows() == rows
+    replaced = []
+
+    def replace_selection(text, _config, captured, *, cancel_event):
+        assert captured == target
+        assert not cancel_event.is_set()
+        replaced.append(text)
+        return "pasted"
+
+    app.delivery.replace_selection = replace_selection
+    app.command("accept_edit", id=previous["id"])
+    assert replaced == ["Edited"]
+
+
 def test_review_rejects_stale_id_cancelled_and_missing_capture(monkeypatch):
     app, _ = captured_edit(monkeypatch)
     app.delivery.replace_selection = lambda *a, **kw: pytest.fail("Unexpected desktop delivery")
@@ -105,6 +137,37 @@ def test_cancel_or_supersede_review_waiting_for_model_lock(monkeypatch, interrup
     assert not worker.is_alive()
     expected = "recording" if interrupting_action == "start" else "idle"
     assert results[0]["phase"] == expected
+
+
+def test_rejected_start_keeps_claimed_edit_alive(monkeypatch):
+    Config(ai_enabled="on", ai_model="test", edit_delivery="replace").save()
+    app, _ = edit_controller()
+    monkeypatch.setattr(assistance, "request_completion", lambda *a, **kw: "Edited")
+    entered, release = threading.Event(), threading.Event()
+    inserted = []
+
+    def replace_selection(text, _config, _target, *, cancel_event):
+        entered.set()
+        assert release.wait(3)
+        if not cancel_event.is_set():
+            inserted.append(text)
+            return "pasted"
+        return "cancelled"
+
+    app.delivery.replace_selection = replace_selection
+    first = app.command("start", mode="edit")["id"]
+    app.command("stop")
+    try:
+        assert entered.wait(2)
+        with pytest.raises(ValueError, match="badly formed hexadecimal UUID"):
+            app.command("start", profile="not-a-profile")
+        assert app.status()["id"] == first
+    finally:
+        release.set()
+        app.worker.join(3)
+    assert not app.worker.is_alive()
+    assert inserted == ["Edited"]
+    assert app.history.get(first)["status"] == "pasted"
 
 
 @pytest.mark.parametrize("boundary", ["provider", "handoff", "desktop"])

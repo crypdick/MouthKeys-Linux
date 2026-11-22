@@ -21,14 +21,6 @@
 1	src/mouthkeys/assistant_ui.py	no-untyped-call	Call to untyped function "show_proposal" in typed context
 4	src/mouthkeys/assistant_ui.py	no-untyped-def	Function is missing a return type annotation
 10	src/mouthkeys/assistant_ui.py	no-untyped-def	Function is missing a type annotation
-3	src/mouthkeys/atspi_helper.py	no-untyped-call	Call to untyped function "active_window" in typed context
-1	src/mouthkeys/atspi_helper.py	no-untyped-call	Call to untyped function "expected_text" in typed context
-1	src/mouthkeys/atspi_helper.py	no-untyped-call	Call to untyped function "find_focused" in typed context
-1	src/mouthkeys/atspi_helper.py	no-untyped-call	Call to untyped function "operate" in typed context
-6	src/mouthkeys/atspi_helper.py	no-untyped-call	Call to untyped function "snapshot" in typed context
-2	src/mouthkeys/atspi_helper.py	no-untyped-call	Call to untyped function "unchanged" in typed context
-6	src/mouthkeys/atspi_helper.py	no-untyped-def	Function is missing a type annotation
-1	src/mouthkeys/atspi_helper.py	var-annotated	Need type annotation for "visited" (hint: "visited: set[<type>] = ...")
 1	src/mouthkeys/benchmark.py	no-untyped-call	Call to untyped function "transcribe_file" in typed context
 1	src/mouthkeys/cli.py	no-untyped-call	Call to untyped function "transcribe_file" in typed context
 3	src/mouthkeys/clipboard.py	no-untyped-call	Call to untyped function "acknowledge" in typed context
@@ -46,8 +38,6 @@
 1	src/mouthkeys/config.py	no-untyped-call	Call to untyped function "models_endpoint" in typed context
 1	src/mouthkeys/config.py	no-untyped-call	Call to untyped function "validate_reasoning" in typed context
 1	src/mouthkeys/delivery.py	no-untyped-call	Call to untyped function "ClipboardPaste" in typed context
-1	src/mouthkeys/delivery.py	no-untyped-call	Call to untyped function "expected_text" in typed context
-1	src/mouthkeys/delivery.py	no-untyped-call	Call to untyped function "unchanged" in typed context
 1	src/mouthkeys/dictionary_transfer.py	no-untyped-call	Call to untyped function "_merge_rules" in typed context
 2	src/mouthkeys/dictionary_transfer.py	no-untyped-call	Call to untyped function "custom_word_entries" in typed context
 1	src/mouthkeys/dictionary_transfer.py	no-untyped-call	Call to untyped function "decode_document" in typed context

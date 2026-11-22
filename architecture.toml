@@ -42,7 +42,7 @@ public_modules = [
   "mouthkeys.operations", "mouthkeys.overlay", "mouthkeys.overlay_assistant", "mouthkeys.overlay_process", "mouthkeys.overlay_rendering",
   "mouthkeys.portal_shortcuts", "mouthkeys.postprocess", "mouthkeys.profiles", "mouthkeys.prompt_profiles_ui",
   "mouthkeys.pronunciation", "mouthkeys.qt_control", "mouthkeys.provider_tools", "mouthkeys.recording_destination", "mouthkeys.recording_learning", "mouthkeys.recording_preview", "mouthkeys.regional", "mouthkeys.regional_ui", "mouthkeys.routing",
-  "mouthkeys.service", "mouthkeys.settings_fields", "mouthkeys.setup_languages", "mouthkeys.shortcut_capture", "mouthkeys.stats_view", "mouthkeys.storage",
+  "mouthkeys.service", "mouthkeys.settings_choices", "mouthkeys.settings_fields", "mouthkeys.settings_form", "mouthkeys.setup_languages", "mouthkeys.shortcut_capture", "mouthkeys.stats_view", "mouthkeys.storage",
   "mouthkeys.transcribe", "mouthkeys.transformers_asr", "mouthkeys.tray", "mouthkeys.upstream_backup", "mouthkeys.vocabulary",
 ]
 

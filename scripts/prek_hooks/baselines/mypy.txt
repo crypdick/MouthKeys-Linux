@@ -184,16 +184,6 @@
 1	src/mouthkeys/formatting.py	no-untyped-call	Call to untyped function "apply_spoken_punctuation" in typed context
 1	src/mouthkeys/formatting.py	no-untyped-call	Call to untyped function "neighbor" in typed context
 7	src/mouthkeys/formatting.py	no-untyped-def	Function is missing a type annotation
-1	src/mouthkeys/gui.py	assignment	Incompatible types in assignment (expression has type "QComboBox", variable has type "QSpinBox")
-1	src/mouthkeys/gui.py	assignment	Incompatible types in assignment (expression has type "QLineEdit", variable has type "QSpinBox")
-4	src/mouthkeys/gui.py	attr-defined	"QSpinBox" has no attribute "addItem"
-1	src/mouthkeys/gui.py	attr-defined	"QSpinBox" has no attribute "currentIndexChanged"
-1	src/mouthkeys/gui.py	attr-defined	"QSpinBox" has no attribute "currentTextChanged"; maybe "textChanged"?
-4	src/mouthkeys/gui.py	attr-defined	"QSpinBox" has no attribute "findData"
-3	src/mouthkeys/gui.py	attr-defined	"QSpinBox" has no attribute "setCurrentIndex"
-1	src/mouthkeys/gui.py	attr-defined	"QSpinBox" has no attribute "setEditable"
-1	src/mouthkeys/gui.py	attr-defined	"QSpinBox" has no attribute "setInsertPolicy"
-3	src/mouthkeys/gui.py	attr-defined	"QSpinBox" has no attribute "setText"
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "AssistantPage" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "LearningPage" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "MicrophonePage" in typed context
@@ -202,25 +192,18 @@
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "SetupPage" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "Window" in typed context
 2	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "apply_theme" in typed context
-1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "audio_sources" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "create_tray" in typed context
-1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "language_choices" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "list_models" in typed context
-1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "model_catalog" in typed context
-2	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "model_choices" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "poll" in typed context
 2	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "preview_sound" in typed context
 2	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "provider_action" in typed context
 2	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "refresh" in typed context
-1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "refresh_delivery_hint" in typed context
-1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "refresh_model_choices" in typed context
 2	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "refresh_regional_offers" in typed context
 3	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "save" in typed context
-3	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "setting_group" in typed context
 3	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "update_status" in typed context
 1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "verify" in typed context
-14	src/mouthkeys/gui.py	no-untyped-def	Function is missing a return type annotation
-8	src/mouthkeys/gui.py	no-untyped-def	Function is missing a type annotation
+10	src/mouthkeys/gui.py	no-untyped-def	Function is missing a return type annotation
+5	src/mouthkeys/gui.py	no-untyped-def	Function is missing a type annotation
 2	src/mouthkeys/lark.py	no-untyped-call	Call to untyped function "carries_status_page" in typed context
 1	src/mouthkeys/lark.py	no-untyped-call	Call to untyped function "find_receiver" in typed context
 1	src/mouthkeys/lark.py	no-untyped-call	Call to untyped function "heartbeat" in typed context

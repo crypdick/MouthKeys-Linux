@@ -6,7 +6,7 @@ from dataclasses import asdict, replace
 from pathlib import Path
 from typing import cast
 
-from PySide6.QtCore import QLocale, Qt, QThread, QTimer
+from PySide6.QtCore import Qt, QThread, QTimer
 from PySide6.QtGui import QCloseEvent, QDragEnterEvent, QDropEvent, QIcon, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
@@ -19,197 +19,27 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QScrollArea,
-    QSpinBox,
     QStackedWidget,
     QVBoxLayout,
     QWidget,
 )
 
-from . import __version__, desktop_entry, desktop_input
+from . import __version__, desktop_entry
 from .backup_ui import BackupPage
-from .config import CHOICES, RANGES, Config, config_path, state_dir
+from .config import Config, config_path, state_dir
 from .control import ensure_daemon, ensure_overlay
-from .desktop_input import automatic_delivery_warning
 from .dictionary_ui import DictionaryPage
 from .file_transcription_ui import FileTranscriptionPage
 from .help_ui import HelpPage
 from .history_ui import HistoryPage
 from .model_downloads_ui import ModelDownloads
 from .processes import python_command
-from .profiles import PromptProfile, load_profiles
+from .profiles import load_profiles
 from .prompt_profiles_ui import KeyringAction, PromptProfilesPage
 from .qt_control import Request, Response, ResponseHandler, Task
 from .settings_fields import field_value
+from .settings_form import SettingsForm
 from .stats_view import StatsPage
-
-COMPUTE_TYPES = [
-    "default",
-    "auto",
-    "int8",
-    "float32",
-    "float16",
-    "int8_float32",
-    "int8_float16",
-    "int8_bfloat16",
-    "bfloat16",
-    "int16",
-]
-
-MODEL_ALIASES = {"large": "large-v3", "turbo": "large-v3-turbo"}
-# Approximate accuracy for short English dictation, strongest first. Language and
-# audio can change the ranking; .en and distilled models only support English.
-# See https://huggingface.co/distil-whisper/distil-large-v3.5 for comparisons.
-MODEL_ACCURACY_ORDER = (
-    "large-v3",
-    "distil-large-v3.5",
-    "large-v3-turbo",
-    "distil-large-v3",
-    "large-v2",
-    "distil-large-v2",
-    "large-v1",
-    "medium.en",
-    "medium",
-    "distil-medium.en",
-    "small.en",
-    "small",
-    "distil-small.en",
-    "base.en",
-    "base",
-    "tiny.en",
-    "tiny",
-)
-
-
-def model_choices():
-    from faster_whisper import available_models
-
-    available = {MODEL_ALIASES.get(name, name) for name in available_models()}
-    ranked = [name for name in MODEL_ACCURACY_ORDER if name in available]
-    return ranked + sorted(available.difference(MODEL_ACCURACY_ORDER))
-
-
-def language_choices():
-    # Match the tokenizer in our installed, version-bounded transcription engine.
-    from faster_whisper.tokenizer import _LANGUAGE_CODES
-
-    names = {"haw": "Hawaiian", "ht": "Haitian Creole", "jw": "Javanese", "yue": "Cantonese"}
-    choices = []
-    for code in _LANGUAGE_CODES:
-        locale = QLocale(code)
-        name = names.get(code, QLocale.languageToString(locale.language()))
-        choices.append((f"{name if name != 'C' else code} ({code})", code))
-    return [("Detect automatically", "auto"), *sorted(choices)]
-
-
-def audio_sources():
-    import subprocess
-
-    if desktop_input.session() == "headless":
-        return ["default"]
-    try:
-        result = subprocess.run(
-            ["pactl", "list", "short", "sources"],  # noqa: S607
-            capture_output=True,
-            text=True,
-            check=True,
-            timeout=2,
-        )
-        return [
-            "default",
-            *[line.split()[1] for line in result.stdout.splitlines() if len(line.split()) >= 2],
-        ]
-    except (OSError, subprocess.SubprocessError):
-        return ["default"]
-
-
-def setting_group(key):
-    if "shortcut" in key or key in ("hotkey_mode", "shortcut_backend"):
-        return "Desktop"
-    if key in (
-        "edit_profile",
-        "command_profile",
-        "edit_prompt",
-        "command_prompt",
-        "command_confirm",
-        "command_continue",
-    ):
-        return "AI cleanup"
-    if key in ("native_timeout_seconds", "file_diarization_mode"):
-        return "Speech"
-    if key == "mic_battery":
-        return "Microphone & media"
-    if key == "file_history_limit":
-        return "History & stats"
-    if key.startswith(("learning_", "pronunciation_")) or key in (
-        "automatic_learning",
-        "pronunciation_matching",
-        "vocabulary_boosting",
-    ):
-        return "Dictionary & learning"
-    if key.startswith("api_"):
-        return "Local API"
-    if key.startswith("ai_"):
-        return "AI cleanup"
-    if key.startswith("spoken_send") or key == "send_after_pause":
-        return "Spoken Send"
-    if key.startswith(("microphone_", "sound_")) or key in (
-        "audio_source",
-        "pause_media",
-        "sounds_enabled",
-    ):
-        return "Microphone & media"
-    if key.startswith(("paste_", "clipboard_")) or key in (
-        "delivery",
-        "destination_guard",
-        "insertion_mode",
-        "restore_clipboard",
-        "copy_to_clipboard",
-        "target_policy",
-        "return_to_start",
-        "verify_paste",
-        "edit_delivery",
-    ):
-        return "Text delivery"
-    if key.startswith("overlay_") or key in (
-        "recording_panel",
-        "theme",
-        "preview_chars",
-        "visualizer_sensitivity",
-        "live_preview",
-    ):
-        return "Appearance"
-    if key.startswith("save_") or key in ("typing_wpm", "weekends_break_streak"):
-        return "History & stats"
-    if key in (
-        "tray",
-        "launch_at_startup",
-        "show_window_at_login",
-        "show_microphone_alerts",
-        "show_paste_alerts",
-        "show_ai_alerts",
-        "hide_from_taskbar",
-        "onboarding_complete",
-    ):
-        return "Desktop"
-    if key in (
-        "model",
-        "language",
-        "device",
-        "compute_type",
-        "engine",
-        "max_seconds",
-        "skip_silent_recordings",
-        "queue_limit",
-        "file_speaker_labels",
-        "file_speaker_count",
-        "model_revision",
-        "native_streaming",
-        "streaming_latency",
-        "preview_interval_ms",
-        "asr_max_tokens",
-    ):
-        return "Speech"
-    return "Text formatting"
 
 
 class Window(QWidget):
@@ -239,6 +69,24 @@ class Window(QWidget):
         self.status.setWordWrap(True)
         self.status.setStyleSheet("color: #ff4f1f; padding: 12px 0")
         layout.addWidget(self.status)
+        self._add_recording_controls(layout)
+        tabs = QStackedWidget()
+        self.nav.currentRowChanged.connect(tabs.setCurrentIndex)
+        self.nav.currentTextChanged.connect(self.page_title.setText)
+        layout.addWidget(tabs)
+        self.history_page = HistoryPage(self.send)
+        tabs.addWidget(self.history_page)
+        tabs.addWidget(self._build_settings())
+        self._add_auxiliary_pages(tabs)
+        self.nav.setCurrentRow(0)
+        self.apply_theme()
+        QApplication.styleHints().colorSchemeChanged.connect(self.apply_theme)
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.poll)
+        self.timer.start(700)
+        self.poll()
+
+    def _add_recording_controls(self, layout: QVBoxLayout) -> None:
         buttons = QHBoxLayout()
         self.toggle = QPushButton("Record / Stop")
         self.toggle.clicked.connect(lambda: self.send("toggle"))
@@ -253,12 +101,8 @@ class Window(QWidget):
         )
         hint.setWordWrap(True)
         layout.addWidget(hint)
-        tabs = QStackedWidget()
-        self.nav.currentRowChanged.connect(tabs.setCurrentIndex)
-        self.nav.currentTextChanged.connect(self.page_title.setText)
-        layout.addWidget(tabs)
-        self.history_page = HistoryPage(self.send)
-        tabs.addWidget(self.history_page)
+
+    def _build_settings(self) -> QScrollArea:
         settings = QWidget()
         form = QFormLayout(settings)
         self.app_version = QLabel(__version__)
@@ -268,230 +112,21 @@ class Window(QWidget):
         self.service_version.setWordWrap(True)
         self.service_version.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         form.addRow("Recording service version", self.service_version)
-        self.settings_category = QComboBox()
-        self.settings_category.addItems(
-            [
-                "All settings",
-                "Speech",
-                "Microphone & media",
-                "Text delivery",
-                "Spoken Send",
-                "Text formatting",
-                "AI cleanup",
-                "Appearance",
-                "History & stats",
-                "Desktop",
-                "Local API",
-                "Dictionary & learning",
-            ]
-        )
-        form.addRow("Category", self.settings_category)
-        self.settings_rows = []
-        self.settings_form = form
-        self.fields = {}
-        config = asdict(Config.load())
-
-        choices = {
-            **CHOICES,
-            "model": model_choices(),
-            "language": language_choices(),
-            "compute_type": COMPUTE_TYPES,
-            "audio_source": audio_sources(),
-            "device": ["cpu", "cuda", "auto"],
-            "recording_panel": [("Show panel", "on"), ("Hide panel", "off")],
-            "delivery": [
-                ("Clipboard only", "clipboard"),
-                ("X11 auto-paste", "x11"),
-                ("Wayland auto-paste", "wayland"),
-            ],
-            "destination_guard": [
-                ("Field first, window fallback", "field_then_window"),
-                ("Require field or pane", "field"),
-            ],
-            "paste_backend": ["auto", "xdotool", "wtype", "ydotool"],
-            "paste_shortcut": [
-                ("Ctrl+Shift+V (Ghostty / most terminals)", "ctrl+shift+v"),
-                ("Ctrl+V (most editors)", "ctrl+v"),
-            ],
-            "sound_preset": [
-                ("Custom files", "custom"),
-                ("None", "none"),
-                ("Legacy MouthKeys pair", "mouthkeys"),
-                *((f"Sound {index + 1}", f"fluid_sfx_{index}") for index in range(5)),
-            ],
-            "command_confirm": [
-                ("Every command", "on"),
-                ("Destructive commands (upstream heuristic)", "destructive"),
-                ("No individual confirmation", "off"),
-            ],
-        }
-        profiles = load_profiles()
-        choices["ai_profile"] = [("Default settings", "")] + [
-            (profile["name"], profile["id"]) for profile in profiles
-        ]
-        for key in ("edit_profile", "command_profile"):
-            choices[key] = [("Sync to global provider", "default"), ("Off", "off")] + [
-                (profile["name"], profile["id"]) for profile in profiles
-            ]
-        labels = {
-            "max_seconds": "Maximum recording length",
-            "recording_panel": "Recording panel",
-            "ai_key_env": "AI API key environment variable",
-            "ai_credential_source": "AI credential source",
-            "destination_guard": "Automatic delivery destination checks",
-            "pronunciation_aligner_model": "Optional local Whisper pronunciation aligner",
-            "ai_endpoint": "AI cleanup endpoint (full URL)",
-            "spoken_send": "Spoken Send",
-            "send_after_pause": "Send after a pause",
-            "spoken_send_key": "Send key",
-            "save_history": "Save transcription history",
-            "microphone_preferred": "Preferred microphones (ordered, comma-separated)",
-            "microphone_fallback": "Last-resort microphones (ordered, comma-separated)",
-            "microphone_never": "Never use microphones (comma-separated)",
-            "typing_wpm": "Typing speed for time-saved estimate (WPM)",
-            "file_speaker_count": "File speaker count (0 = automatic)",
-            "command_confirm": "Confirm before running commands",
-            "ai_custom_prompt_only": "Send custom dictation prompt only",
-            "hide_from_taskbar": "Hide main window from taskbar / app switcher",
-            "show_ai_alerts": "AI processing failure notifications",
-            "sounds_enabled": "Recording sounds",
-        }
-        help_text = {
-            "ai_custom_prompt_only": (
-                "Off prepends the built-in dictation-cleaning instructions to your custom prompt. "
-                "On sends only your prompt and transcript. Command/Edit prompts are separate."
-            ),
-            "hide_from_taskbar": (
-                "Use a Linux tool-window hint for the main window. Taskbar and app-switcher "
-                "behavior depends on your compositor. Reopen through the tray or mouthkeys gui."
-            ),
-            "command_confirm": (
-                "Every command shows the exact shell command and directory for review. "
-                "Destructive uses upstream's command-text heuristic, not a sandbox. "
-                "No individual confirmation runs model-generated commands as your user; "
-                "continuation remains bounded to 20 steps."
-            ),
-            "max_seconds": (
-                "At the limit, recording stops and text is copied without automatic paste."
-            ),
-            "recording_panel": (
-                "Hide the panel if your compositor tiles it or takes keyboard focus. "
-                "Dictation still works; the panel also shows loading and shortcut errors."
-            ),
-            "spoken_send": (
-                "Opt-in: send configured key only after automatic insertion into "
-                "an unchanged X11 destination."
-            ),
-            "ai_enabled": (
-                "When on, recorded transcript is sent to the configured local or "
-                "remote AI endpoint."
-            ),
-            "ai_key_env": (
-                "Set this variable in the recording service environment; API keys "
-                "are never stored in backups."
-            ),
-            "ai_credential_source": (
-                "Environment uses the named variable. Secret Service uses your desktop keyring "
-                "for this exact provider endpoint; Save API key below. Settings never reads keys."
-            ),
-            "destination_guard": (
-                "Both options check the field or pane when it can be identified. If no field was "
-                "identified, window fallback can still paste or send in the same window, but "
-                "cannot detect tab or pane switches. Require field or pane copies instead. "
-                "Paste latest still pastes at current focus."
-            ),
-            "pronunciation_aligner_model": (
-                "Blank disables extra alignment. A complete already-cached Whisper model/path "
-                "can align engines without native word intervals for pronunciation matching. "
-                "No download; separate CPU/int8 model adds RAM and processing time. "
-                "Native word intervals remain preferred."
-            ),
-            "save_history": (
-                "Off removes completed attempts after delivery; failed raw text is"
-                " not retained either."
-            ),
-            "restore_clipboard": (
-                "Restoration occurs only after supported automatic paste and only "
-                "if clipboard ownership is unchanged."
-            ),
-            "api_enabled": (
-                "Opt-in loopback HTTP API; requires a token in the configured "
-                "environment variable. Restart service after changes."
-            ),
-        }
-        for key, value in config.items():
-            # faster-whisper gives existing local directories precedence over aliases.
-            if key == "model" and value in MODEL_ALIASES and not Path(value).is_dir():
-                value = MODEL_ALIASES.get(value, value)
-            if key in RANGES:
-                field = QSpinBox()
-                field.setRange(*RANGES[key])
-                if key == "max_seconds":
-                    field.setSuffix(" seconds" if key == "max_seconds" else " MB")
-                field.setValue(value)
-            elif key in choices:
-                field = QComboBox()
-                for option in choices[key]:
-                    label, data = option if isinstance(option, tuple) else (option, option)
-                    field.addItem(label, data)
-                # Preserve custom model paths, microphone names, and prior CLI settings.
-                if field.findData(value) < 0:
-                    field.addItem(value, value)
-                field.setCurrentIndex(field.findData(value))
-                if key in ("model", "audio_source"):
-                    field.setEditable(True)
-                    field.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
-            else:
-                field = QLineEdit(value)
-            self.fields[key] = field
-            self.settings_rows.append((form.rowCount(), setting_group(key)))
-            form.addRow(labels.get(key, key.replace("_", " ").capitalize()), field)
-            if key == "delivery":
-                self.delivery_hint = QLabel()
-                self.delivery_hint.setWordWrap(True)
-                self.settings_rows.append((form.rowCount(), setting_group(key)))
-                form.addRow("", self.delivery_hint)
-            elif key in help_text:
-                field.setToolTip(help_text[key])
-                hint = QLabel(help_text[key])
-                hint.setWordWrap(True)
-                self.settings_rows.append((form.rowCount(), setting_group(key)))
-                form.addRow("", hint)
-        for key in ("delivery", "paste_backend", "insertion_mode"):
-            self.fields[key].currentIndexChanged.connect(self.refresh_delivery_hint)
-        self.refresh_delivery_hint()
+        options = self.settings_options = SettingsForm(form, Config.load(), load_profiles())
+        self.fields = options.fields
+        self.settings_category = options.category
         from .regional_ui import RegionalFillerBanner
 
         self.regional_banner = RegionalFillerBanner(self, on_change=self.refresh_regional_offers)
-        self.settings_rows.append((form.rowCount(), "Text formatting"))
-        form.addRow(self.regional_banner)
-        self.fields["engine"].currentTextChanged.connect(self.refresh_model_choices)
-        if config["engine"] != "whisper":
-            self.refresh_model_choices(config["engine"])
+        options.add_grouped_row(self.regional_banner, "Text formatting")
         self.models_info = QLabel(
             "Download only on request. Install optional engine extras before switching engines."
         )
         self.models_info.setWordWrap(True)
-        self.settings_rows.append((form.rowCount(), "Speech"))
-        form.addRow(self.models_info)
+        options.add_grouped_row(self.models_info, "Speech")
         catalog_button = QPushButton("Inspect model catalog / installed state")
         catalog_button.clicked.connect(self.inspect_models)
-        self.settings_rows.append((form.rowCount(), "Speech"))
-        form.addRow(catalog_button)
-        self.fields["model"].setToolTip(
-            "Approximate transcription accuracy, strongest first (English dictation).\n"
-            "Accuracy varies by language and audio; .en and distilled models "
-            "are English-only.\n"
-            "Choose a model or enter a local model path / Hugging Face ID."
-        )
-        self.fields["audio_source"].setToolTip(
-            "Choose a microphone or enter a PulseAudio source name. Default follows your desktop."
-        )
-        self.fields["compute_type"].setToolTip(
-            "default follows the model's stored precision, with hardware fallbacks.\n"
-            "auto selects the fastest supported type for your device.\n"
-            "int8 reduces memory use; default may use more memory and run slower on CPU."
-        )
+        options.add_grouped_row(catalog_button, "Speech")
         save = QPushButton("Save settings")
         save.clicked.connect(self.save)
         form.addRow(save)
@@ -513,27 +148,16 @@ class Window(QWidget):
         ):
             button = QPushButton(label)
             button.clicked.connect(action)
-            self.settings_rows.append((form.rowCount(), category))
-            form.addRow(button)
+            options.add_grouped_row(button, category)
         self.model_downloads = ModelDownloads(
             self.save, self.selected_model, self.status.setText, lambda: self.send("warmup")
         )
-        self.settings_rows.append((form.rowCount(), "Speech"))
-        form.addRow(self.model_downloads)
-        self.settings_category.currentTextChanged.connect(self.filter_settings)
+        options.add_grouped_row(self.model_downloads, "Speech")
         self.settings_category.setCurrentText("Speech")
         settings_scroll = QScrollArea()
         settings_scroll.setWidgetResizable(True)
         settings_scroll.setWidget(settings)
-        tabs.addWidget(settings_scroll)
-        self._add_auxiliary_pages(tabs)
-        self.nav.setCurrentRow(0)
-        self.apply_theme()
-        QApplication.styleHints().colorSchemeChanged.connect(self.apply_theme)
-        self.timer = QTimer(self)
-        self.timer.timeout.connect(self.poll)
-        self.timer.start(700)
-        self.poll()
+        return settings_scroll
 
     def _add_auxiliary_pages(self, tabs: QStackedWidget) -> None:
         self.dictionary_page = DictionaryPage(self.send, self.status.setText)
@@ -549,7 +173,7 @@ class Window(QWidget):
             self.send,
             self.run_task,
             self.status.setText,
-            self.refresh_profile_choices,
+            self.settings_options.refresh_profiles,
             lambda action: self.keyring_action(action, profile=True),
         )
         profiles_scroll = QScrollArea()
@@ -625,26 +249,6 @@ class Window(QWidget):
         navigation.addWidget(footer)
         return sidebar
 
-    def filter_settings(self, category):
-        for row, group in self.settings_rows:
-            self.settings_form.setRowVisible(row, category == "All settings" or group == category)
-
-    def refresh_model_choices(self, engine):
-        field = self.fields["model"]
-        current = field_value(field)
-        if engine == "whisper":
-            names = model_choices()
-        else:
-            from .engines import model_catalog
-
-            names = [entry["model"] for entry in model_catalog(engine)]
-        field.clear()
-        for name in names:
-            field.addItem(name, name)
-        if current and current not in names:
-            field.addItem(current, current)
-        field.setCurrentIndex(field.findData(current))
-
     def inspect_models(self):
         from .models_ui import ModelBrowser
 
@@ -660,7 +264,7 @@ class Window(QWidget):
     def reset_fillers(self):
         from .regional import UPSTREAM_FILLERS
 
-        self.fields["filler_words"].setText(UPSTREAM_FILLERS)
+        cast("QLineEdit", self.fields["filler_words"]).setText(UPSTREAM_FILLERS)
         self.status.setText("Upstream filler list restored in editor; Save settings to apply")
 
     def offer_regional_filler(self):
@@ -683,8 +287,8 @@ class Window(QWidget):
                 word for word in words.split(",") if word.strip().casefold() != offer["word"]
             )
         replace(config, filler_words=words, regional_filler_answered="on").save()
-        self.fields["filler_words"].setText(words)
-        field = self.fields["regional_filler_answered"]
+        cast("QLineEdit", self.fields["filler_words"]).setText(words)
+        field = cast("QComboBox", self.fields["regional_filler_answered"])
         field.setCurrentIndex(field.findData("on"))
         self.refresh_regional_offers()
 
@@ -713,20 +317,6 @@ class Window(QWidget):
 
     def delete_model(self) -> None:
         self.model_downloads.delete_model()
-
-    def refresh_profile_choices(self, profiles: list[PromptProfile]) -> None:
-        for key in ("ai_profile", "edit_profile", "command_profile"):
-            picker = cast("QComboBox", self.fields[key])
-            selected = picker.currentData()
-            picker.clear()
-            if key == "ai_profile":
-                picker.addItem("Default settings", "")
-            else:
-                picker.addItem("Sync to global provider", "default")
-                picker.addItem("Off", "off")
-            for profile in profiles:
-                picker.addItem(profile["name"], profile["id"])
-            picker.setCurrentIndex(max(0, picker.findData(selected)))
 
     def run_task(self, function: Callable[[], object], callback: ResponseHandler) -> None:
         task = Task(function, self)
@@ -820,25 +410,6 @@ class Window(QWidget):
                 self.service_version.setText("Unavailable")
 
         self.send("status", callback=update)
-
-    def refresh_delivery_hint(self):
-        config = Config(
-            **{
-                key: field_value(self.fields[key])
-                for key in ("delivery", "paste_backend", "insertion_mode")
-            },
-        )
-        warning = automatic_delivery_warning(config)
-        message = (
-            "Dictation copies text. Paste manually in the destination."
-            if config.delivery == "clipboard"
-            else "Auto-paste requires an unchanged destination. Otherwise, text is copied."
-        )
-        if warning:
-            message = f"{warning} Clipboard fallback stays available."
-            if config.insertion_mode == "direct" and config.delivery == desktop_input.session():
-                message += " Direct insertion may still work in supported fields."
-        self.delivery_hint.setText(f"Detected session: {desktop_input.session()}. {message}")
 
     def save(self):
         try:
@@ -956,7 +527,7 @@ class Window(QWidget):
                     self, "AI models", "Choose a model", models, editable=False
                 )
                 if accepted:
-                    self.fields["ai_model"].setText(model)
+                    cast("QLineEdit", self.fields["ai_model"]).setText(model)
                     self.status.setText("Model selected; Save settings to apply")
 
         self.run_task(function, received)

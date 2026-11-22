@@ -1,7 +1,9 @@
 import json
 import os
+import signal
 import subprocess
 from dataclasses import replace
+from threading import Event
 
 import pytest
 
@@ -108,9 +110,17 @@ def test_reviewed_command_executor_uses_merged_bounded_pipes(monkeypatch):
     assert calls[0][1]["stderr"] == subprocess.STDOUT
 
 
+def _capture_group_signal(monkeypatch, process):
+    def killpg(pid, sig):
+        assert (pid, sig) == (process.pid, signal.SIGKILL)
+        process.kill()
+
+    monkeypatch.setattr(assistance.os, "killpg", killpg)
+
+
 def test_executor_kills_process_group_at_output_limit(monkeypatch):
     process = FakeProcess(b"a" * 50, hanging=True)
-    monkeypatch.setattr(assistance, "_kill_group", lambda p: p.kill())
+    _capture_group_signal(monkeypatch, process)
     result = assistance.execute_command("example", max_output=10, popen=lambda *a, **kw: process)
     assert result["output"] == "a" * 10
     assert result["truncated"] is True
@@ -119,18 +129,27 @@ def test_executor_kills_process_group_at_output_limit(monkeypatch):
 
 def test_executor_timeout_is_bounded_and_kills_children(monkeypatch):
     process = FakeProcess(hanging=True)
-    monkeypatch.setattr(assistance, "_kill_group", lambda p: p.kill())
+    _capture_group_signal(monkeypatch, process)
     result = assistance.execute_command("example", timeout=0.01, popen=lambda *a, **kw: process)
     assert result["timed_out"] is True
     assert result["returncode"] == -9
 
 
-def test_command_cancellation_kills_group_and_records_truthful_outcome(monkeypatch):
-    import threading
+def test_deadline_still_applies_after_output_pipe_reaches_eof(monkeypatch):
+    process = FakeProcess(b"done writing", hanging=True)
+    os.close(process.write)
+    process.write = None
+    _capture_group_signal(monkeypatch, process)
+    result = assistance.execute_command("example", timeout=0.05, popen=lambda *a, **kw: process)
+    assert result["output"] == "done writing"
+    assert result["timed_out"] is True
+    assert result["returncode"] == -9
 
-    cancelled = threading.Event()
+
+def test_command_cancellation_kills_group_and_records_truthful_outcome(monkeypatch):
+    cancelled = Event()
     process = FakeProcess(hanging=True)
-    monkeypatch.setattr(assistance, "_kill_group", lambda p: p.kill())
+    _capture_group_signal(monkeypatch, process)
 
     def launch(*args, **kwargs):
         cancelled.set()
@@ -149,12 +168,84 @@ def test_command_working_directory_validated_before_launch(tmp_path):
         calls.append(kwargs)
         return FakeProcess(b"OK")
 
-    for invalid in ("relative/path", str(tmp_path / "missing")):
+    for invalid in ("relative/path", str(tmp_path / "missing"), False, None, "bad\0path"):
         with pytest.raises(ValueError, match="directory"):
             assistance.execute_command("example", working_directory=invalid, popen=launch)
     assert calls == []
     assistance.execute_command("example", working_directory=str(tmp_path), popen=launch)
     assert calls[0]["cwd"] == str(tmp_path)
+
+
+def test_executor_closes_output_even_if_terminated_child_cannot_be_reaped(monkeypatch):
+    process = FakeProcess(hanging=True)
+    monkeypatch.setattr(assistance.os, "killpg", lambda pid, sig: None)
+    with pytest.raises(subprocess.TimeoutExpired):
+        assistance.execute_command("example", timeout=0.01, popen=lambda *a, **kw: process)
+    assert process.stdout.closed
+    process.kill()  # Close the fake writer without signalling a real process.
+
+
+def test_executor_cleans_up_child_if_launcher_has_no_pipe(monkeypatch):
+    process = FakeProcess(hanging=True)
+    process.stdout.close()
+    process.stdout = None
+    _capture_group_signal(monkeypatch, process)
+    with pytest.raises(RuntimeError, match="output pipe"):
+        assistance.execute_command("example", popen=lambda *a, **kw: process)
+    assert process.poll() == -signal.SIGKILL
+
+
+def test_output_can_be_truncated_after_process_has_already_exited(monkeypatch):
+    def gone(pid, sig):
+        assert pid == process.pid
+        raise ProcessLookupError
+
+    process = FakeProcess(b"already written")
+    monkeypatch.setattr(assistance.os, "killpg", gone)
+    result = assistance.execute_command("example", max_output=5, popen=lambda *a, **kw: process)
+    assert result == {"returncode": 0, "output": "alrea", "truncated": True, "timed_out": False}
+
+
+@pytest.mark.parametrize(
+    ("command", "options", "error"),
+    [
+        (None, {}, "nonempty"),
+        ("   ", {}, "nonempty"),
+        ("bad\0command", {}, "nonempty"),
+        ("x" * 16385, {}, "nonempty"),
+        ("example", {"timeout": 0}, "limits"),
+        ("example", {"timeout": 301}, "limits"),
+        ("example", {"max_output": 0}, "limits"),
+        ("example", {"max_output": assistance.MAX_OUTPUT + 1}, "limits"),
+    ],
+)
+def test_executor_rejects_invalid_input_without_starting_child(command, options, error):
+    def unexpected_launch(*args, **kwargs):
+        pytest.fail("Invalid input launched a child")
+
+    with pytest.raises(ValueError, match=error):
+        assistance.execute_command(command, popen=unexpected_launch, **options)
+
+
+def test_pre_cancelled_command_never_launches():
+    cancelled = Event()
+    cancelled.set()
+    with pytest.raises(ValueError, match="cancelled before execution"):
+        assistance.execute_command(
+            "example",
+            cancel_event=cancelled,
+            popen=lambda *a, **kw: pytest.fail("Cancelled command launched"),
+        )
+
+
+def test_unknown_confirmation_policy_does_not_authorize_command():
+    with pytest.raises(ValueError, match="Unknown command confirmation policy"):
+        assistance.requires_confirmation("example", "unknown")
+
+
+def test_executor_reports_real_exit_code_and_combines_stdout_and_stderr():
+    result = assistance.execute_command("printf 'out'; printf 'err' >&2; exit 7")
+    assert result == {"returncode": 7, "output": "outerr", "truncated": False, "timed_out": False}
 
 
 def test_assistant_ui_requires_review_of_exact_command(monkeypatch):

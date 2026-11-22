@@ -48,6 +48,22 @@ def test_auto_paste_fallback_explains_why(controller, monkeypatch, desktop, expe
     assert controller.history.rows()[0]["status"] == "copied"
 
 
+def test_empty_cleanup_result_is_not_inserted(controller, monkeypatch):
+    Config(ai_enabled="on", ai_model="model").save()
+    monkeypatch.setattr("mouthkeys.recording_cleanup.process", lambda *_args, **_kwargs: "")
+    controller.command("start")
+    controller.command("stop")
+    finish(controller)
+    assert not controller.delivery.calls
+    row = controller.history.rows()[0]
+    assert (row["status"], row["raw_text"], row["text"]) == (
+        "transcribed",
+        controller.transcriber.text,
+        "",
+    )
+    assert controller.status()["message"] == "No text to deliver"
+
+
 def test_cancel_recording_stops_capture_without_delivery(controller):
     item = controller.command("start")["id"]
     recorder = controller.recorder

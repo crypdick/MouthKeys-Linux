@@ -35,6 +35,20 @@ class DeliveryOutcome:
     send_warning: str
 
 
+def delivery_message(request: DeliveryRequest, outcome: DeliveryOutcome) -> str:
+    if outcome.paste_warning:
+        return f"Copied — auto-paste skipped. {outcome.paste_warning}"
+    if outcome.status == "send_requested":
+        return "Send requested — no text inserted"
+    if not request.text:
+        return "No text to deliver"
+    if outcome.status == "copied":
+        return "Copied — paste into your app"
+    if request.config.save_history == "on":
+        return "Insertion requested — transcript saved in history"
+    return "Insertion requested — history disabled"
+
+
 def _paste_warning(request: DeliveryRequest, status: str) -> str | None:
     if status != "copied" or not request.automatic:
         return None

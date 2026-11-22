@@ -156,23 +156,48 @@ def test_optional_target_capture_failure_does_not_leak_pending_job():
     assert controller.status()["pending_jobs"] == 0
 
 
-def test_acoustic_correction_runs_before_format_and_never_rewrites_raw(monkeypatch):
+@pytest.mark.parametrize("alignment", [None, {"warning": "No ASR word timings"}])
+def test_acoustic_correction_runs_before_format_and_never_rewrites_raw(monkeypatch, alignment):
     Config(pronunciation_matching="on", lowercase_first="on").save()
     controller = app("Raw heard phrase")
+    controller.transcriber.last_alignment = alignment
     monkeypatch.setattr(PronunciationStore, "correct", lambda text, path: "CorrectSpelling")
     controller.command("start")
     controller.command("stop")
     finish(controller)
     assert controller.history.rows()[0]["raw_text"] == "Raw heard phrase"
     assert controller.history.rows()[0]["text"] == "correctSpelling"
+    expected = "Copied — paste into your app"
+    if alignment:
+        expected += ". No ASR word timings"
+    assert controller.status()["message"] == expected
 
 
-def test_actual_alignment_uses_span_matcher_and_keeps_raw_on_budget_limit(monkeypatch):
+@pytest.mark.parametrize(
+    ("correction", "asr_warning", "expected_notice"),
+    [
+        (
+            {"truncated": True},
+            "",
+            "Pronunciation matching budget reached; unmatched ASR text retained",
+        ),
+        (
+            {"skipped_reason": "Alignment belongs to another recording"},
+            "ASR timings are incomplete",
+            "Pronunciation spans skipped: Alignment belongs to another recording. ASR timings are incomplete",
+        ),
+        ({}, "ASR timings are incomplete", "ASR timings are incomplete"),
+    ],
+)
+def test_actual_alignment_uses_span_matcher_and_preserves_diagnostics(
+    monkeypatch, correction, asr_warning, expected_notice
+):
     Config(pronunciation_matching="on", pronunciation_span_budget=321).save()
     controller = app("Heard phrase")
     original = {
         "text": "Heard phrase",
         "source": "whisper",
+        "warning": asr_warning,
         "words": [
             {"word": "Heard", "start": 0, "end": 0.2},
             {"word": "phrase", "start": 0.2, "end": 0.5},
@@ -186,7 +211,7 @@ def test_actual_alignment_uses_span_matcher_and_keeps_raw_on_budget_limit(monkey
         assert alignment is not original
         assert alignment["words"] is not original["words"]
         assert budget == 321
-        return {"text": "Correct phrase", "truncated": True}
+        return {"text": "Correct phrase", **correction}
 
     monkeypatch.setattr(PronunciationStore, "correct_spans", correct)
     monkeypatch.setattr(
@@ -198,7 +223,7 @@ def test_actual_alignment_uses_span_matcher_and_keeps_raw_on_budget_limit(monkey
     row = controller.history.rows()[0]
     assert row["raw_text"] == "Heard phrase"
     assert row["text"] == "Correct phrase"
-    assert "budget reached" in controller.status()["message"]
+    assert controller.status()["message"] == f"Copied — paste into your app. {expected_notice}"
 
 
 def test_edit_replacement_requires_exact_captured_selection():

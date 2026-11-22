@@ -134,6 +134,7 @@ def test_edit_delivery_failure_is_not_recorded_as_ai_failure(monkeypatch):
     assert row["was_ai_processed"] == 1
     assert row["ai_processing_error"] == ""
     assert row["error"] == "Desktop helper missing"
+    assert app.status()["notice"] is None
 
 
 def test_cancelled_ai_result_does_not_leave_success_or_raw_transcript(monkeypatch):
@@ -230,11 +231,12 @@ def test_privacy_opt_out_never_writes_transcript_history():
     def deliver(text, config, target):
         assert app.history.rows() == []
         app.delivery.calls.append((text, config, target))
-        return "copied"
+        return "paste_requested"
 
     app.delivery.deliver = deliver
     app.command("stop")
     finish(app)
+    assert app.status()["message"] == "Insertion requested — history disabled"
     assert app.delivery.calls[0][0] == "Hello world"
     assert app.history.rows() == []
     assert not path.exists()

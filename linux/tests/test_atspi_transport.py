@@ -1,5 +1,6 @@
 import io
 import json
+import runpy
 import sys
 from types import ModuleType, SimpleNamespace
 
@@ -92,3 +93,18 @@ def test_helper_reports_unavailable_without_leaking_transport_diagnostics(monkey
     captured = capsys.readouterr()
     assert json.loads(captured.out) is None
     assert not captured.err
+
+
+@pytest.mark.parametrize("payload", [b"not-json", b"[]"])
+def test_helper_rejects_invalid_request_before_opening_bus(payload, monkeypatch, capsys):
+    monkeypatch.setattr(sys, "stdin", SimpleNamespace(buffer=io.BytesIO(payload)))
+    monkeypatch.setattr(atspi, "Bus", lambda: pytest.fail("Unexpected desktop bus connection"))
+    atspi.main()
+    assert capsys.readouterr().out == "null\n"
+
+
+def test_system_python_script_entry_point_has_no_application_imports(monkeypatch, capsys):
+    # Malformed input must exit before loading GI even when invoked as a standalone script.
+    monkeypatch.setattr(sys, "stdin", SimpleNamespace(buffer=io.BytesIO(b"[]")))
+    runpy.run_path(atspi.__file__, run_name="__main__")
+    assert capsys.readouterr().out == "null\n"

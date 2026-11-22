@@ -70,26 +70,7 @@
 2	src/mouthkeys/assistant_ui.py	FBT003	Boolean positional value in function call
 1	src/mouthkeys/assistant_ui.py	PLC0415	`import` should be at the top-level of a file
 1	src/mouthkeys/assistant_ui.py	SIM108	Use ternary operator `reviewed = f"Working directory: {directory}\n\n{command}" if directory else command` instead of `if`-`else`-block
-1	src/mouthkeys/atspi_helper.py	ANN001	Missing type annotation for function argument `after`
-2	src/mouthkeys/atspi_helper.py	ANN001	Missing type annotation for function argument `before`
-4	src/mouthkeys/atspi_helper.py	ANN001	Missing type annotation for function argument `bus`
-2	src/mouthkeys/atspi_helper.py	ANN001	Missing type annotation for function argument `ref`
-1	src/mouthkeys/atspi_helper.py	ANN001	Missing type annotation for function argument `request`
-1	src/mouthkeys/atspi_helper.py	ANN001	Missing type annotation for function argument `require_focus`
-1	src/mouthkeys/atspi_helper.py	ANN001	Missing type annotation for function argument `text`
-1	src/mouthkeys/atspi_helper.py	ANN001	Missing type annotation for function argument `window`
-1	src/mouthkeys/atspi_helper.py	ANN201	Missing return type annotation for public function `active_window`
-1	src/mouthkeys/atspi_helper.py	ANN201	Missing return type annotation for public function `expected_text`
-1	src/mouthkeys/atspi_helper.py	ANN201	Missing return type annotation for public function `find_focused`
-1	src/mouthkeys/atspi_helper.py	ANN201	Missing return type annotation for public function `operate`
-1	src/mouthkeys/atspi_helper.py	ANN201	Missing return type annotation for public function `snapshot`
-1	src/mouthkeys/atspi_helper.py	ANN201	Missing return type annotation for public function `unchanged`
-1	src/mouthkeys/atspi_helper.py	C901	`snapshot` is too complex (18 > 15)
 2	src/mouthkeys/atspi_helper.py	PLC0415	`import` should be at the top-level of a file
-1	src/mouthkeys/atspi_helper.py	PLR0911	Too many return statements (11 > 6)
-1	src/mouthkeys/atspi_helper.py	PLR0911	Too many return statements (13 > 6)
-1	src/mouthkeys/atspi_helper.py	PLR0912	Too many branches (17 > 12)
-2	src/mouthkeys/atspi_helper.py	SIM105	Use `contextlib.suppress(Exception)` instead of `try`-`except`-`pass`
 1	src/mouthkeys/audio.py	SIM115	Use a context manager for opening files
 7	src/mouthkeys/benchmark.py	PLC0415	`import` should be at the top-level of a file
 1	src/mouthkeys/benchmark.py	PLR0913	Too many arguments in function definition (6 > 5)

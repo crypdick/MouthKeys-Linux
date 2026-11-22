@@ -8,7 +8,9 @@ import json
 import re
 import sys
 import time
-from collections.abc import Sequence
+from collections.abc import Container, Mapping, Sequence
+from contextlib import suppress
+from typing import NamedTuple, Protocol, TypedDict, cast, runtime_checkable
 
 ACCESSIBLE = "org.a11y.atspi.Accessible"
 TEXT = "org.a11y.atspi.Text"
@@ -18,15 +20,76 @@ ROOT = ("org.a11y.atspi.Registry", "/org/a11y/atspi/accessible/root")
 LIMIT = 100000
 
 
-def valid_ref(ref: object) -> bool:
-    return (
-        isinstance(ref, (list, tuple))
-        and len(ref) == 2
-        and isinstance(ref[0], str)
-        and re.fullmatch(r":\d+\.\d+", ref[0]) is not None
-        and isinstance(ref[1], str)
-        and ref[1].startswith("/org/a11y/atspi/accessible/")
-    )
+ObjectRef = tuple[str, str]
+
+
+def _reference(value: object) -> ObjectRef | None:
+    if isinstance(value, (list, tuple)) and len(value) == 2:
+        name, path = value
+        if (
+            isinstance(name, str)
+            and re.fullmatch(r":\d+\.\d+", name)
+            and isinstance(path, str)
+            and path.startswith("/org/a11y/atspi/accessible/")
+        ):
+            return name, path
+    return None
+
+
+@runtime_checkable
+class _Transport(Protocol):
+    password_role: int
+    terminal_role: int
+    focused_state: int
+    editable_state: int
+    active_state: int
+    deadline: float
+
+    @property
+    def window_roles(self) -> Container[int]: ...
+
+    def call(
+        self,
+        ref: Sequence[str],
+        interface: str,
+        method: str,
+        signature: str | None = None,
+        args: tuple[object, ...] = (),
+    ) -> tuple[object, ...]: ...
+
+    def prop(self, ref: Sequence[str], interface: str, name: str) -> object: ...
+
+
+class FieldSnapshot(TypedDict):
+    field_id: str
+    bus: str
+    path: str
+    text: str
+    caret: int
+    selection_start: int
+    selection_end: int
+    context: str
+    text_start: int
+    character_count: int
+    complete: bool
+    focused: bool
+    foreground: bool | None
+    editable: bool
+    terminal: bool
+    protected: bool
+    app: str
+
+
+class _Protected(TypedDict):
+    protected: bool
+
+
+class _Position(NamedTuple):
+    characters: int
+    caret: int
+    start: int
+    end: int
+    selections: int
 
 
 class Bus:
@@ -95,215 +158,275 @@ class Bus:
         ]
 
 
+def _states(bus: _Transport, ref: ObjectRef) -> Sequence[int]:
+    words = bus.call(ref, ACCESSIBLE, "GetState")[0]
+    if not isinstance(words, (list, tuple)) or any(type(word) is not int for word in words):
+        raise ValueError("Invalid accessibility state")
+    return words
+
+
 def has_state(words: Sequence[int], state: int) -> bool:
     return len(words) > state // 32 and bool(words[state // 32] & (1 << (state % 32)))
 
 
-def active_window(bus, ref):
+def active_window(bus: _Transport, ref: ObjectRef) -> bool | None:
     """Nearest exposed top-level window corroborates local child focus."""
-    visited = set()
-    current = ref
+    visited: set[ObjectRef] = set()
+    current: ObjectRef | None = ref
     for _ in range(24):
-        current = tuple(current)
-        if current in visited or not valid_ref(current):
-            return None
+        if current is None or current in visited:
+            break
         visited.add(current)
         role = bus.call(current, ACCESSIBLE, "GetRole")[0]
-        if role in bus.window_roles:
-            return has_state(bus.call(current, ACCESSIBLE, "GetState")[0], bus.active_state)
-        current = bus.prop(current, ACCESSIBLE, "Parent")
+        if type(role) is int and role in bus.window_roles:
+            return has_state(_states(bus, current), bus.active_state)
+        current = _reference(bus.prop(current, ACCESSIBLE, "Parent"))
     return None
 
 
-def snapshot(bus, ref, *, require_focus=True, window=None):
-    if not valid_ref(ref):
+def _foreground(bus: _Transport, ref: ObjectRef) -> bool | None:
+    # A stale toolkit object cannot corroborate focus. Do not log bus payloads.
+    with suppress(Exception):
+        return active_window(bus, ref)
+    return None
+
+
+def _app_name(bus: _Transport, ref: ObjectRef) -> str:
+    # An unavailable application name does not invalidate otherwise stable text.
+    with suppress(Exception):
+        name = bus.prop((ref[0], ROOT[1]), ACCESSIBLE, "Name")
+        if isinstance(name, str):
+            return name[:200]
+    return ""
+
+
+def _position(bus: _Transport, ref: ObjectRef) -> _Position | None:
+    count = bus.prop(ref, TEXT, "CharacterCount")
+    caret = bus.prop(ref, TEXT, "CaretOffset")
+    selections = bus.call(ref, TEXT, "GetNSelections")[0]
+    if type(count) is not int or type(caret) is not int or not 0 <= caret <= count:
         return None
-    role = bus.call(ref, ACCESSIBLE, "GetRole")[0]
-    if role == bus.password_role:
+    if type(selections) is not int or selections not in (0, 1):
+        return None  # Disjoint edits cannot be represented by a single captured range.
+    if not selections:
+        return _Position(count, caret, caret, caret, selections)
+    start, end = bus.call(ref, TEXT, "GetSelection", "(i)", (0,))
+    if type(start) is not int or type(end) is not int or not 0 <= start <= end <= count:
         return None
-    states = bus.call(ref, ACCESSIBLE, "GetState")[0]
+    return _Position(count, caret, start, end, selections)
+
+
+def _region(position: _Position, window: Mapping[str, object] | None) -> tuple[int, int] | None:
+    count, start, end = position.characters, position.start, position.end
+    first, last = (0, count) if count <= LIMIT else (max(0, start - 2000), min(count, end + 2000))
+    if window is not None and window.get("complete") is False:
+        offset, previous = window.get("text_start"), window.get("character_count")
+        text = window.get("text")
+        if type(offset) is not int or type(previous) is not int or not isinstance(text, str):
+            return None
+        first, last = offset, min(count, offset + len(text) + count - previous)
+    if not 0 <= first <= last <= count or last - first > LIMIT:
+        return None
+    return first, last
+
+
+def _read_text(bus: _Transport, ref: ObjectRef, region: tuple[int, int], role: int) -> str | None:
+    # The toolkit can turn an editable field into a password field during capture.
+    if bus.call(ref, ACCESSIBLE, "GetRole")[0] != role:
+        return None
+    text = bus.call(ref, TEXT, "GetText", "(ii)", region)[0]
+    if not isinstance(text, str) or len(text) != region[1] - region[0]:
+        return None
+    return text
+
+
+def _same_field_state(
+    bus: _Transport, ref: ObjectRef, *, focused: bool, editable: bool, foreground: bool | None
+) -> bool:
+    states = _states(bus, ref)
+    return (
+        has_state(states, bus.focused_state) == focused
+        and has_state(states, bus.editable_state) == editable
+        and _foreground(bus, ref) == foreground
+    )
+
+
+def snapshot(
+    bus: _Transport,
+    ref: object,
+    *,
+    require_focus: bool = True,
+    window: Mapping[str, object] | None = None,
+) -> FieldSnapshot | None:
+    address = _reference(ref)
+    if address is None:
+        return None
+    role = bus.call(address, ACCESSIBLE, "GetRole")[0]
+    if type(role) is not int or role == bus.password_role:
+        return None
+    states = _states(bus, address)
     focused = has_state(states, bus.focused_state)
     editable = has_state(states, bus.editable_state)
     terminal = role == bus.terminal_role
     if (require_focus and not focused) or not (editable or terminal):
         return None
-    try:
-        foreground = active_window(bus, ref)
-    # A stale toolkit object is unavailable; never log field or bus payloads.
-    except Exception:  # allow: exception-handling  # noqa: BLE001
-        foreground = None
-    count = bus.prop(ref, TEXT, "CharacterCount")
-    caret = bus.prop(ref, TEXT, "CaretOffset")
-    if type(count) is not int or count < 0 or not 0 <= caret <= count:
-        return None  # Never truncate text and then pretend an exact comparison is possible.
-    selections = bus.call(ref, TEXT, "GetNSelections")[0]
-    if selections > 1:
-        return None  # Disjoint edits cannot be represented by a single captured range.
-    start, end = (
-        bus.call(ref, TEXT, "GetSelection", "(i)", (0,)) if selections == 1 else (caret, caret)
-    )
-    if not 0 <= start <= end <= count:
+    foreground = _foreground(bus, address)
+    position = _position(bus, address)
+    region = _region(position, window) if position is not None else None
+    if position is None or region is None:
         return None
-    text_start, text_end = 0, count
-    if count > LIMIT:
-        text_start, text_end = max(0, start - 2000), min(count, end + 2000)
-    if window and window.get("complete") is False:
-        text_start = window["text_start"]
-        text_end = min(count, text_start + len(window["text"]) + count - window["character_count"])
-    if not 0 <= text_start <= text_end <= count or text_end - text_start > LIMIT:
-        return None
-    text = bus.call(ref, TEXT, "GetText", "(ii)", (text_start, text_end))[0]
-    if not isinstance(text, str) or len(text) != text_end - text_start:
-        return None
-    app_name = ""
-    try:
-        app_name = bus.prop((ref[0], ROOT[1]), ACCESSIBLE, "Name")
-    # A stale toolkit object is unavailable; never log field or bus payloads.
-    except Exception:  # allow: exception-handling  # noqa: BLE001, S110
-        pass
-    # A snapshot spans several D-Bus calls. Reject edits/focus changes during it,
-    # rather than returning an early caret/focus bit alongside later text.
+    text = _read_text(bus, address, region, role)
+    app = _app_name(bus, address) if text is not None else ""
     if (
-        bus.prop(ref, TEXT, "CharacterCount") != count
-        or bus.prop(ref, TEXT, "CaretOffset") != caret
-        or bus.call(ref, TEXT, "GetNSelections")[0] != selections
-        or (selections == 1 and bus.call(ref, TEXT, "GetSelection", "(i)", (0,)) != (start, end))
-        or bus.call(ref, TEXT, "GetText", "(ii)", (text_start, text_end))[0] != text
-        or bus.call(ref, ACCESSIBLE, "GetRole")[0] != role
+        text is None
+        or _position(bus, address) != position
+        or _read_text(bus, address, region, role) != text
+        or not _same_field_state(
+            bus, address, focused=focused, editable=editable, foreground=foreground
+        )
     ):
         return None
-    final_states = bus.call(ref, ACCESSIBLE, "GetState")[0]
-    final_focus = has_state(final_states, bus.focused_state)
-    if final_focus != focused or has_state(final_states, bus.editable_state) != editable:
-        return None
-    try:
-        if active_window(bus, ref) != foreground:
-            return None
-    # A stale toolkit object is unavailable; never log field or bus payloads.
-    except Exception:  # allow: exception-handling  # noqa: BLE001
-        if foreground is not None:
-            return None
+    first, last = region
     return {
-        "field_id": ref[0] + "|" + ref[1],
-        "bus": ref[0],
-        "path": ref[1],
+        "field_id": address[0] + "|" + address[1],
+        "bus": address[0],
+        "path": address[1],
         "text": text,
-        "caret": caret,
-        "selection_start": start,
-        "selection_end": end,
-        "context": text[max(0, start - text_start - 200) : max(0, start - text_start)],
-        "text_start": text_start,
-        "character_count": count,
-        "complete": text_start == 0 and text_end == count,
+        "caret": position.caret,
+        "selection_start": position.start,
+        "selection_end": position.end,
+        "context": text[max(0, position.start - first - 200) : max(0, position.start - first)],
+        "text_start": first,
+        "character_count": position.characters,
+        "complete": first == 0 and last == position.characters,
         "focused": focused,
         "foreground": foreground,
         "editable": editable,
         "terminal": terminal,
         "protected": False,
-        "app": app_name[:200] if isinstance(app_name, str) else "",
+        "app": app,
     }
 
 
-def find_focused(bus):
+def find_focused(bus: _Transport) -> FieldSnapshot | _Protected | None:
     pending = [ROOT]
-    visited = set()
+    visited: set[ObjectRef] = set()
     while pending and len(visited) < 500 and time.monotonic() < bus.deadline:
-        ref = tuple(pending.pop())
+        ref = pending.pop()
         if ref in visited:
             continue
         visited.add(ref)
         try:
             role = bus.call(ref, ACCESSIBLE, "GetRole")[0]
             if role == bus.password_role:
-                states = bus.call(ref, ACCESSIBLE, "GetState")[0]
-                if has_state(states, bus.focused_state) and active_window(bus, ref) is True:
-                    # Report that fallback is unsafe without reading any password data.
+                if has_state(_states(bus, ref), bus.focused_state) and active_window(bus, ref):
+                    # Prevent window-level fallback without reading any password data.
                     return {"protected": True}
                 continue
             value = snapshot(bus, ref)
-            if value and value.get("foreground") is True:
+            if value and value["foreground"] is True:
                 return value
             children = bus.call(ref, ACCESSIBLE, "GetChildren")[0]
-            pending.extend(reversed([child for child in children if valid_ref(child)]))
-        # A stale toolkit object is unavailable; never log field or bus payloads.
+            if isinstance(children, (list, tuple)):
+                pending.extend(
+                    child for item in reversed(children) if (child := _reference(item)) is not None
+                )
+        # Ignore stale toolkit objects and never log their payloads.
         except Exception:  # allow: exception-handling  # noqa: BLE001, S112
             continue
     return None
 
 
-def unchanged(before, after):
+def unchanged(before: Mapping[str, object] | None, after: Mapping[str, object] | None) -> bool:
     return bool(
         before
         and after
-        and before.get("field_id") == after.get("field_id")
-        and before.get("text") == after.get("text")
         and before.get("text_start", 0) == after.get("text_start", 0)
-        and before.get("character_count") == after.get("character_count")
-        and before.get("selection_start") == after.get("selection_start")
-        and before.get("selection_end") == after.get("selection_end")
+        and all(
+            before.get(field) == after.get(field)
+            for field in (
+                "field_id",
+                "text",
+                "character_count",
+                "caret",
+                "selection_start",
+                "selection_end",
+            )
+        )
         and after.get("focused")
         and after.get("foreground") is True
         and not after.get("protected")
     )
 
 
-def expected_text(before, text):
-    start = before["selection_start"] - before.get("text_start", 0)
-    end = before["selection_end"] - before.get("text_start", 0)
-    return before["text"][:start] + text + before["text"][end:]
+def expected_text(before: Mapping[str, object], text: str) -> str:
+    offset = cast("int", before.get("text_start", 0))
+    start = cast("int", before["selection_start"]) - offset
+    end = cast("int", before["selection_end"]) - offset
+    original = cast("str", before["text"])
+    return original[:start] + text + original[end:]
 
 
-def operate(bus, request):
+def _focus(bus: _Transport, ref: ObjectRef, before: Mapping[str, object]) -> bool:
+    # Explicit return-to-start only. Require the target to still exist and be unchanged.
+    current = snapshot(bus, ref, require_focus=False)
+    if current is None or any(
+        current[key] != before.get(key) for key in ("text", "selection_start", "selection_end")
+    ):
+        return False
+    if not bus.call(ref, COMPONENT, "GrabFocus")[0]:
+        return False
+    return unchanged(before, snapshot(bus, ref))
+
+
+def _insert(
+    bus: _Transport, ref: ObjectRef, before: Mapping[str, object], text: object
+) -> FieldSnapshot | None:
+    if not isinstance(text, str) or len(text) > LIMIT:
+        return None
+    current = snapshot(bus, ref)
+    if (
+        current is None
+        or not unchanged(before, current)
+        or current["terminal"]
+        or not current["editable"]
+        or current["selection_start"] != current["selection_end"]
+    ):
+        return None
+    expected = expected_text(current, text)
+    if len(expected) > LIMIT:
+        return None
+    # InsertText preserves rich content outside the insertion point.
+    # Never use whole-field SetTextContents to replace a selection.
+    if not bus.call(
+        ref, EDITABLE, "InsertText", "(isi)", (current["caret"], text, len(text.encode("utf-8")))
+    )[0]:
+        return None
+    # Never retry an accepted insert if caret placement is unsupported.
+    with suppress(Exception):
+        bus.call(ref, TEXT, "SetCaretOffset", "(i)", (current["caret"] + len(text),))
+    result = snapshot(bus, ref, window=before)
+    return result if result and result["text"] == expected else None
+
+
+def operate(
+    bus: _Transport, request: Mapping[str, object]
+) -> FieldSnapshot | _Protected | bool | None:
     action = request.get("action", "snapshot")
     before = request.get("target")
     if action == "snapshot" and not before:
         return find_focused(bus)
-    ref = (before.get("bus"), before.get("path")) if isinstance(before, dict) else None
-    if not valid_ref(ref):
+    if (
+        not isinstance(before, dict)
+        or (ref := _reference((before.get("bus"), before.get("path")))) is None
+    ):
         return None
     if action == "snapshot":
         return snapshot(bus, ref, require_focus=False, window=before)
     if action == "focus":
-        # Explicit return-to-start only. Require target still exists and unchanged first.
-        current = snapshot(bus, ref, require_focus=False)
-        if (
-            not current
-            or current["text"] != before.get("text")
-            or current["selection_start"] != before.get("selection_start")
-            or current["selection_end"] != before.get("selection_end")
-        ):
-            return False
-        if not bus.call(ref, COMPONENT, "GrabFocus")[0]:
-            return False
-        return unchanged(before, snapshot(bus, ref))
+        return _focus(bus, ref, before)
     if action == "insert":
-        text = request.get("text")
-        if not isinstance(text, str) or len(text) > LIMIT:
-            return None
-        current = snapshot(bus, ref)
-        if (
-            not unchanged(before, current)
-            or current["terminal"]
-            or not current["editable"]
-            or current["selection_start"] != current["selection_end"]
-        ):
-            return None
-        expected = expected_text(before, text)
-        if len(expected) > LIMIT:
-            return None
-        # InsertText preserves rich content outside the insertion point. Never use
-        # whole-field SetTextContents to replace a selection: it erases formatting.
-        if not bus.call(
-            ref, EDITABLE, "InsertText", "(isi)", (before["caret"], text, len(text.encode("utf-8")))
-        )[0]:
-            return None
-        try:
-            bus.call(ref, TEXT, "SetCaretOffset", "(i)", (before["selection_start"] + len(text),))
-        # A stale toolkit object is unavailable; never log field or bus payloads.
-        except Exception:  # allow: exception-handling  # noqa: BLE001, S110
-            pass  # An accepted insertion must not be retried if caret placement is unsupported.
-        result = snapshot(bus, ref, window=before)
-        return result if result and result["text"] == expected else None
+        return _insert(bus, ref, before, request.get("text"))
     raise ValueError("Unknown accessibility action")
 
 
@@ -312,8 +435,11 @@ def main() -> None:
         line = sys.stdin.buffer.readline(1024 * 1024 + 1)
         if len(line) > 1024 * 1024:
             raise ValueError("Accessibility request too large")
-        value = operate(Bus(), json.loads(line))
-    # A stale toolkit object is unavailable; never log field or bus payloads.
+        request = json.loads(line)
+        if not isinstance(request, dict):
+            raise ValueError("Invalid accessibility request")  # noqa: TRY004 - malformed JSON payload
+        value = operate(Bus(), request)
+    # Do not log private toolkit errors or request payloads.
     except Exception:  # allow: exception-handling  # noqa: BLE001
         value = None
     print(json.dumps(value, ensure_ascii=False))  # noqa: T201

@@ -1,3 +1,4 @@
+import io
 import json
 import signal
 import socket
@@ -81,6 +82,30 @@ def test_daemon_shutdown_reply_observes_interrupted_controller(daemon_socket):
     _, controller = daemon_socket
     assert request("shutdown") == {"interrupted": True}
     assert controller.interrupted
+
+
+@pytest.mark.parametrize("client_gone", [False, True])
+def test_shutdown_acknowledges_before_stopping_socket(client_gone):
+    events = []
+    controller = FakeCommands()
+
+    def write(line):
+        assert json.loads(line) == {"ok": True, "result": {"interrupted": True}}
+        events.append("reply")
+        if client_gone:
+            raise BrokenPipeError
+
+    handler = SimpleNamespace(
+        connection=SimpleNamespace(settimeout=lambda _: None),
+        rfile=io.BytesIO(b'{"action":"shutdown"}\n'),
+        wfile=SimpleNamespace(write=write),
+        server=SimpleNamespace(
+            controller=controller,
+            schedule_shutdown=lambda: events.append("shutdown"),
+        ),
+    )
+    daemon.Handler.handle(handler)
+    assert events == ["reply", "shutdown"]
 
 
 @pytest.mark.parametrize("api_available", [False, True])

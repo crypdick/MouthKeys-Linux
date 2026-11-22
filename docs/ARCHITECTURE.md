@@ -3,7 +3,8 @@
 [MouthKeys Linux](../linux/README.md#recording-and-architecture) is a local dictation app. The
 installed entry point, `mouthkeys.cli.main`, parses arguments with `cli_options.build_parser`,
 then dispatches local work or uses `control` to contact the private Unix socket served by
-`daemon.Server`. The socket host owns lifecycle, not the recording queue.
+`daemon.Server`. The socket host owns lifecycle, not the recording queue. It sends the shutdown
+reply before stopping the server.
 
 - **Recording:** `service.Controller` owns capture and a FIFO of `DictationJob`s. `audio.CaptureSession`
   wraps the process owned by `capture`. `microphone` owns session source preferences, retry
@@ -14,8 +15,9 @@ then dispatches local work or uses `control` to contact the private Unix socket 
   metadata afterward, without activating another window. Automatic stop does not wait on focus
   in the daemon loop; an expired focus snapshot falls back to copy. `recording_preview` meters
   live audio and tracks pauses; stale decodes cannot publish after a microphone switch.
-  `transcribe.Transcriber` serializes inference, with optional
-  engines in `engines` and `native_worker`. `native_asr` owns local artifact checks and common
+  `recording_inference` validates capture and serializes final decoding; the controller
+  commits results only if cancellation or logout has not won. `transcribe.Transcriber`
+  uses engines in `engines` and `native_worker`. `native_asr` owns local artifact checks and common
   audio helpers; `transformers_asr` and `nemo_asr` load and decode inside the isolated worker.
 - **Delivery:** `formatting` and `spoken_send` transform text without desktop effects. `storage.History`
   persists text before `delivery.Delivery` attempts insertion. `accessibility` calls the isolated

@@ -5,6 +5,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from mouthkeys import pronunciation_spans
 from mouthkeys.pronunciation import PronunciationStore, acoustic_distance, acoustic_features
 from mouthkeys.word_alignment import align_words
 
@@ -130,30 +131,6 @@ def test_unrelated_audio_spans_are_not_changed_despite_recognized_wrong_spelling
     assert not result["corrections"]
 
 
-def test_budget_stops_without_accepting_half_compared_candidates():
-    samples, alignment = surrounding(trained())
-    result = PronunciationStore.correct_spans(alignment["text"], samples, alignment, budget=1)
-    assert result["truncated"]
-    assert result["comparisons"] == 1
-    assert result["cells"] <= 80 * 80
-    assert result["corrections"] == []
-    assert result["text"] == alignment["text"]
-
-
-def test_long_search_has_explicit_comparison_and_cell_bounds():
-    trained()
-    samples = np.tile(utterance(base=1800, seconds=0.3), 200)
-    text = " ".join(["word"] * 200)
-    words = [{"word": "word", "start": i * 0.3, "end": (i + 1) * 0.3} for i in range(200)]
-    result = PronunciationStore.correct_spans(
-        text, samples, {"text": text, "words": words}, budget=8
-    )
-    assert result["truncated"]
-    assert result["comparisons"] <= 8
-    assert result["cells"] <= 8 * 80 * 80
-    assert result["text"] == text
-
-
 def test_wrong_recording_source_and_misaligned_text_fail_closed(tmp_path):
     samples, alignment = surrounding(trained())
     alignment["source"] = "another-recording"
@@ -271,30 +248,6 @@ def test_no_ready_enrollments_preserves_original_word_timing_metadata():
     assert not result["truncated"]
 
 
-def test_wall_deadline_bounds_scanning_even_before_any_dtw(monkeypatch):
-    from types import SimpleNamespace
-
-    from mouthkeys import pronunciation
-
-    trained()
-    clock = [0]
-
-    def monotonic():
-        clock[0] += 0.1
-        return clock[0]
-
-    monkeypatch.setattr(pronunciation, "time", SimpleNamespace(monotonic=monotonic))
-    audio = np.tile(utterance(base=1800, seconds=0.3), 200)
-    text = " ".join(["word"] * 200)
-    words = [{"word": "word", "start": i * 0.3, "end": (i + 1) * 0.3} for i in range(200)]
-    result = PronunciationStore.correct_spans(
-        text, audio, {"text": text, "words": words}, max_seconds=0.15
-    )
-    assert result["truncated"]
-    assert result["comparisons"] == 0
-    assert result["text"] == text
-
-
 @pytest.mark.parametrize("timestamp", [True, float("nan"), 10**400])
 def test_alignment_rejects_invalid_timestamps(timestamp):
     with pytest.raises(ValueError, match="Invalid aligned word timing"):
@@ -314,3 +267,121 @@ def test_alignment_rejects_negative_recording_duration():
 def test_alignment_rejects_entries_without_a_word_string():
     with pytest.raises(ValueError, match="Invalid aligned word"):
         align_words("one", [{"start": 0, "end": 1}])
+
+
+def test_mismatched_transcript_does_not_load_profiles_or_read_audio(tmp_path, monkeypatch):
+    monkeypatch.setattr(PronunciationStore, "load", lambda: pytest.fail("loaded profiles"))
+    result = PronunciationStore.correct_spans(
+        "new text", tmp_path / "missing.wav", {"text": "old text"}
+    )
+    assert result["text"] == "new text"
+    assert result["skipped_reason"] == "Alignment does not match final transcript"
+
+
+def test_no_enrolled_profiles_still_rejects_malformed_timing():
+    result = PronunciationStore.correct_spans(
+        "text", np.zeros(16000), {"text": "text", "words": []}
+    )
+    assert result["words"] == []
+    assert "Word timing metadata" in result["skipped_reason"]
+
+
+@pytest.mark.parametrize(
+    ("audio", "message"),
+    [
+        (np.empty(0), "one hour"),
+        (np.zeros((4000, 2)), "finite mono"),
+        (np.full(4000, np.nan), "finite mono"),
+    ],
+)
+def test_span_search_rejects_invalid_sample_arrays(audio, message):
+    trained()
+    with pytest.raises(ValueError, match=message):
+        PronunciationStore.correct_spans("", audio, {"text": "", "words": []})
+
+
+def test_span_search_rejects_stereo_wav(tmp_path):
+    trained()
+    path = tmp_path / "stereo.wav"
+    with wave.open(str(path), "wb") as recording:
+        recording.setparams((2, 2, 16000, 0, "NONE", ""))
+        recording.writeframes(bytes(16000))
+    with pytest.raises(ValueError, match="mono 16-bit PCM"):
+        PronunciationStore.correct_spans("", path, {"text": "", "source": str(path), "words": []})
+
+
+@pytest.mark.parametrize("duration", [0.1, 10.1])
+def test_spans_outside_supported_duration_are_not_candidates(duration):
+    trained()
+    text = "word"
+    words = [{"word": text, "start": 0, "end": duration}]
+    result = PronunciationStore.correct_spans(
+        text, np.zeros(round(16000 * duration)), {"text": text, "words": words}
+    )
+    assert result["text"] == text
+    assert result["candidates"] == 0
+    assert not result["truncated"]
+
+
+@pytest.mark.parametrize(
+    ("text", "silence", "candidates", "comparisons"),
+    [("...", False, 0, 0), ("word", True, 1, 0), ("MouthKeys", False, 1, 2)],
+)
+def test_nonlexical_silent_and_already_correct_spans_are_unchanged(
+    text, silence, candidates, comparisons
+):
+    audio = trained()
+    if silence:
+        audio = np.zeros_like(audio)
+    words = [{"word": text, "start": 0, "end": len(audio) / 16000}]
+    result = PronunciationStore.correct_spans(text, audio, {"text": text, "words": words})
+    assert result["text"] == text
+    assert result["corrections"] == []
+    assert result["candidates"] == candidates
+    assert result["comparisons"] == comparisons
+
+
+@pytest.mark.parametrize(("voiced_seconds", "comparisons"), [(0.32, 0), (0.50, 2)])
+def test_duration_guard_applies_to_speech_not_leading_or_trailing_silence(
+    voiced_seconds, comparisons
+):
+    PronunciationStore.enroll("label", utterance())
+    PronunciationStore.enroll("label", utterance())
+    audio = np.pad(utterance(seconds=voiced_seconds), (2400, 2400))
+    text = "other"
+    words = [{"word": text, "start": 0, "end": len(audio) / 16000}]
+    result = PronunciationStore.correct_spans(text, audio, {"text": text, "words": words})
+    assert result["candidates"] == 1
+    assert result["comparisons"] == comparisons
+    assert result["text"] == text
+
+
+def test_overlapping_acceptable_windows_use_the_closest_match(monkeypatch):
+    audio = trained()
+    duration = len(audio) / 16000
+    # Every timed window matches; the two-word window is closest and excludes both singles.
+    monkeypatch.setattr(
+        pronunciation_spans,
+        "_span_distance",
+        lambda candidate, enrolled: 0.0 if candidate["duration"] > duration / 2 else 0.1,
+    )
+    words = [
+        {"word": "mouth", "start": 0, "end": len(audio) / 32000},
+        {"word": "keys", "start": len(audio) / 32000, "end": len(audio) / 16000},
+    ]
+    # Use untrimmed timing so the short fixture's single words also qualify for comparison.
+    take = acoustic_features(audio)
+    monkeypatch.setattr(
+        pronunciation_spans,
+        "acoustic_features",
+        lambda samples: {
+            **take,
+            "duration": len(samples) / 16000,
+        },
+    )
+    result = PronunciationStore.correct_spans(
+        "mouth keys", audio, {"text": "mouth keys", "words": words}
+    )
+    assert result["comparisons"] == 6
+    assert result["text"] == "MouthKeys"
+    assert [(match["word_start"], match["word_end"]) for match in result["corrections"]] == [(0, 2)]

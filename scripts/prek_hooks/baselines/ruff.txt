@@ -316,33 +316,6 @@
 4	src/mouthkeys/profiles.py	PLC0415	`import` should be at the top-level of a file
 1	src/mouthkeys/profiles.py	PLR0912	Too many branches (22 > 12)
 2	src/mouthkeys/profiles.py	TRY004	Prefer `TypeError` exception for invalid type
-1	src/mouthkeys/pronunciation.py	ANN001	Missing type annotation for function argument `alignment`
-4	src/mouthkeys/pronunciation.py	ANN001	Missing type annotation for function argument `audio`
-1	src/mouthkeys/pronunciation.py	ANN001	Missing type annotation for function argument `budget`
-1	src/mouthkeys/pronunciation.py	ANN001	Missing type annotation for function argument `candidate`
-1	src/mouthkeys/pronunciation.py	ANN001	Missing type annotation for function argument `end`
-1	src/mouthkeys/pronunciation.py	ANN001	Missing type annotation for function argument `enrolled`
-1	src/mouthkeys/pronunciation.py	ANN001	Missing type annotation for function argument `label`
-1	src/mouthkeys/pronunciation.py	ANN001	Missing type annotation for function argument `margin`
-1	src/mouthkeys/pronunciation.py	ANN001	Missing type annotation for function argument `max_seconds`
-1	src/mouthkeys/pronunciation.py	ANN001	Missing type annotation for function argument `start`
-1	src/mouthkeys/pronunciation.py	ANN001	Missing type annotation for function argument `store`
-1	src/mouthkeys/pronunciation.py	ANN001	Missing type annotation for function argument `text`
-1	src/mouthkeys/pronunciation.py	ANN001	Missing type annotation for function argument `threshold`
-1	src/mouthkeys/pronunciation.py	ANN202	Missing return type annotation for private function `_correct_spans`
-1	src/mouthkeys/pronunciation.py	ANN202	Missing return type annotation for private function `_span_distance`
-1	src/mouthkeys/pronunciation.py	ANN202	Missing return type annotation for private function `close`
-1	src/mouthkeys/pronunciation.py	ANN202	Missing return type annotation for private function `read`
-1	src/mouthkeys/pronunciation.py	ANN204	Missing return type annotation for special method `__init__`
-1	src/mouthkeys/pronunciation.py	ANN206	Missing return type annotation for classmethod `enroll`
-1	src/mouthkeys/pronunciation.py	ANN206	Missing return type annotation for classmethod `match`
-1	src/mouthkeys/pronunciation.py	C901	`_correct_spans` is too complex (36 > 15)
-1	src/mouthkeys/pronunciation.py	PLC0415	`import` should be at the top-level of a file
-1	src/mouthkeys/pronunciation.py	PLR0912	Too many branches (36 > 12)
-1	src/mouthkeys/pronunciation.py	PLR0913	Too many arguments in function definition (6 > 5)
-1	src/mouthkeys/pronunciation.py	PLR0915	Too many statements (108 > 50)
-2	src/mouthkeys/pronunciation.py	PLR1702	Too many nested blocks (6 > 5)
-1	src/mouthkeys/pronunciation.py	SIM115	Use a context manager for opening files
 1	src/mouthkeys/provider_tools.py	ANN001	Missing type annotation for function argument `config`
 1	src/mouthkeys/provider_tools.py	ANN001	Missing type annotation for function argument `endpoint`
 1	src/mouthkeys/provider_tools.py	ANN003	Missing type annotation for `**values`
@@ -459,9 +432,7 @@
 1	tests/test_pipeline.py	PT011	`pytest.raises(ValueError)` is too broad, set the `match` parameter or use a more specific exception
 1	tests/test_pipeline_options.py	PLC0415	`import` should be at the top-level of a file
 1	tests/test_postprocess.py	PT006	Wrong type passed to first argument of `pytest.mark.parametrize`; expected `tuple`
-2	tests/test_pronunciation.py	PLC0415	`import` should be at the top-level of a file
 2	tests/test_pronunciation.py	PT011	`pytest.raises(ValueError)` is too broad, set the `match` parameter or use a more specific exception
-2	tests/test_pronunciation_spans.py	PLC0415	`import` should be at the top-level of a file
 1	tests/test_pronunciation_spans.py	PT006	Wrong type passed to first argument of `pytest.mark.parametrize`; expected `tuple`
 1	tests/test_pronunciation_spans.py	PT011	`pytest.raises(ValueError)` is too broad, set the `match` parameter or use a more specific exception
 3	tests/test_provider_tools.py	PT006	Wrong type passed to first argument of `pytest.mark.parametrize`; expected `tuple`

@@ -734,7 +734,7 @@ class Controller:
                         self.report_error(ai_warning, kind="ai")
             if job.mode != "dictation":
                 if job.mode == "training":
-                    proposal = {"mode": "training", "text": text}
+                    proposal: dict[str, Any] = {"mode": "training", "text": text}
                 elif job.mode == "pronunciation":
                     with self.lock:
                         if self.interrupted or job.cancelled:

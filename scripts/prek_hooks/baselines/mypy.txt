@@ -147,17 +147,6 @@
 2	src/mouthkeys/postprocess.py	no-untyped-def	Function is missing a type annotation
 1	src/mouthkeys/profiles.py	no-untyped-call	Call to untyped function "models_endpoint" in typed context
 1	src/mouthkeys/profiles.py	no-untyped-call	Call to untyped function "validate_reasoning" in typed context
-1	src/mouthkeys/pronunciation.py	assignment	Incompatible types in assignment (expression has type "dict[str, Any] | None", variable has type "dict[str, Any]")
-1	src/mouthkeys/pronunciation.py	index	Value of type "ndarray[Any, Any] | None" is not indexable
-1	src/mouthkeys/pronunciation.py	no-untyped-call	Call to untyped function "_AudioWindow" in typed context
-1	src/mouthkeys/pronunciation.py	no-untyped-call	Call to untyped function "_correct_spans" in typed context
-1	src/mouthkeys/pronunciation.py	no-untyped-call	Call to untyped function "_span_distance" in typed context
-3	src/mouthkeys/pronunciation.py	no-untyped-call	Call to untyped function "close" in typed context
-1	src/mouthkeys/pronunciation.py	no-untyped-call	Call to untyped function "match" of "PronunciationStore" in typed context
-1	src/mouthkeys/pronunciation.py	no-untyped-call	Call to untyped function "read" in typed context
-1	src/mouthkeys/pronunciation.py	no-untyped-def	Function is missing a return type annotation
-6	src/mouthkeys/pronunciation.py	no-untyped-def	Function is missing a type annotation
-1	src/mouthkeys/pronunciation.py	var-annotated	Need type annotation for "chosen" (hint: "chosen: list[<type>] = ...")
 1	src/mouthkeys/provider_tools.py	no-untyped-call	Call to untyped function "_completion" in typed context
 1	src/mouthkeys/provider_tools.py	no-untyped-call	Call to untyped function "_request_payload" in typed context
 2	src/mouthkeys/provider_tools.py	no-untyped-call	Call to untyped function "_with_query" in typed context
@@ -165,7 +154,6 @@
 2	src/mouthkeys/provider_tools.py	no-untyped-call	Call to untyped function "request_json" in typed context
 2	src/mouthkeys/provider_tools.py	no-untyped-def	Function is missing a type annotation
 1	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "_command" in typed context
-1	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "enroll" of "PronunciationStore" in typed context
 1	src/mouthkeys/service.py	no-untyped-call	Call to untyped function "handle_action" in typed context
 2	src/mouthkeys/service.py	no-untyped-def	Function is missing a return type annotation
 3	src/mouthkeys/service.py	no-untyped-def	Function is missing a type annotation

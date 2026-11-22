@@ -90,17 +90,6 @@
 1	src/mouthkeys/file_transcription.py	ANN201	Missing return type annotation for public function `transcribe_file`
 3	src/mouthkeys/file_transcription.py	PLC0415	`import` should be at the top-level of a file
 1	src/mouthkeys/file_transcription.py	SLF001	Private member accessed: `_segments`
-1	src/mouthkeys/gui.py	ANN001	Missing type annotation for function argument `response`
-1	src/mouthkeys/gui.py	ANN001	Missing type annotation for function argument `stop`
-1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `capture_shortcut`
-1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `inspect_models`
-1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `preview_sound`
-1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `save`
-1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `start_hotkeys`
-1	src/mouthkeys/gui.py	ANN202	Missing return type annotation for private function `update`
-2	src/mouthkeys/gui.py	FBT003	Boolean positional value in function call
-8	src/mouthkeys/gui.py	PLC0415	`import` should be at the top-level of a file
-1	src/mouthkeys/gui.py	TRY300	Consider moving this statement to an `else` block
 1	src/mouthkeys/hotkeys.py	PLC0415	`import` should be at the top-level of a file
 5	src/mouthkeys/lark.py	FBT003	Boolean positional value in function call
 1	src/mouthkeys/learning.py	PLR0911	Too many return statements (7 > 6)

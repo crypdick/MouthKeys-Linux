@@ -273,6 +273,11 @@ def ensure_hotkeys() -> None:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
             return
+    spawn_hotkeys()
+
+
+def spawn_hotkeys() -> None:
+    """Start the configured listener; the child owns the backend and singleton lock."""
     with (state_dir() / "hotkeys.log").open("a") as output:
         pathlib.Path(output.name).chmod(0o600)
         subprocess.Popen(  # noqa: S603

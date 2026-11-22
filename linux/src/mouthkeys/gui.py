@@ -2,6 +2,7 @@
 
 from collections.abc import Callable, Mapping
 from pathlib import Path
+from sys import float_info
 from typing import cast
 
 from PySide6.QtCore import Qt, QThread, QTimer
@@ -20,15 +21,20 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from . import __version__, desktop_entry
+from . import __version__, desktop_entry, models_ui, shortcut_capture
+from .assistant_ui import AssistantPage
 from .backup_ui import BackupPage
-from .config import Config, state_dir
+from .config import Config
+from .desktop import play_sound
 from .dictionary_ui import DictionaryPage
 from .file_transcription_ui import FileTranscriptionPage
 from .help_ui import HelpPage
 from .history_ui import HistoryPage
+from .hotkeys import spawn_hotkeys
+from .learning_ui import LearningPage
+from .microphone_ui import MicrophonePage
 from .model_downloads_ui import ModelDownloads
-from .processes import python_command
+from .onboarding import SetupPage
 from .profiles import load_profiles
 from .prompt_profiles_ui import PromptProfilesPage
 from .provider_settings_ui import KeyringAction, ProviderSettings
@@ -138,8 +144,12 @@ class Window(QWidget):
         form.addRow(save)
         self.providers.add_buttons(options, self.save)
         for label, action, category in (
-            ("Preview recording sound", lambda: self.preview_sound(False), "Microphone & media"),
-            ("Preview stop sound", lambda: self.preview_sound(True), "Microphone & media"),
+            (
+                "Preview recording sound",
+                lambda: self.preview_sound(stop=False),
+                "Microphone & media",
+            ),
+            ("Preview stop sound", lambda: self.preview_sound(stop=True), "Microphone & media"),
             ("Start configured shortcut listener", self.start_hotkeys, "Desktop"),
             ("Capture keyboard shortcut", self.capture_shortcut, "Desktop"),
             (
@@ -181,12 +191,8 @@ class Window(QWidget):
             self._profile_keyring,
         )
         tabs.addWidget(_scroll_page(self.prompt_profiles))
-        from .assistant_ui import AssistantPage
-
         self.assistant_page = AssistantPage(self)
         tabs.addWidget(self.assistant_page)
-        from .onboarding import SetupPage
-
         self.setup_page = SetupPage(
             self.fields,
             self.send,
@@ -195,13 +201,9 @@ class Window(QWidget):
             refresh_other_banner=self.regional_banner.refresh,
         )
         tabs.addWidget(self.setup_page)
-        from .learning_ui import LearningPage
-
         self.learning_page = LearningPage(self.send)
         self.dictionary_page.vocabulary_changed.connect(self.learning_page.refresh_words)
         tabs.addWidget(_scroll_page(self.learning_page))
-        from .microphone_ui import MicrophonePage
-
         self.microphone_page = MicrophonePage(self)
         tabs.addWidget(self.microphone_page)
 
@@ -257,11 +259,9 @@ class Window(QWidget):
         navigation.addWidget(footer)
         return sidebar
 
-    def inspect_models(self):
-        from .models_ui import ModelBrowser
-
+    def inspect_models(self) -> None:
         try:
-            ModelBrowser(self).exec()
+            models_ui.ModelBrowser(self).exec()
         # Report to the Settings UI without duplicating private data in logs.
         except Exception as exc:  # allow: exception-handling  # noqa: BLE001
             self.status.setText(str(exc))
@@ -271,8 +271,7 @@ class Window(QWidget):
 
     def refresh_regional_offers(self) -> None:
         self.regional_banner.refresh()
-        if hasattr(self, "setup_page"):
-            self.setup_page.regional_banner.refresh()
+        self.setup_page.regional_banner.refresh()
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:  # noqa: N802 - Qt override
         if event.mimeData().hasUrls() and any(u.isLocalFile() for u in event.mimeData().urls()):
@@ -331,37 +330,42 @@ class Window(QWidget):
         if self.polling:
             return
         self.polling = True
+        self.send("status", callback=self._update_status)
 
-        def update(response):
-            self.polling = False
-            if "result" in response:
-                result = response["result"]
-                self.loaded_model = result.get("loaded_model")
-                service_version = result["version"]
-                version_text = service_version
-                if service_version != __version__:
-                    version_text += " — restart MouthKeys after updating"
-                self.service_version.setText(version_text)
-                seconds = f"  {result['seconds']:.1f}s" if result["phase"] == "recording" else ""
-                self.status.setText(f"{result['phase'].upper()}{seconds} · {result['message']}")
-                self.toggle.setEnabled(
-                    result["phase"] in ("starting", "recording", "switching", "capture_failed")
-                    or result.get("can_record", result["phase"] == "idle")
-                )
-                self.assistant_page.update_status(result)
-                self.setup_page.update_status(result)
-                self.learning_page.update_status(result)
-                self.microphone_page.update_status(result)
-                self.prompt_profiles.update_status(result)
-                self.dictionary_page.update_training(result)
-                self.history_page.refresh_history()
-            else:
-                self.loaded_model = None
-                self.service_version.setText("Unavailable")
+    def _update_status(self, response: Response) -> None:
+        self.polling = False
+        result = response.get("result")
+        if not isinstance(result, dict) or not all(
+            isinstance(result.get(key), str) for key in ("phase", "message", "version")
+        ):
+            self.loaded_model = None
+            self.service_version.setText("Unavailable")
+            return
 
-        self.send("status", callback=update)
+        model = result.get("loaded_model")
+        self.loaded_model = model if isinstance(model, dict) else None
+        phase, message, service_version = result["phase"], result["message"], result["version"]
+        if service_version != __version__:
+            service_version += " — restart MouthKeys after updating"
+        self.service_version.setText(service_version)
+        seconds = result.get("seconds")
+        if not isinstance(seconds, int | float) or not 0 <= seconds <= float_info.max:
+            seconds = 0
+        elapsed = f"  {seconds:.1f}s" if phase == "recording" else ""
+        self.status.setText(f"{phase.upper()}{elapsed} · {message}")
+        self.toggle.setEnabled(
+            phase in ("starting", "recording", "switching", "capture_failed")
+            or result.get("can_record", phase == "idle") is True
+        )
+        self.assistant_page.update_status(result)
+        self.setup_page.update_status(result)
+        self.learning_page.update_status(result)
+        self.microphone_page.update_status(result)
+        self.prompt_profiles.update_status(result)
+        self.dictionary_page.update_training(result)
+        self.history_page.refresh_history()
 
-    def save(self):
+    def save(self) -> bool:
         try:
             previous = Config.load()
             values = {key: field_value(field) for key, field in self.fields.items()}
@@ -384,42 +388,32 @@ class Window(QWidget):
             )
             if previous.audio_source != updated.audio_source:
                 self.send("select_microphone", {"source": updated.audio_source, "persist": True})
-            return True
         # Report to the Settings UI without duplicating private data in logs.
         except Exception as exc:  # allow: exception-handling  # noqa: BLE001
             self.status.setText(str(exc))
             return False
+        return True
 
     def _profile_keyring(self, action: KeyringAction) -> None:
         page = self.prompt_profiles
         self.providers.keyring(action, page.fields, profile_selection=lambda: page.selection)
 
-    def preview_sound(self, stop):
+    def preview_sound(self, *, stop: bool) -> None:
         if self.save():
-            from .desktop import play_sound
-
             play_sound(Config.load(), stop=stop, preview=True)
 
-    def start_hotkeys(self):
+    def start_hotkeys(self) -> None:
         if not self.save():
             return
-        import subprocess
-
-        with (state_dir() / "hotkeys.log").open("a") as output:
-            Path(output.name).chmod(0o600)
-            subprocess.Popen(  # noqa: S603
-                python_command("mouthkeys", "hotkeys"),
-                stdin=subprocess.DEVNULL,
-                stdout=output,
-                stderr=output,
-                start_new_session=True,
-            )
+        try:
+            spawn_hotkeys()
+        except OSError as exc:
+            self.status.setText(str(exc))
+            return
         self.status.setText("Shortcut listener requested; portal setup may ask for desktop consent")
 
-    def capture_shortcut(self):
-        from .shortcut_capture import ShortcutCapture
-
-        ShortcutCapture(
+    def capture_shortcut(self) -> None:
+        shortcut_capture.ShortcutCapture(
             self, lambda key, chord: cast("QLineEdit", self.fields[key]).setText(chord)
         ).exec()
 
@@ -428,11 +422,8 @@ class Window(QWidget):
 
     @property
     def busy(self) -> bool:
-        return (
-            bool(self.jobs)
-            or self.model_downloads.running
-            or self.file_page.running
-            or self.backup_page.running
+        return bool(self.jobs) or any(
+            page.running for page in (self.model_downloads, self.file_page, self.backup_page)
         )
 
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802 - Qt override

@@ -4,12 +4,12 @@ import time
 import uuid
 from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
-from typing import cast
+from typing import Any, cast
 
 from . import __version__
 from .audio import CaptureSession, CaptureTeardownError, check_audio, is_short_silence
 from .config import Config, private_dir, runtime_dir
-from .delivery import Delivery
+from .delivery import Delivery, Target
 from .desktop import MediaSession, choose_source, play_sound
 from .formatting import enabled, format_text, parse_send
 from .microphone import MicrophoneSelection, Recording, SwitchOutcome, selection
@@ -19,6 +19,13 @@ from .recording_assistant import InlineContext, RecordingAssistant, inline_conte
 from .recording_cleanup import cleanup_transcript
 from .recording_delivery import DeliveryRequest, RecordingDelivery
 from .recording_destination import snapshot_for_stop
+from .recording_edit import (
+    EditReplacement,
+    captured_selection,
+    claim_edit,
+    edit_message,
+    reviewed_return_target,
+)
 from .recording_job import DictationJob, recording_input
 from .recording_learning import RecordingLearning
 from .recording_preview import PreviewWork, RecordingPreview, reset_owned_stream
@@ -356,8 +363,8 @@ class Controller:
             self.live_preview.reset()
             self.config = config
             self.learning.cancel()
-            if self.job and self.job.done.is_set() and self.job.edit_consumed:
-                # A new recording supersedes any reviewed edit waiting on desktop work.
+            if self.job and self.job.edit_consumed:
+                # A new recording supersedes an Edit waiting on desktop work.
                 self.job.cancel_event.set()
             for previous in self._pending_jobs():
                 previous.suppress_send = True
@@ -394,11 +401,8 @@ class Controller:
         # Unknown focus disables automatic delivery.
         except Exception:  # allow: exception-handling  # noqa: BLE001
             job.start_target = None
-        if job.mode == "edit" and not job.selected_text and isinstance(job.start_target, dict):
-            captured = job.start_target.get("field", {})
-            if captured.get("complete") is not False:
-                begin, end = captured.get("selection_start", 0), captured.get("selection_end", 0)
-                job.selected_text = captured.get("text", "")[begin:end]
+        if job.mode == "edit" and not job.selected_text:
+            job.selected_text = captured_selection(job.start_target)
 
     def _select_recording_prompt(self, job: DictationJob, override: object) -> None:
         if override is None:
@@ -487,86 +491,45 @@ class Controller:
             and not job.cancelled
         )
 
-    @staticmethod
-    def _edit_target_matches(job):
-        if not isinstance(job.start_target, dict) or not job.selected_text:
-            return False
-        captured = job.start_target.get("field")
-        if (
-            not isinstance(captured, dict)
-            or not captured.get("field_id")
-            or captured.get("protected") is not False
-            or captured.get("complete") is False
-            or captured.get("editable") is not True
-            or captured.get("terminal")
-        ):
-            return False
-        start, end = captured.get("selection_start"), captured.get("selection_end")
-        text = captured.get("text")
-        return (
-            isinstance(text, str)
-            and type(start) is int
-            and type(end) is int
-            and 0 <= start < end <= len(text)
-            and text[start:end] == job.selected_text
-        )
-
-    def _accept_edit(self, data):
-        if type(data.get("return_to_target", False)) is not bool:
-            raise ValueError("Return to target must be an explicit boolean")
+    def _accept_edit(self, data: Mapping[str, object]) -> dict[str, object]:
+        return_to_target = reviewed_return_target(data)
         with self.lock:
             job = self.job
-            proposal = self.assistant_proposal
+            edit = None
             if (
-                self.interrupted
-                or self.phase != "idle"
-                or self._pending_jobs()
-                or not job
-                or job.cancelled
-                or job.mode != "edit"
-                or data.get("id") != job.item_id
-                or not proposal
-                or proposal.get("edit_id") != job.item_id
-                or job.edit_consumed
-                or not self._edit_target_matches(job)
+                not self.interrupted
+                and self.phase == "idle"
+                and job is not None
+                and data.get("id") == job.item_id
+                and not self._pending_jobs()
             ):
+                config = replace(job.config, return_to_start="on" if return_to_target else "off")
+                edit = claim_edit(job, self.assistant_proposal, config)
+            if edit is None:
                 raise ValueError("No current captured Edit selection available for replacement")
-            # Consume before desktop work: even an unverified write must never be replayed.
-            job.edit_consumed = True
-            proposal["can_accept_edit"] = False
-            config = replace(
-                job.config, return_to_start="on" if data.get("return_to_target") else "off"
-            )
-            text = proposal["text"]
             self.phase, self.message = "queued", "Waiting to replace reviewed selection"
         try:
             with self.model_lock:
                 with self.lock:
-                    if self.interrupted or job.cancelled or self.job is not job:
-                        if self.job is job and not self.interrupted:
-                            self._job_status(job, "idle", "Edit cancelled")
+                    if self.interrupted or self.job is not edit.job:
                         return self.status()
-                # Preparing/returning focus is cancellable and does not own the state lock.
-                result = self.delivery.replace_selection(
-                    text, config, job.start_target, cancel_event=job.cancel_event
-                )
-                with self.lock:
-                    self._update(job, result, text)
-                    if self.job is job and not self.interrupted:
-                        self.message = (
-                            "Edit inserted"
-                            if result == "pasted"
-                            else "Edit cancelled"
-                            if result == "cancelled"
-                            else "Edit insertion requested; do not retry automatically"
-                            if result in ("paste_requested", "insert_requested")
-                            else "Edit copied; captured selection changed or unavailable"
-                        )
+                    if edit.job.cancelled:
+                        self._job_status(edit.job, "idle", "Edit cancelled")
+                        return self.status()
+                self._apply_edit(edit)
         finally:
             with self.lock:
-                if self.job is job and not self.interrupted:
+                if self.job is edit.job and not self.interrupted:
                     self.phase = "idle"
         return self.status()
+
+    def _apply_edit(self, edit: EditReplacement) -> None:
+        result = edit.apply(self.delivery)
+        with self.lock:
+            if not self.interrupted:
+                if self.job is edit.job or result != "cancelled":
+                    self._update(edit.job, result, edit.text)
+                self._job_status(edit.job, "idle", edit_message(result))
 
     def _pending_jobs(self):
         return [job for job in self.jobs if not job.done.is_set()]
@@ -627,6 +590,8 @@ class Controller:
             self.learning.cancel()
             self.cancelled = True
             recorder, self.recorder = self.recorder, None
+            if self.job and self.job.edit_consumed:
+                self.job.cancel_event.set()
             for job in self._pending_jobs():
                 job.cancelled = True
                 job.cancel_event.set()
@@ -713,7 +678,7 @@ class Controller:
                 self._job_status(job, "queued", "Waiting for earlier dictation")
                 self._update(job, "transcribing")
         target = None if focus_gate and not focus_gate.valid else destination.target
-        self._finish(job, target, auto_paste_expected=destination.automatic)
+        self._finish(job, cast("Target", target), auto_paste_expected=destination.automatic)
 
     def _manual_delivery(self, action, data):
         with self.lock:
@@ -763,12 +728,53 @@ class Controller:
     def _automatic_command_started(self, job: DictationJob) -> None:
         self._job_status(job, "transcribing", "Running configured automatic command")
 
-    def _finish(self, job, target, *, auto_paste_expected=False):
+    def _publish_proposal(
+        self, job: DictationJob, config: Config, proposal: dict[str, Any], ai_warning: str
+    ) -> None:
+        with self.lock:
+            if self.interrupted:
+                return
+            if job.cancelled:
+                self._update(job, "cancelled")
+                job.audio_path.unlink(missing_ok=True)
+                self._job_status(job, "idle", "Cancelled")
+                return
+            text = proposal["text"]
+            assistant_requested = job.mode in ("command", "edit")
+            self._update(
+                job,
+                "transcribed",
+                text,
+                was_ai_processed=assistant_requested,
+                ai_processing_error=ai_warning,
+                ai_processing_model=config.ai_model if assistant_requested else "",
+            )
+            edit = None
+            if self.job is job:
+                if config.edit_delivery == "replace":
+                    edit = claim_edit(job, proposal, config)
+                self.assistant_proposal = proposal
+                self.recording_assistant.clear_stream()
+                self.preview_text = text
+            if edit is not None:
+                self._job_status(job, "delivering", "Replacing captured selection")
+            else:
+                message = (
+                    "Command finished; execution receipts retained"
+                    if proposal.get("execution_count")
+                    else "Recording ready for review; nothing inserted"
+                )
+                self._job_status(job, "idle", message)
+        if edit is not None:
+            self._apply_edit(edit)
+
+    def _finish(
+        self, job: DictationJob, target: Target, *, auto_paste_expected: bool = False
+    ) -> None:
         text = ""
         alignment = None
         pronunciation_warning = ""
         ai_warning = ""
-        assistant_requested = False
         assistant_error = ""
         config = job.config
         path = job.audio_path
@@ -851,66 +857,13 @@ class Controller:
                         enrollment = PronunciationStore.enroll(job.label, path)
                     proposal = {"mode": "pronunciation", "text": job.label, **enrollment}
                 else:
-                    assistant_requested = True
                     try:
-                        proposal = self.recording_assistant.propose(
-                            job, config, text, self._edit_target_matches
-                        )
+                        proposal = self.recording_assistant.propose(job, config, text)
                     except Exception as exc:
                         assistant_error = str(exc)
                         raise
-                with self.lock:
-                    if self.interrupted:
-                        return
-                    if job.cancelled:
-                        self._update(job, "cancelled")
-                        path.unlink(missing_ok=True)
-                        self._job_status(job, "idle", "Cancelled")
-                        return
-                    text = proposal["text"]
-                    self._update(
-                        job,
-                        "transcribed",
-                        text,
-                        was_ai_processed=assistant_requested,
-                        ai_processing_error=ai_warning,
-                        ai_processing_model=config.ai_model if assistant_requested else "",
-                    )
-                    if self.job is job:
-                        self.assistant_proposal = proposal
-                        self.recording_assistant.clear_stream()
-                        self.preview_text = text
-                    self._job_status(
-                        job,
-                        "idle",
-                        "Command finished; execution receipts retained"
-                        if proposal.get("execution_count")
-                        else "Recording ready for review; nothing inserted",
-                    )
-                if (
-                    job.mode == "edit"
-                    and config.edit_delivery == "replace"
-                    and self._edit_target_matches(job)
-                    and not job.cancelled
-                    and not self.interrupted
-                ):
-                    with self.lock:
-                        if job.cancelled or self.interrupted:
-                            return
-                        job.edit_consumed = True
-                        proposal["can_accept_edit"] = False
-                        self._job_status(job, "delivering", "Replacing captured selection")
-                    result = self.delivery.replace_selection(
-                        text, config, job.start_target, cancel_event=job.cancel_event
-                    )
-                    self._update(job, result, text)
-                    self._job_status(
-                        job,
-                        "idle",
-                        "Edit inserted"
-                        if result == "pasted"
-                        else "Edit copied; selection changed or unavailable",
-                    )
+                text = proposal["text"]
+                self._publish_proposal(job, config, proposal, ai_warning)
                 return
             if enabled(config, "pronunciation_matching"):
                 if isinstance(alignment, dict) and alignment.get("words"):

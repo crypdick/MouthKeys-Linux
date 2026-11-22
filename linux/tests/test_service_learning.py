@@ -9,6 +9,7 @@ from mouthkeys.config import Config
 from mouthkeys.dictionary import Dictionary
 from mouthkeys.learning import CorrectionLearner
 from mouthkeys.pronunciation import PronunciationStore
+from mouthkeys.recording_edit import matches_edit_selection
 from mouthkeys.service import Controller
 from mouthkeys.storage import History
 
@@ -201,20 +202,10 @@ def test_actual_alignment_uses_span_matcher_and_keeps_raw_on_budget_limit(monkey
 
 
 def test_edit_replacement_requires_exact_captured_selection():
-    from types import SimpleNamespace
-
     field = {**snapshot("Original text"), "selection_start": 0, "selection_end": 8}
-    assert Controller._edit_target_matches(
-        SimpleNamespace(start_target={"field": field}, selected_text="Original")
-    )
-    assert not Controller._edit_target_matches(
-        SimpleNamespace(start_target={"field": field}, selected_text="Different")
-    )
-    assert not Controller._edit_target_matches(
-        SimpleNamespace(
-            start_target={"field": {**field, "protected": True}}, selected_text="Original"
-        )
-    )
+    assert matches_edit_selection({"field": field}, "Original")
+    assert not matches_edit_selection({"field": field}, "Different")
+    assert not matches_edit_selection({"field": {**field, "protected": True}}, "Original")
 
 
 def test_slow_automatic_accept_does_not_hold_controller_state_lock(monkeypatch):

@@ -24,6 +24,8 @@ then dispatches local work or uses `control` to contact the private Unix socket 
   `recording_cleanup` runs configured AI cleanup with the recording's cancellation event.
   `recording_delivery` receives committed text and owns the cancellable Spoken Send review
   window. The key reservation uses the same lock as cancel and new-recording commands.
+  `recording_edit` validates captured selection evidence and reserves replacement once for
+  reviewed and automatic Edit. A newer recording cancels a replacement still in progress.
   `recording_learning` observes confirmed insertions and coordinates review without holding
   the controller state lock during AT-SPI reads or dictionary writes.
 - **Command line:** `cli_options` defines argument grammar; `cli` dispatches commands and keeps

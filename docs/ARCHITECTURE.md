@@ -68,7 +68,9 @@ then dispatches local work or uses `control` to contact the private Unix socket 
   `file_transcription_ui` owns the file worker and its history; Settings and the tray check whether
   it is busy before closing.
   `local_api` is opt-in loopback access. `ai_providers` and `ai_stream` handle configured AI
-  requests only; imports, status, and Settings opening must not contact providers or download models.
+  requests only. `ai_stream_events` normalizes provider frames before callbacks; the transport
+  discards frames read after cancellation or timeout. Imports, status, and Settings opening must
+  not contact providers or download models.
 - **State:** `config.Config.from_mapping` loads settings at the JSON boundary, including old files.
   `operations` prepares and applies backups. `upstream_backup` converts upstream dictionaries and
   prompt drafts; `upstream_backup_sections` parses settings and transcript records without writing

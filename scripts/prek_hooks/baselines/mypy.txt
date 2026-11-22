@@ -4,18 +4,9 @@
 2	src/mouthkeys/ai_providers.py	no-untyped-call	Call to untyped function "_request_payload" in typed context
 1	src/mouthkeys/ai_providers.py	no-untyped-call	Call to untyped function "request_headers" in typed context
 1	src/mouthkeys/ai_providers.py	no-untyped-call	Call to untyped function "request_json" in typed context
-1	src/mouthkeys/ai_providers.py	no-untyped-call	Call to untyped function "stream_completion" in typed context
-1	src/mouthkeys/ai_providers.py	no-untyped-call	Call to untyped function "thinking_text" in typed context
 1	src/mouthkeys/ai_providers.py	no-untyped-call	Call to untyped function "validate_reasoning" in typed context
-10	src/mouthkeys/ai_providers.py	no-untyped-def	Function is missing a type annotation
-2	src/mouthkeys/ai_stream.py	no-untyped-call	Call to untyped function "_abort" in typed context
-1	src/mouthkeys/ai_stream.py	no-untyped-call	Call to untyped function "_delta" in typed context
-1	src/mouthkeys/ai_stream.py	no-untyped-call	Call to untyped function "_events" in typed context
+9	src/mouthkeys/ai_providers.py	no-untyped-def	Function is missing a type annotation
 1	src/mouthkeys/ai_stream.py	no-untyped-call	Call to untyped function "request_headers" in typed context
-1	src/mouthkeys/ai_stream.py	no-untyped-call	Call to untyped function "thinking_text" in typed context
-1	src/mouthkeys/ai_stream.py	no-untyped-def	Function is missing a return type annotation
-4	src/mouthkeys/ai_stream.py	no-untyped-def	Function is missing a type annotation
-1	src/mouthkeys/ai_stream.py	var-annotated	Need type annotation for "lines" (hint: "lines: list[<type>] = ...")
 6	src/mouthkeys/assistance.py	no-untyped-call	Call to untyped function "_kill_group" in typed context
 1	src/mouthkeys/assistance.py	no-untyped-call	Call to untyped function "request_completion" in typed context
 1	src/mouthkeys/assistance.py	no-untyped-def	Function is missing a type annotation

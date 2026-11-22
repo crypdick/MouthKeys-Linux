@@ -8,6 +8,7 @@ import re
 import urllib.error
 import urllib.parse
 import urllib.request
+from typing import Any
 
 MAX_RESPONSE = 1024 * 1024
 MAX_HISTORY_MESSAGES = 32
@@ -218,7 +219,7 @@ def _request_payload(text, config, provider, history=None):
     return _apply_reasoning(_base_payload(text, config, provider, history), config)
 
 
-def thinking_text(data, provider, *, streaming=False):
+def thinking_text(data: dict[str, Any], provider: str, *, streaming: bool = False) -> str:
     """Only explicit external-provider reasoning fields; never infer from text."""
     if provider == "anthropic":
         if streaming:

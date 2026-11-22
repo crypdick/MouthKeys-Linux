@@ -110,7 +110,9 @@ def test_download_retries_unavailable_model_only_after_success(monkeypatch, tmp_
         model_downloads_ui, "python_command", lambda *args: ["python", "-c", script]
     )
     messages = []
-    monkeypatch.setattr(gui.QMessageBox, "information", lambda *args: messages.append(args[-1]))
+    monkeypatch.setattr(
+        model_downloads_ui.QMessageBox, "information", lambda *args: messages.append(args[-1])
+    )
     window = gui.Window()
     window.timer.stop()
     try:

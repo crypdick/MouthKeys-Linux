@@ -1,10 +1,12 @@
+from dataclasses import replace
 from types import SimpleNamespace
 
 import pytest
-from PySide6.QtWidgets import QFormLayout, QInputDialog, QPushButton
+from PySide6.QtWidgets import QFormLayout, QInputDialog, QMessageBox, QPushButton
 
 from mouthkeys import desktop_input, gui, provider_tools, settings_choices
 from mouthkeys.config import Config
+from mouthkeys.regional import UPSTREAM_FILLERS
 
 
 def test_settings_category_filters_fields_and_keeps_matching_hints(monkeypatch):
@@ -172,5 +174,78 @@ def test_provider_action_does_not_connect_when_settings_cannot_be_saved(monkeypa
         )
         button.click()
         assert not tasks
+    finally:
+        window.close()
+
+
+@pytest.mark.parametrize("answered_elsewhere", [False, True])
+def test_regional_dialog_preserves_settings_saved_while_it_is_open(monkeypatch, answered_elsewhere):
+    monkeypatch.setenv("TZ", "America/Toronto")
+    Config(remove_filler_words="on", filler_words="um,EH").save()
+    monkeypatch.setattr(gui.Window, "poll", lambda _: None)
+
+    def answer(*_):
+        replace(
+            Config.load(),
+            audio_source="new-source",
+            regional_filler_answered="on" if answered_elsewhere else "off",
+        ).save()
+        return QMessageBox.StandardButton.Yes
+
+    monkeypatch.setattr(QMessageBox, "question", answer)
+    window = gui.Window()
+    window.timer.stop()
+    try:
+        button = next(
+            b for b in window.findChildren(QPushButton) if b.text() == "Regional filler suggestion"
+        )
+        button.click()
+        saved = Config.load()
+        assert saved.audio_source == "new-source"
+        assert saved.filler_words == ("um,EH" if answered_elsewhere else "um")
+        assert saved.regional_filler_answered == "on"
+        assert window.regional_banner.isHidden()
+        assert not window.isVisible()
+    finally:
+        window.close()
+
+
+def test_filler_actions_without_active_offer_change_only_the_draft(monkeypatch):
+    monkeypatch.setattr(gui.Window, "poll", lambda _: None)
+
+    def unexpected_dialog(*_):
+        pytest.fail("An unavailable regional suggestion should not open a dialog")
+
+    monkeypatch.setattr(QMessageBox, "question", unexpected_dialog)
+    config = Config(remove_filler_words="off", filler_words="custom")
+    config.save()
+    window = gui.Window()
+    window.timer.stop()
+    try:
+        buttons = {b.text(): b for b in window.findChildren(QPushButton)}
+        buttons["Regional filler suggestion"].click()
+        assert "No unanswered regional filler suggestion" in window.status.text()
+        buttons["Reset filler words to upstream defaults"].click()
+        assert window.fields["filler_words"].text() == UPSTREAM_FILLERS
+        assert "Save settings to apply" in window.status.text()
+        assert Config.load() == config
+        assert not window.isVisible()
+    finally:
+        window.close()
+
+
+def test_theme_changes_only_after_saving_preferences(monkeypatch):
+    monkeypatch.setattr(gui.Window, "poll", lambda _: None)
+    Config(theme="dark").save()
+    window = gui.Window()
+    window.timer.stop()
+    try:
+        assert window.styleSheet().startswith("QWidget { background: #111214;")
+        field = window.fields["theme"]
+        field.setCurrentIndex(field.findData("light"))
+        assert window.styleSheet().startswith("QWidget { background: #111214;")
+        assert window.save()
+        assert window.styleSheet().startswith("QWidget { background: #ffffff;")
+        assert not window.isVisible()
     finally:
         window.close()

@@ -1,8 +1,6 @@
 "Optional Qt desktop controller. The daemon owns audio and never opens windows."
 
-import sys
 from collections.abc import Callable, Mapping
-from dataclasses import asdict, replace
 from pathlib import Path
 from typing import cast
 
@@ -10,13 +8,11 @@ from PySide6.QtCore import Qt, QThread, QTimer
 from PySide6.QtGui import QCloseEvent, QDragEnterEvent, QDropEvent, QIcon, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
-    QComboBox,
     QFormLayout,
     QHBoxLayout,
     QLabel,
     QLineEdit,
     QListWidget,
-    QMessageBox,
     QPushButton,
     QScrollArea,
     QStackedWidget,
@@ -26,8 +22,7 @@ from PySide6.QtWidgets import (
 
 from . import __version__, desktop_entry
 from .backup_ui import BackupPage
-from .config import Config, config_path, state_dir
-from .control import ensure_daemon, ensure_overlay
+from .config import Config, state_dir
 from .dictionary_ui import DictionaryPage
 from .file_transcription_ui import FileTranscriptionPage
 from .help_ui import HelpPage
@@ -35,15 +30,18 @@ from .history_ui import HistoryPage
 from .model_downloads_ui import ModelDownloads
 from .processes import python_command
 from .profiles import load_profiles
-from .prompt_profiles_ui import KeyringAction, PromptProfilesPage
+from .prompt_profiles_ui import PromptProfilesPage
+from .provider_settings_ui import KeyringAction, ProviderSettings
 from .qt_control import Request, Response, ResponseHandler, Task
+from .regional_ui import RegionalFillerBanner
 from .settings_fields import field_value
 from .settings_form import SettingsForm
 from .stats_view import StatsPage
+from .window_theme import window_stylesheet
 
 
 class Window(QWidget):
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
         self.setWindowFlag(Qt.WindowType.Tool, Config.load().hide_from_taskbar == "on")
         self.setWindowTitle("MouthKeys")
@@ -115,9 +113,10 @@ class Window(QWidget):
         options = self.settings_options = SettingsForm(form, Config.load(), load_profiles())
         self.fields = options.fields
         self.settings_category = options.category
-        from .regional_ui import RegionalFillerBanner
-
-        self.regional_banner = RegionalFillerBanner(self, on_change=self.refresh_regional_offers)
+        self.providers = ProviderSettings(self, self.fields, self.run_task, self.status.setText)
+        self.regional_banner = RegionalFillerBanner(
+            self, self.fields, on_change=self.refresh_regional_offers
+        )
         options.add_grouped_row(self.regional_banner, "Text formatting")
         self.models_info = QLabel(
             "Download only on request. Install optional engine extras before switching engines."
@@ -130,21 +129,22 @@ class Window(QWidget):
         save = QPushButton("Save settings")
         save.clicked.connect(self.save)
         form.addRow(save)
+        self.providers.add_buttons(options, self.save)
         for label, action, category in (
-            ("Verify AI connection", lambda: self.provider_action("verify"), "AI cleanup"),
-            ("Discover AI models", lambda: self.provider_action("models"), "AI cleanup"),
-            ("Save API key in desktop keyring", lambda: self.keyring_action("store"), "AI cleanup"),
-            (
-                "Delete API key from desktop keyring",
-                lambda: self.keyring_action("delete"),
-                "AI cleanup",
-            ),
             ("Preview recording sound", lambda: self.preview_sound(False), "Microphone & media"),
             ("Preview stop sound", lambda: self.preview_sound(True), "Microphone & media"),
             ("Start configured shortcut listener", self.start_hotkeys, "Desktop"),
             ("Capture keyboard shortcut", self.capture_shortcut, "Desktop"),
-            ("Reset filler words to upstream defaults", self.reset_fillers, "Text formatting"),
-            ("Regional filler suggestion", self.offer_regional_filler, "Text formatting"),
+            (
+                "Reset filler words to upstream defaults",
+                lambda: self.regional_banner.reset_defaults(self.status.setText),
+                "Text formatting",
+            ),
+            (
+                "Regional filler suggestion",
+                lambda: self.regional_banner.show_suggestion(self.status.setText),
+                "Text formatting",
+            ),
         ):
             button = QPushButton(label)
             button.clicked.connect(action)
@@ -174,7 +174,7 @@ class Window(QWidget):
             self.run_task,
             self.status.setText,
             self.settings_options.refresh_profiles,
-            lambda action: self.keyring_action(action, profile=True),
+            self._profile_keyring,
         )
         profiles_scroll = QScrollArea()
         profiles_scroll.setWidgetResizable(True)
@@ -261,38 +261,7 @@ class Window(QWidget):
     def operation_result(self, response: Response) -> None:
         self.status.setText(str(response.get("error", response.get("result", "Done"))))
 
-    def reset_fillers(self):
-        from .regional import UPSTREAM_FILLERS
-
-        cast("QLineEdit", self.fields["filler_words"]).setText(UPSTREAM_FILLERS)
-        self.status.setText("Upstream filler list restored in editor; Save settings to apply")
-
-    def offer_regional_filler(self):
-        from .regional import region_offer
-
-        config = Config.load()
-        offer = region_offer(config)
-        if not offer:
-            self.status.setText(
-                "No unanswered regional filler suggestion applies to current settings"
-            )
-            return
-        keep = (
-            QMessageBox.question(self, "Regional filler", offer["message"])
-            == QMessageBox.StandardButton.Yes
-        )
-        words = config.filler_words
-        if keep:
-            words = ",".join(
-                word for word in words.split(",") if word.strip().casefold() != offer["word"]
-            )
-        replace(config, filler_words=words, regional_filler_answered="on").save()
-        cast("QLineEdit", self.fields["filler_words"]).setText(words)
-        field = cast("QComboBox", self.fields["regional_filler_answered"])
-        field.setCurrentIndex(field.findData("on"))
-        self.refresh_regional_offers()
-
-    def refresh_regional_offers(self):
+    def refresh_regional_offers(self) -> None:
         self.regional_banner.refresh()
         if hasattr(self, "setup_page"):
             self.setup_page.regional_banner.refresh()
@@ -326,35 +295,12 @@ class Window(QWidget):
         task.finished.connect(task.deleteLater)
         task.start()
 
-    def apply_theme(self, *_):
-        preference = Config.load().theme
-        light = preference == "light" or (
-            preference == "system"
-            and QApplication.styleHints().colorScheme() == Qt.ColorScheme.Light
-        )
-        surface, ink, edge, side, field = (
-            ("#ffffff", "#111214", "#111214", "#f2f2f4", "#ffffff")
-            if light
-            else ("#111214", "#ebebec", "#2c2e33", "#0c0d0f", "#0c0d0f")
-        )
+    def apply_theme(self, *_: object) -> None:
         self.setStyleSheet(
-            f"QWidget {{ background: {surface}; color: {ink}; font-family: sans-serif;"
-            "font-size: 13px; }"
-            f"QWidget#sidebar {{ background: {side}; border-right: 1px solid {edge}; }}"
-            f"#sidebar QLabel, #navigation {{ background: {side}; font-family: monospace; }}"
-            "#brand { font-size: 20px; font-weight: 600; letter-spacing: 2px; }"
-            "#placard { font-size: 10px; }"
-            "#pageTitle { font-size: 24px; font-weight: 600; }"
-            f"QPushButton {{ padding: 8px 12px; border: 1px solid {edge}; border-radius: 0; }}"
-            f"QPushButton:hover {{ border-color: {ink}; }}"
-            f"QPushButton:pressed {{ background: {ink}; color: {surface}; }}"
-            "QPushButton:disabled { color: #777; }"
-            f"QLineEdit, QTextEdit, QListWidget, QComboBox, QSpinBox {{ background: {field};"
-            f"border: 1px solid {edge}; padding: 8px; selection-background-color: {ink};"
-            f"selection-color: {surface}; }}"
-            "QListWidget#navigation { border: 0; padding: 0; }"
-            "QListWidget::item { padding: 12px 8px; }"
-            f"QListWidget::item:selected {{ background: {ink}; color: {surface}; }}"
+            window_stylesheet(
+                Config.load().theme,
+                system_light=QApplication.styleHints().colorScheme() == Qt.ColorScheme.Light,
+            )
         )
 
     def send(
@@ -377,7 +323,7 @@ class Window(QWidget):
         job.finished.connect(job.deleteLater)
         job.start()
 
-    def poll(self):
+    def poll(self) -> None:
         if self.polling:
             return
         self.polling = True
@@ -440,98 +386,9 @@ class Window(QWidget):
             self.status.setText(str(exc))
             return False
 
-    def keyring_action(self, action: KeyringAction, *, profile: bool = False) -> None:
-        from PySide6.QtWidgets import QInputDialog
-
-        from .credentials import delete_key, store_key
-
-        fields = self.prompt_profiles.fields if profile else self.fields
-        selection = self.prompt_profiles.selection if profile else None
-        try:
-            values = {key: field_value(field) for key, field in fields.items()}
-            config = Config.from_mapping({**asdict(Config.load()), **values})
-        except (OSError, TypeError, ValueError) as exc:
-            self.status.setText(str(exc))
-            return
-        if action == "store":
-            key, accepted = QInputDialog.getText(
-                self,
-                "Save API key",
-                "API key for the configured provider endpoint:",
-                QLineEdit.EchoMode.Password,
-            )
-            if not accepted:
-                return
-
-            def function() -> None:
-                store_key(config, key)
-        else:
-            if (
-                QMessageBox.question(
-                    self, "Delete API key", "Delete the key saved for this provider endpoint?"
-                )
-                != QMessageBox.StandardButton.Yes
-            ):
-                return
-
-            def function() -> None:
-                delete_key(config)
-
-        def received(response: Response) -> None:
-            if "error" in response:
-                self.status.setText(str(response["error"]))
-                return
-            if action == "store":
-                if (
-                    field_value(fields["ai_endpoint"]) != config.ai_endpoint
-                    or field_value(fields["ai_provider"]) != config.ai_provider
-                    or (profile and self.prompt_profiles.selection != selection)
-                ):
-                    self.status.setText(
-                        "API key saved for earlier endpoint; current editor unchanged"
-                    )
-                    return
-                source = cast("QComboBox", fields["ai_credential_source"])
-                source.setCurrentIndex(source.findData("secret-service"))
-                self.status.setText(
-                    "API key saved in desktop keyring. Save profile to use it."
-                    if profile
-                    else "API key saved in desktop keyring. Save settings to use it."
-                )
-            else:
-                self.status.setText("API key deleted from desktop keyring")
-
-        self.run_task(function, received)
-
-    def provider_action(self, action):
-        if not self.save():
-            return
-        from .provider_tools import list_models, verify
-
-        config = Config.load()
-        function = (lambda: verify(config)) if action == "verify" else (lambda: list_models(config))
-
-        def received(response):
-            if "error" in response:
-                self.status.setText(response["error"])
-            elif action == "verify":
-                self.status.setText("Provider connection verified")
-            else:
-                from PySide6.QtWidgets import QInputDialog
-
-                models = response["result"]
-                if not models:
-                    self.status.setText("Provider returned no models")
-                    return
-                model, accepted = QInputDialog.getItem(
-                    self, "AI models", "Choose a model", models, editable=False
-                )
-                if accepted:
-                    cast("QLineEdit", self.fields["ai_model"]).setText(model)
-                    self.status.setText("Model selected; Save settings to apply")
-
-        self.run_task(function, received)
-        self.status.setText("Checking provider…")
+    def _profile_keyring(self, action: KeyringAction) -> None:
+        page = self.prompt_profiles
+        self.providers.keyring(action, page.fields, profile_selection=lambda: page.selection)
 
     def preview_sound(self, stop):
         if self.save():
@@ -580,25 +437,3 @@ class Window(QWidget):
             event.ignore()
             return
         event.accept()  # Closing the controller leaves the shortcut daemon running.
-
-
-def launch():
-    first_launch = not config_path().exists()
-    ensure_daemon()
-    ensure_overlay()
-    from .hotkeys import ensure_hotkeys
-
-    ensure_hotkeys()
-    app = QApplication(sys.argv)
-    app.setApplicationName("MouthKeys")
-    window = Window()
-    if first_launch:
-        window.nav.setCurrentRow(9)
-    from .tray import create_tray
-
-    tray = create_tray(window)
-    app.setQuitOnLastWindowClosed(tray is None)
-    if tray is None:
-        window.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
-    window.show()
-    return app.exec()

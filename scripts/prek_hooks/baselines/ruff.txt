@@ -400,27 +400,16 @@
 1	src/mouthkeys/formatting.py	PLR0912	Too many branches (33 > 12)
 1	src/mouthkeys/formatting.py	PLR0913	Too many arguments in function definition (7 > 5)
 1	src/mouthkeys/formatting.py	PLR0915	Too many statements (90 > 50)
-1	src/mouthkeys/gui.py	ANN001	Missing type annotation for function argument `action`
-2	src/mouthkeys/gui.py	ANN001	Missing type annotation for function argument `response`
+1	src/mouthkeys/gui.py	ANN001	Missing type annotation for function argument `response`
 1	src/mouthkeys/gui.py	ANN001	Missing type annotation for function argument `stop`
-1	src/mouthkeys/gui.py	ANN002	Missing type annotation for `*_`
-1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `apply_theme`
 1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `capture_shortcut`
 1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `inspect_models`
-1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `launch`
-1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `offer_regional_filler`
-1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `poll`
 1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `preview_sound`
-1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `provider_action`
-1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `refresh_regional_offers`
-1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `reset_fillers`
 1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `save`
 1	src/mouthkeys/gui.py	ANN201	Missing return type annotation for public function `start_hotkeys`
-1	src/mouthkeys/gui.py	ANN202	Missing return type annotation for private function `received`
 1	src/mouthkeys/gui.py	ANN202	Missing return type annotation for private function `update`
-1	src/mouthkeys/gui.py	ANN204	Missing return type annotation for special method `__init__`
 2	src/mouthkeys/gui.py	FBT003	Boolean positional value in function call
-17	src/mouthkeys/gui.py	PLC0415	`import` should be at the top-level of a file
+8	src/mouthkeys/gui.py	PLC0415	`import` should be at the top-level of a file
 1	src/mouthkeys/gui.py	TRY300	Consider moving this statement to an `else` block
 1	src/mouthkeys/hotkeys.py	PLC0415	`import` should be at the top-level of a file
 1	src/mouthkeys/lark.py	ANN001	Missing type annotation for function argument `args`
@@ -694,24 +683,14 @@
 1	src/mouthkeys/pronunciation.py	PLR0915	Too many statements (108 > 50)
 2	src/mouthkeys/pronunciation.py	PLR1702	Too many nested blocks (6 > 5)
 1	src/mouthkeys/pronunciation.py	SIM115	Use a context manager for opening files
-3	src/mouthkeys/provider_tools.py	ANN001	Missing type annotation for function argument `config`
+1	src/mouthkeys/provider_tools.py	ANN001	Missing type annotation for function argument `config`
 1	src/mouthkeys/provider_tools.py	ANN001	Missing type annotation for function argument `endpoint`
-2	src/mouthkeys/provider_tools.py	ANN001	Missing type annotation for function argument `opener`
 1	src/mouthkeys/provider_tools.py	ANN003	Missing type annotation for `**values`
-1	src/mouthkeys/provider_tools.py	ANN201	Missing return type annotation for public function `list_models`
 1	src/mouthkeys/provider_tools.py	ANN201	Missing return type annotation for public function `models_endpoint`
-1	src/mouthkeys/provider_tools.py	ANN201	Missing return type annotation for public function `verify`
 1	src/mouthkeys/provider_tools.py	ANN202	Missing return type annotation for private function `_with_query`
 1	src/mouthkeys/provider_tools.py	C901	`list_models` is too complex (18 > 15)
 1	src/mouthkeys/provider_tools.py	PLR0912	Too many branches (19 > 12)
 3	src/mouthkeys/provider_tools.py	TRY004	Prefer `TypeError` exception for invalid type
-1	src/mouthkeys/regional_ui.py	ANN001	Missing type annotation for function argument `dictation`
-1	src/mouthkeys/regional_ui.py	ANN001	Missing type annotation for function argument `keep`
-1	src/mouthkeys/regional_ui.py	ANN001	Missing type annotation for function argument `on_change`
-1	src/mouthkeys/regional_ui.py	ANN001	Missing type annotation for function argument `window`
-1	src/mouthkeys/regional_ui.py	ANN201	Missing return type annotation for public function `answer`
-1	src/mouthkeys/regional_ui.py	ANN201	Missing return type annotation for public function `refresh`
-1	src/mouthkeys/regional_ui.py	ANN204	Missing return type annotation for special method `__init__`
 1	src/mouthkeys/routing.py	ANN001	Missing type annotation for function argument `app`
 1	src/mouthkeys/routing.py	ANN001	Missing type annotation for function argument `config`
 1	src/mouthkeys/routing.py	ANN001	Missing type annotation for function argument `mode`
@@ -827,9 +806,7 @@
 1	src/mouthkeys/tray.py	ANN001	Missing type annotation for function argument `reason`
 2	src/mouthkeys/tray.py	ANN001	Missing type annotation for function argument `response`
 1	src/mouthkeys/tray.py	ANN001	Missing type annotation for function argument `result`
-2	src/mouthkeys/tray.py	ANN001	Missing type annotation for function argument `window`
 1	src/mouthkeys/tray.py	ANN201	Missing return type annotation for public function `activate`
-1	src/mouthkeys/tray.py	ANN201	Missing return type annotation for public function `create_tray`
 1	src/mouthkeys/tray.py	ANN201	Missing return type annotation for public function `launch`
 1	src/mouthkeys/tray.py	ANN201	Missing return type annotation for public function `notify_status`
 1	src/mouthkeys/tray.py	ANN201	Missing return type annotation for public function `open_window`
@@ -840,7 +817,6 @@
 1	src/mouthkeys/tray.py	ANN202	Missing return type annotation for private function `finished`
 1	src/mouthkeys/tray.py	ANN202	Missing return type annotation for private function `received`
 1	src/mouthkeys/tray.py	ANN202	Missing return type annotation for private function `settled`
-1	src/mouthkeys/tray.py	ANN204	Missing return type annotation for special method `__init__`
 2	src/mouthkeys/tray.py	PLC0415	`import` should be at the top-level of a file
 2	src/mouthkeys/upstream_backup.py	PLR0913	Too many arguments in function definition (6 > 5)
 2	src/mouthkeys/upstream_backup.py	TRY004	Prefer `TypeError` exception for invalid type

@@ -4,7 +4,7 @@ import uuid
 from collections.abc import Callable, Mapping
 from dataclasses import asdict
 from functools import partial
-from typing import Literal, cast
+from typing import cast
 
 from PySide6.QtCore import QSignalBlocker
 from PySide6.QtWidgets import (
@@ -27,11 +27,10 @@ from .ai_providers import PROVIDER_ENDPOINTS
 from .config import CHOICES, RANGES, Config
 from .postprocess import process
 from .profiles import PROFILE_FIELDS, PromptProfile, load_profiles, save_profiles
+from .provider_settings_ui import KeyringAction
 from .qt_control import Response, ResponseHandler, Send
 from .routing import PromptRoute, load_routes, save_routes
 from .settings_fields import SettingsField, field_value
-
-KeyringAction = Literal["store", "delete"]
 
 
 def _set_field(field: SettingsField, value: str | int) -> None:

@@ -244,9 +244,10 @@ def _install_desktop(args: argparse.Namespace) -> int:
 
 
 def _launch_desktop(args: argparse.Namespace) -> int:
-    module = import_module(
-        ".overlay_process" if args.command == "overlay" else "." + args.command, __package__
+    module_name = {"gui": "gui_launch", "overlay": "overlay_process"}.get(
+        args.command, args.command
     )
+    module = import_module("." + module_name, __package__)
     return cast("int", module.launch())
 
 

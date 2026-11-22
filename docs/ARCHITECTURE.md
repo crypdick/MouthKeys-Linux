@@ -36,7 +36,9 @@ then dispatches local work or uses `control` to contact the private Unix socket 
   control requests without importing Settings or blocking the Qt event loop.
   `settings_form` owns Settings editors, their categories, and live hints. `settings_choices`
   populates model and microphone selectors without loading models or opening capture. The main
-  window owns persistence and recording-service requests.
+  window owns persistence and recording-service requests; `gui_launch` starts it and the
+  configured desktop integrations. `provider_settings_ui` owns explicit provider and keyring
+  actions. `regional_ui` shares the same save path between the inline banner and Settings prompt.
   Transcript history (`history_ui`), activity (`stats_view`), backup review (`backup_ui`), and
   diagnostics (`help_ui`) own their Settings pages. `dictionary_ui` owns editing and voice training
   drafts; saving compares the editor's snapshot under the same lock used to write the dictionary.

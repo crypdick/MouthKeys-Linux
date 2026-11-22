@@ -246,10 +246,10 @@ def test_profile_credentials_read_multiline_prompt_and_ignore_stale_selection(mo
     monkeypatch.setattr(gui.Window, "poll", lambda self: None)
     monkeypatch.setattr(widgets.QInputDialog, "getText", lambda *_: ("example-test-value", True))
     monkeypatch.setattr(credentials, "store_key", Mock(return_value=None))
+    task = Mock()
+    monkeypatch.setattr(gui.Window, "run_task", task)
     window = gui.Window()
     window.timer.stop()
-    task = Mock()
-    monkeypatch.setattr(window, "run_task", task)
     page = window.prompt_profiles
     named_draft(page)
     click(page, "Save profile")

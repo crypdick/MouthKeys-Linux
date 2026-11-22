@@ -22,24 +22,7 @@
 1	src/mouthkeys/file_history.py	operator	Unsupported operand types for <= ("int" and "None")
 1	src/mouthkeys/file_history.py	operator	Unsupported operand types for > ("int" and "None")
 1	src/mouthkeys/file_transcription.py	no-untyped-def	Function is missing a type annotation
-1	src/mouthkeys/gui.py	no-untyped-call	Call to untyped function "ModelBrowser" in typed context
 1	src/mouthkeys/local_api.py	no-untyped-call	Call to untyped function "transcribe_file" in typed context
-1	src/mouthkeys/models_ui.py	assignment	Incompatible types in assignment (expression has type "list[Any]", variable has type "dict[str, Any]")
-1	src/mouthkeys/models_ui.py	attr-defined	"Callable[[], QWidget]" has no attribute "delete_model"
-1	src/mouthkeys/models_ui.py	attr-defined	"Callable[[], QWidget]" has no attribute "download_model"
-9	src/mouthkeys/models_ui.py	attr-defined	"Callable[[], QWidget]" has no attribute "fields"
-2	src/mouthkeys/models_ui.py	attr-defined	"Callable[[], QWidget]" has no attribute "jobs"
-1	src/mouthkeys/models_ui.py	attr-defined	"Callable[[], QWidget]" has no attribute "save"
-1	src/mouthkeys/models_ui.py	attr-defined	"Callable[[], QWidget]" has no attribute "send"
-1	src/mouthkeys/models_ui.py	method-assign	Cannot assign to a method
-3	src/mouthkeys/models_ui.py	no-untyped-call	Call to untyped function "choose" in typed context
-1	src/mouthkeys/models_ui.py	no-untyped-call	Call to untyped function "filter_rows" in typed context
-3	src/mouthkeys/models_ui.py	no-untyped-call	Call to untyped function "refresh" in typed context
-1	src/mouthkeys/models_ui.py	no-untyped-call	Call to untyped function "update_resident" in typed context
-8	src/mouthkeys/models_ui.py	no-untyped-def	Function is missing a return type annotation
-4	src/mouthkeys/models_ui.py	no-untyped-def	Function is missing a type annotation
-4	src/mouthkeys/models_ui.py	union-attr	Item "None" of "QTableWidgetItem | None" has no attribute "data"
-1	src/mouthkeys/models_ui.py	union-attr	Item "None" of "QTableWidgetItem | None" has no attribute "setText"
 1	src/mouthkeys/overlay.py	no-untyped-call	Call to untyped function "set_status" in typed context
 3	src/mouthkeys/overlay.py	no-untyped-def	Function is missing a type annotation
 1	src/mouthkeys/postprocess.py	no-untyped-call	Call to untyped function "dictation_prompt" in typed context

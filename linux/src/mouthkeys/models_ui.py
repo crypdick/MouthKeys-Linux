@@ -2,9 +2,12 @@
 
 import json
 import threading
+from collections.abc import Mapping
 from dataclasses import replace
+from typing import Any, Protocol, cast
 
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt, QThread, QTimer
+from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
@@ -19,18 +22,40 @@ from PySide6.QtWidgets import (
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
+    QWidget,
 )
 
-from .qt_control import Task
-from .settings_fields import field_value
+from . import benchmark, engines
+from .config import Config
+from .qt_control import Response, Task
+from .settings_fields import SettingsField, field_value
+
+_INFERENCE_FIELDS = (
+    "device",
+    "compute_type",
+    "language",
+    "asr_max_tokens",
+    "native_streaming",
+    "streaming_latency",
+)
+
+
+class _ModelSettings(Protocol):
+    fields: Mapping[str, SettingsField]
+    jobs: set[QThread]
+
+    def save(self) -> bool: ...
+    def send(self, action: str) -> None: ...
+    def download_model(self) -> None: ...
+    def delete_model(self) -> None: ...
 
 
 class ModelBrowser(QDialog):
-    def __init__(self, window):
+    def __init__(self, window: QWidget) -> None:
         super().__init__(window)
-        self.window = window
-        self.benchmark_task = None
-        self.measurement_context = None
+        self.settings = cast("_ModelSettings", window)
+        self.benchmark_task: Task | None = None
+        self.measurement_context: tuple[str, str | None] | None = None
         self.setWindowTitle("Speech models")
         self.resize(1100, 550)
         layout = QVBoxLayout(self)
@@ -89,29 +114,18 @@ class ModelBrowser(QDialog):
         self.timer.timeout.connect(self.update_resident)
         self.timer.start(1000)
 
-    def refresh(self):
-        from .config import Config
-        from .engines import model_catalog
+    def _field_values(self, *keys: str) -> dict[str, Any]:
+        fields = self.settings.fields
+        return {key: field_value(fields[key]) for key in keys if key in fields}
 
-        engine = self.window.fields["engine"].currentData()
-        self.engine = engine
-        values = {
-            key: field_value(self.window.fields[key])
-            for key in (
-                "model",
-                "language",
-                "device",
-                "compute_type",
-                "asr_max_tokens",
-                "native_streaming",
-                "streaming_latency",
-            )
-            if key in self.window.fields
-        }
-        config = replace(Config(), **values, engine=engine)
-        models = model_catalog(
-            engine,
-            revision=self.window.fields["model_revision"].text(),
+    def refresh(self) -> None:
+        self.engine = cast("QComboBox", self.settings.fields["engine"]).currentData()
+        config = replace(
+            Config(), engine=self.engine, **self._field_values("model", *_INFERENCE_FIELDS)
+        )
+        models = engines.model_catalog(
+            self.engine,
+            revision=self._revision().text(),
             measurement_config=config,
             measurement_context=self.measurement_context,
         )
@@ -151,70 +165,86 @@ class ModelBrowser(QDialog):
         self.filter_rows()
         self.update_resident()
 
-    def update_resident(self):
-        loaded = getattr(self.window, "loaded_model", None)
+    def _revision(self) -> QLineEdit:
+        return cast("QLineEdit", self.settings.fields["model_revision"])
+
+    def _row_model(self, row: int) -> dict[str, Any]:
+        # Published rows have all catalog cells; the table itself is read-only.
+        item = cast("QTableWidgetItem", self.table.item(row, 0))
+        return cast("dict[str, Any]", item.data(Qt.ItemDataRole.UserRole))
+
+    def update_resident(self) -> None:
+        loaded: object = getattr(self.settings, "loaded_model", None)
+        if not isinstance(loaded, dict) or not all(
+            isinstance(loaded.get(key), str)
+            for key in ("engine", "model", "revision", "device", "compute_type")
+        ):
+            loaded = None
         self.resident.setText(
             f"Resident model: {loaded['engine']} / {loaded['model']} @ {loaded['revision']} "
             f"({loaded['device']}, {loaded['compute_type']})"
             if loaded
             else "Resident model: none reported"
         )
-        revision = self.window.fields["model_revision"].text()
+        revision = self._revision().text()
         sorting = self.table.isSortingEnabled()
         self.table.setSortingEnabled(False)
         for row in range(self.table.rowCount()):
-            model = self.table.item(row, 0).data(Qt.ItemDataRole.UserRole)
+            model = self._row_model(row)
             active = (
                 loaded
                 and loaded["engine"] == self.engine
                 and loaded["model"] == model["model"]
                 and loaded["revision"] == model.get("revision", revision)
             )
-            self.table.item(row, 6).setText("Yes" if active else "No")
+            resident = cast("QTableWidgetItem", self.table.item(row, 6))
+            resident.setText("Yes" if active else "No")
         self.table.setSortingEnabled(sorting)
 
-    def filter_rows(self, *_):
+    def filter_rows(self, *_: object) -> None:
         query = self.query.text().casefold()
+        state = self.state.currentText()
         for row in range(self.table.rowCount()):
-            model = self.table.item(row, 0).data(Qt.ItemDataRole.UserRole)
+            model = self._row_model(row)
             text = " ".join(str(value) for value in model.values()).casefold()
-            state = self.state.currentText()
             visible = query in text and (
                 state == "All models"
                 or (model["installed"] if state == "Installed" else not model["installed"])
             )
             self.table.setRowHidden(row, not visible)
 
-    def choose(self):
+    def _selected(self) -> dict[str, Any] | None:
         row = self.table.currentRow()
-        if row < 0:
+        if row < 0 or self.table.isRowHidden(row):
+            return None
+        item = cast("QTableWidgetItem", self.table.item(row, 0))
+        return self._row_model(row) if item.isSelected() else None
+
+    def choose(self) -> bool:
+        model = self._selected()
+        if model is None:
             return False
-        model = self.table.item(row, 0).data(Qt.ItemDataRole.UserRole)
-        self.window.fields["model"].setEditText(model["model"])
+        cast("QComboBox", self.settings.fields["model"]).setEditText(model["model"])
         if model.get("revision"):
-            self.window.fields["model_revision"].setText(model["revision"])
+            self._revision().setText(model["revision"])
         return True
 
-    def activate(self):
-        if self.choose() and self.window.save():
-            self.window.send("warmup")
+    def activate(self) -> None:
+        if self.choose() and self.settings.save():
+            self.settings.send("warmup")
 
-    def download(self):
+    def download(self) -> None:
         if self.choose():
-            self.window.download_model()
+            self.settings.download_model()
 
-    def delete(self):
+    def delete(self) -> None:
         if self.choose():
-            self.window.delete_model()
+            self.settings.delete_model()
             self.refresh()
 
-    def benchmark(self):
-        from .benchmark import run_benchmark
-        from .config import Config
-
-        if self.benchmark_task is not None or self.table.currentRow() < 0:
+    def benchmark(self) -> None:
+        if self.benchmark_task is not None or (model := self._selected()) is None:
             return
-        model = self.table.item(self.table.currentRow(), 0).data(Qt.ItemDataRole.UserRole)
         if not model["installed"]:
             QMessageBox.information(
                 self, "Offline benchmark", "Download this model explicitly first."
@@ -232,24 +262,12 @@ class ModelBrowser(QDialog):
         if not accepted:
             return
         try:
-            settings = {
-                key: field_value(self.window.fields[key])
-                for key in (
-                    "device",
-                    "compute_type",
-                    "language",
-                    "asr_max_tokens",
-                    "native_streaming",
-                    "streaming_latency",
-                )
-                if key in self.window.fields
-            }
             config = replace(
                 Config.load(),
                 engine=self.engine,
                 model=model["model"],
                 model_revision=model["revision"],
-                **settings,
+                **self._field_values(*_INFERENCE_FIELDS),
             ).validate()
         except (TypeError, ValueError) as exc:
             QMessageBox.warning(self, "Benchmark", str(exc))
@@ -260,7 +278,7 @@ class ModelBrowser(QDialog):
         progress.canceled.connect(cancelled.set)
         progress.show()
         task = Task(
-            lambda: run_benchmark(
+            lambda: benchmark.run_benchmark(
                 config,
                 fixture,
                 reference=reference if reference.strip() else None,
@@ -270,14 +288,14 @@ class ModelBrowser(QDialog):
             cancelled,
         )
         self.benchmark_task = task
-        self.window.jobs.add(task)
+        self.settings.jobs.add(task)
 
-        def received(response):
+        def received(response: Response) -> None:
             progress.close()
             if "error" in response:
-                QMessageBox.warning(self, "Benchmark", response["error"])
+                QMessageBox.warning(self, "Benchmark", str(response["error"]))
             else:
-                report = response["result"]
+                report = cast("dict[str, Any]", response["result"])
                 self.measurement_context = (
                     report["fixture_sha256"],
                     (report.get("accuracy") or {}).get("reference_sha256"),
@@ -300,8 +318,8 @@ class ModelBrowser(QDialog):
                 box.setDetailedText(json.dumps(report, indent=2))
                 box.exec()
 
-        def finished():
-            self.window.jobs.discard(task)
+        def finished() -> None:
+            self.settings.jobs.discard(task)
             self.benchmark_task = None
             progress.deleteLater()
 
@@ -310,7 +328,7 @@ class ModelBrowser(QDialog):
         task.finished.connect(task.deleteLater)
         task.start()
 
-    def closeEvent(self, event):
+    def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802 - Qt override
         if self.benchmark_task is not None:
             event.ignore()
             return

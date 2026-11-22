@@ -39,10 +39,7 @@ def _samples(audio: object) -> npt.NDArray[np.float32] | npt.NDArray[np.float64]
         raise ValueError("Pronunciation sample contains no audible speech")
     # Trim only low-energy edges. Interior pauses remain part of pronunciation.
     energy = np.array(
-        [
-            np.sqrt(np.mean(part * part))
-            for part in np.array_split(samples, max(1, len(samples) // 160))
-        ]
+        [np.sqrt(np.mean(part * part)) for part in np.array_split(samples, len(samples) // 160)]
     )
     active = np.flatnonzero(energy > max(0.0005, float(energy.max()) * 0.06))
     if not len(active):
@@ -53,20 +50,15 @@ def _samples(audio: object) -> npt.NDArray[np.float32] | npt.NDArray[np.float64]
     samples = samples[start:end]
     if len(samples) < 3200:
         raise ValueError("Pronunciation sample contains too little speech")
-    return samples / max(peak, 1e-6)
+    return samples / peak
 
 
 def acoustic_features(audio: object) -> AcousticFeatures:
     samples = _samples(audio)
     duration = len(samples) / 16000
     emphasized = np.append(samples[0], samples[1:] - 0.97 * samples[:-1])
-    starts = range(0, max(1, len(emphasized) - 399), 160)
-    frames = np.stack(
-        [
-            np.pad(emphasized[start : start + 400], (0, max(0, start + 400 - len(emphasized))))
-            for start in starts
-        ]
-    )
+    starts = range(0, len(emphasized) - 399, 160)
+    frames = np.stack([emphasized[start : start + 400] for start in starts])
     power = np.abs(np.fft.rfft(frames * np.hamming(400), n=512)) ** 2
     mel_edges = np.linspace(2595 * np.log10(1 + 70 / 700), 2595 * np.log10(1 + 7600 / 700), 28)
     frequencies = 700 * (10 ** (mel_edges / 2595) - 1)

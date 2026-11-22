@@ -33,8 +33,9 @@ reply before stopping the server.
   `delivery` decides whether to use those commands and rechecks the destination before sending.
   Cancellation before delivery wins; unverified destination identity falls back to copy.
   `recording_transcript` prepares dictated text for delivery: pronunciation, Spoken Send parsing,
-  and local formatting. `recording_cleanup` runs configured AI cleanup with the recording's
-  cancellation event.
+  and local formatting. `pronunciation_spans` bounds acoustic search and applies only completed,
+  disjoint matches to observed word timings. `recording_cleanup` runs configured AI cleanup with
+  the recording's cancellation event.
   `recording_delivery` receives committed text and owns the cancellable Spoken Send review
   window. The key reservation uses the same lock as cancel and new-recording commands.
   Manual replay checks ownership again before requesting a paste; it cannot update a newer

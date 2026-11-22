@@ -1,3 +1,6 @@
+import wave
+from pathlib import Path
+
 import numpy as np
 import pytest
 
@@ -76,9 +79,6 @@ def test_corrupt_feature_shapes_are_rejected():
 
 
 def test_real_fixture_wav_enrollment_survives_gain_and_speaking_rate_change():
-    import wave
-    from pathlib import Path
-
     path = Path(__file__).parent / "resources" / "dictation_fixture.wav"
     with wave.open(str(path)) as source:
         samples = (
@@ -138,3 +138,73 @@ def test_pronunciation_loader_checks_store_size_before_parsing():
         store.truncate(16 * 1024 * 1024 + 1)
     with pytest.raises(ValueError, match="exceeds 16 MiB"):
         PronunciationStore.load()
+
+
+def test_imported_numeric_features_remain_usable_for_matching():
+    audio = utterance()
+    take = acoustic_features(audio)
+    encoded = {**take, "features": [[str(value) for value in row] for row in take["features"]]}
+    PronunciationStore.save(
+        [{"label": "Word", "version": FEATURE_VERSION, "samples": [encoded, encoded]}]
+    )
+    assert PronunciationStore.match(audio)["label"] == "Word"
+
+
+@pytest.mark.parametrize(
+    ("duration", "features", "message"),
+    [
+        (10**400, [[0] * 12], "sample duration"),
+        (0.8, [["wrong"] * 12], "feature values"),
+    ],
+)
+def test_invalid_imported_take_values_fail_validation(duration, features, message):
+    profile = {
+        "label": "Word",
+        "version": FEATURE_VERSION,
+        "samples": [{"duration": duration, "features": features}],
+    }
+    with pytest.raises(ValueError, match=message):
+        PronunciationStore.save([profile])
+    assert not PronunciationStore.path().exists()
+
+
+def test_invalid_acoustic_capture_leaves_whole_phrase_unchanged():
+    assert PronunciationStore.correct("other word", np.zeros(4000)) == "other word"
+
+
+@pytest.mark.parametrize(
+    ("channels", "frames", "message"),
+    [(2, 4000, "mono 16-bit PCM"), (1, 160001, "exceeds ten seconds")],
+)
+def test_acoustic_enrollment_rejects_unsupported_wav_headers(tmp_path, channels, frames, message):
+    path = tmp_path / "recording.wav"
+    with wave.open(str(path), "wb") as recording:
+        recording.setparams((channels, 2, 16000, 0, "NONE", ""))
+        recording.writeframes(bytes(channels * 2 * frames))
+    with pytest.raises(ValueError, match=message):
+        PronunciationStore.enroll("Word", path)
+
+
+def test_sparse_clicks_are_not_audible_speech():
+    samples = np.zeros(4000)
+    samples[::160] = 0.002
+    with pytest.raises(ValueError, match="no audible speech"):
+        acoustic_features(samples)
+
+
+def test_enrollment_rejects_too_little_speech_after_trimming():
+    samples = np.pad(np.tile([0.1, -0.1], 120), (3200, 3200))
+    with pytest.raises(ValueError, match="too little speech"):
+        acoustic_features(samples)
+
+
+def test_distance_rejects_impossible_speaking_rate():
+    first = acoustic_features(utterance(seconds=0.4))
+    second = acoustic_features(utterance(seconds=1.4))
+    assert acoustic_distance(first, second) == 1.0
+
+
+def test_distance_is_infinite_when_alignment_has_no_admissible_path():
+    first = {"duration": 0.8, "features": [[1.0] + [0.0] * 11] * 80}
+    second = {"duration": 0.8, "features": first["features"][:1]}
+    assert np.isinf(acoustic_distance(first, second))

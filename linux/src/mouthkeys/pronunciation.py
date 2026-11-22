@@ -7,21 +7,61 @@ and a clear winner are required before automatic correction.
 """
 
 import json
-import math
 import threading
-import time
-import wave
 from pathlib import Path
-from typing import Any
+from typing import TypedDict
 
 import numpy as np
 
-from .acoustic_features import acoustic_distance, acoustic_features
+from .acoustic_features import AcousticFeatures, acoustic_distance, acoustic_features
 from .config import config_path, private_dir
 from .operations import write_private
+from .pronunciation_spans import PronunciationProfile, SpanResult, correct_spans, search_budget
 
 FEATURE_VERSION = "cepstral-dtw-16k-v1"
 _LOCK = threading.RLock()
+
+
+class PronunciationMatch(TypedDict):
+    label: str
+    confidence: float
+    distance: float
+
+
+def _validated_label(label: object) -> str:
+    if (
+        not isinstance(label, str)
+        or not label.strip()
+        or len(label) > 128
+        or not all(character.isprintable() for character in label)
+    ):
+        raise ValueError("Pronunciation labels must contain 1–128 printable characters")
+    return label
+
+
+def _validated_take(sample: object) -> AcousticFeatures:
+    if not isinstance(sample, dict) or set(sample) != {"duration", "features"}:
+        raise ValueError("Invalid pronunciation sample")
+    duration = sample["duration"]
+    if (
+        not isinstance(duration, int | float)
+        or isinstance(duration, bool)
+        or not 0.2 <= duration <= 10
+    ):
+        raise ValueError("Invalid pronunciation sample duration")
+    try:
+        values = np.asarray(sample["features"], dtype=float)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError("Invalid pronunciation feature values") from exc
+    if (
+        values.ndim != 2
+        or values.shape[1] != 12
+        or not 1 <= len(values) <= 80
+        or not np.all(np.isfinite(values))
+        or np.max(np.abs(values)) > 1.01
+    ):
+        raise ValueError("Invalid pronunciation feature dimensions or values")
+    return {"duration": duration, "features": values.tolist()}
 
 
 class PronunciationStore:
@@ -30,47 +70,31 @@ class PronunciationStore:
         return config_path().with_name("pronunciations.json")
 
     @staticmethod
-    def validate(profiles: object) -> list[dict[str, Any]]:
+    def validate(profiles: object) -> list[PronunciationProfile]:
         if not isinstance(profiles, list) or len(profiles) > 50:
             raise ValueError("At most 50 pronunciation phrases can be enrolled")
         seen = set()
+        validated = []
         for profile in profiles:
             if not isinstance(profile, dict) or set(profile) != {"label", "version", "samples"}:
                 raise ValueError("Invalid pronunciation profile")
-            label = profile["label"]
-            if (
-                not isinstance(label, str)
-                or not label.strip()
-                or len(label) > 128
-                or not all(c.isprintable() for c in label)
-            ):
-                raise ValueError("Pronunciation labels must contain 1–128 printable characters")
+            label = _validated_label(profile["label"])
             if label.casefold() in seen or profile["version"] != FEATURE_VERSION:
                 raise ValueError("Duplicate or incompatible pronunciation profile")
             seen.add(label.casefold())
             if not isinstance(profile["samples"], list) or not 1 <= len(profile["samples"]) <= 10:
                 raise ValueError("Pronunciation requires 1–10 samples")
-            for sample in profile["samples"]:
-                if not isinstance(sample, dict) or set(sample) != {"duration", "features"}:
-                    raise ValueError("Invalid pronunciation sample")
-                duration = sample["duration"]
-                values = np.asarray(sample["features"], dtype=float)
-                if (
-                    isinstance(duration, bool)
-                    or not isinstance(duration, int | float)
-                    or not np.isfinite(duration)
-                    or not 0.2 <= duration <= 10
-                    or values.ndim != 2
-                    or values.shape[1] != 12
-                    or not 1 <= len(values) <= 80
-                    or not np.all(np.isfinite(values))
-                    or np.max(np.abs(values)) > 1.01
-                ):
-                    raise ValueError("Invalid pronunciation feature dimensions or values")
-        return profiles
+            validated.append(
+                PronunciationProfile(
+                    label=label,
+                    version=FEATURE_VERSION,
+                    samples=[_validated_take(sample) for sample in profile["samples"]],
+                )
+            )
+        return validated
 
     @classmethod
-    def load(cls) -> list[dict[str, Any]]:
+    def load(cls) -> list[PronunciationProfile]:
         with _LOCK:
             path = cls.path()
             if not path.exists():
@@ -80,7 +104,7 @@ class PronunciationStore:
             return cls.validate(json.loads(path.read_text()))
 
     @classmethod
-    def save(cls, profiles: object) -> list[dict[str, Any]]:
+    def save(cls, profiles: object) -> list[PronunciationProfile]:
         with _LOCK:
             validated = cls.validate(profiles)
             path = cls.path()
@@ -89,15 +113,8 @@ class PronunciationStore:
             return validated
 
     @classmethod
-    def enroll(cls, label, audio):
-        if (
-            not isinstance(label, str)
-            or not label.strip()
-            or len(label) > 128
-            or not all(character.isprintable() for character in label)
-        ):
-            raise ValueError("Pronunciation labels must contain 1–128 printable characters")
-        label = label.strip()
+    def enroll(cls, label: object, audio: object) -> dict[str, str | int | bool]:
+        label = _validated_label(label).strip()
         sample = acoustic_features(audio)
         with _LOCK:
             profiles = cls.load()
@@ -105,7 +122,7 @@ class PronunciationStore:
                 (item for item in profiles if item["label"].casefold() == label.casefold()), None
             )
             if profile is None:
-                profile = {"label": label.strip(), "version": FEATURE_VERSION, "samples": []}
+                profile = {"label": label, "version": FEATURE_VERSION, "samples": []}
                 profiles.append(profile)
             elif min(acoustic_distance(sample, previous) for previous in profile["samples"]) > 0.35:
                 raise ValueError(
@@ -120,14 +137,16 @@ class PronunciationStore:
             }
 
     @classmethod
-    def delete(cls, label: str) -> list[dict[str, Any]]:
+    def delete(cls, label: str) -> list[PronunciationProfile]:
         with _LOCK:
             return cls.save(
                 [item for item in cls.load() if item["label"].casefold() != label.casefold()]
             )
 
     @classmethod
-    def match(cls, audio, *, threshold=0.18, margin=0.06):
+    def match(
+        cls, audio: object, *, threshold: float = 0.18, margin: float = 0.06
+    ) -> PronunciationMatch | None:
         sample = acoustic_features(audio)
         candidates = []
         for profile in cls.load():
@@ -154,7 +173,7 @@ class PronunciationStore:
         *,
         budget: object = 2000,
         max_seconds: object = 2.0,
-    ) -> dict[str, Any]:
+    ) -> SpanResult:
         """Correct bounded, real word-timed spans without rewriting their neighbors.
 
         `alignment` contains exact `text`, `source` (recording path), and actual
@@ -169,10 +188,7 @@ class PronunciationStore:
         `truncated` explicitly reports incomplete coverage. Alignment/source
         mismatches fail closed and leave the transcript unchanged.
         """
-        result: dict[str, Any] = _correct_spans(
-            cls, text, audio, alignment, budget=budget, max_seconds=max_seconds
-        )
-        return result
+        return correct_spans(text, audio, alignment, cls.load, search_budget(budget, max_seconds))
 
     @classmethod
     def correct(cls, text: str, audio: object) -> str:
@@ -185,248 +201,3 @@ class PronunciationStore:
             return text  # Long/no-speech captures are outside this matcher's contract.
         corrected: str = match["label"] if match else text
         return corrected
-
-
-class _AudioWindow:
-    def __init__(self, audio):
-        self.source = None
-        self.samples = None
-        if isinstance(audio, str | Path):
-            self.source = wave.open(str(audio), "rb")
-            if (
-                self.source.getnchannels(),
-                self.source.getsampwidth(),
-                self.source.getframerate(),
-            ) != (1, 2, 16000):
-                self.close()
-                raise ValueError("Span matching requires mono 16-bit PCM at 16 kHz")
-            self.frames = self.source.getnframes()
-        else:
-            self.samples = np.asarray(audio, dtype=np.float32)
-            if self.samples.ndim != 1 or not np.all(np.isfinite(self.samples)):
-                raise ValueError("Span matching requires finite mono audio")
-            self.frames = len(self.samples)
-        if not 0 < self.frames <= 3600 * 16000:
-            self.close()
-            raise ValueError("Span matching supports recordings up to one hour")
-        self.duration = self.frames / 16000
-
-    def read(self, start, end):
-        first, last = max(0, math.floor(start * 16000)), min(self.frames, math.ceil(end * 16000))
-        if self.source is not None:
-            self.source.setpos(first)
-            return (
-                np.frombuffer(self.source.readframes(last - first), dtype="<i2").astype(np.float32)
-                / 32768
-            )
-        return self.samples[first:last]
-
-    def close(self):
-        if self.source is not None:
-            self.source.close()
-
-
-def _span_distance(candidate, enrolled):
-    # Full-span DTW alone can stretch one endpoint over an unrelated neighbor.
-    # Require both acoustic edges to resemble the enrolled phrase as well.
-    ratio = candidate["duration"] / enrolled["duration"]
-    if not 0.65 <= ratio <= 1.55:
-        return 1.0
-    left = np.asarray(candidate["features"])
-    right = np.asarray(enrolled["features"])
-    edges = []
-    for end in (False, True):
-        first = left[-max(1, len(left) // 8) :] if end else left[: max(1, len(left) // 8)]
-        second = right[-max(1, len(right) // 8) :] if end else right[: max(1, len(right) // 8)]
-        first, second = first.mean(axis=0), second.mean(axis=0)
-        denominator = np.linalg.norm(first) * np.linalg.norm(second)
-        edges.append(float(1 - first @ second / max(denominator, 1e-8)))
-    if max(edges) > 0.4 or sum(edges) / 2 > 0.25:
-        return 1.0
-    return acoustic_distance(candidate, enrolled)
-
-
-def _correct_spans(store, text, audio, alignment, *, budget, max_seconds):
-    from .word_alignment import align_words, lexical_span
-
-    if type(budget) is not int or not 1 <= budget <= 20000:
-        raise ValueError("Pronunciation span budget must be 1–20000 comparisons")
-    if (
-        type(max_seconds) not in (int, float)
-        or not math.isfinite(max_seconds)
-        or not 0 < max_seconds <= 10
-    ):
-        raise ValueError("Pronunciation span time limit must be 0–10 seconds")
-    deadline = time.monotonic() + max_seconds
-    result = {
-        "text": text,
-        "words": [],
-        "corrections": [],
-        "comparisons": 0,
-        "cells": 0,
-        "candidates": 0,
-        "truncated": False,
-        "skipped_reason": "",
-    }
-    if not isinstance(alignment, dict) or alignment.get("text") != text:
-        result["skipped_reason"] = "Alignment does not match final transcript"
-        return result
-    if isinstance(audio, str | Path) and alignment.get("source") != str(audio):
-        result["skipped_reason"] = "Alignment belongs to another recording"
-        return result
-    profiles = [profile for profile in store.load() if len(profile["samples"]) >= 2]
-    if not profiles:
-        try:
-            result["words"] = align_words(text, alignment.get("words"))
-        except ValueError:
-            result["skipped_reason"] = "Word timing metadata is incomplete or inconsistent"
-        return result
-    source = _AudioWindow(audio)
-    try:
-        try:
-            words = align_words(text, alignment.get("words"), duration=source.duration)
-        except ValueError:
-            result["skipped_reason"] = "Word timing metadata is incomplete or inconsistent"
-            return result
-        result["words"] = words
-        matches = []
-        stop = False
-        for first in range(len(words)):
-            for last in range(first, min(len(words), first + 5)):
-                if time.monotonic() >= deadline:
-                    result["truncated"] = stop = True
-                    break
-                if last > first:
-                    previous = words[last - 1]
-                    if words[last]["start"] - previous["end"] > 0.4:
-                        break
-                    if any(
-                        character in ",.;:!?…。“”" for character in previous["word"].rstrip()[-1:]
-                    ):
-                        break
-                start, end = words[first]["start"], words[last]["end"]
-                duration = end - start
-                # A token boundary inside another token's observed audio is
-                # ambiguous. Only a range covering that overlap can be replaced.
-                if first and words[first - 1]["end"] > start + 0.02:
-                    continue
-                if last + 1 < len(words) and words[last + 1]["start"] < end - 0.02:
-                    continue
-                if duration > 10:
-                    break
-                if duration < 0.25:
-                    continue
-                if not any(
-                    0.5 <= duration / take["duration"] <= 2
-                    for profile in profiles
-                    for take in profile["samples"]
-                ):
-                    continue
-                if time.monotonic() >= deadline:
-                    result["truncated"] = stop = True
-                    break
-                char_start, char_end = lexical_span(text, words[first], words[last])
-                if char_start == char_end:
-                    continue
-                result["candidates"] += 1
-                try:
-                    features = acoustic_features(source.read(start, end))
-                except ValueError:
-                    continue
-                ranked = []
-                for profile in profiles:
-                    distances = []
-                    for take in profile["samples"]:
-                        # Outside this duration ratio the defined metric is exactly 1.
-                        if not 0.5 <= features["duration"] / take["duration"] <= 2:
-                            distances.append(1.0)
-                            continue
-                        cells = len(features["features"]) * len(take["features"])
-                        if (
-                            result["comparisons"] >= budget
-                            or result["cells"] + cells > 12800000
-                            or time.monotonic() >= deadline
-                        ):
-                            result["truncated"] = stop = True
-                            break
-                        result["comparisons"] += 1
-                        result["cells"] += cells
-                        distances.append(_span_distance(features, take))
-                    if stop:
-                        break
-                    distances.sort()
-                    ranked.append((sum(distances[:2]) / 2, profile["label"]))
-                if stop:
-                    break
-                ranked.sort()
-                if ranked[0][0] > 0.18 or (len(ranked) > 1 and ranked[1][0] - ranked[0][0] < 0.06):
-                    continue
-                distance, label = ranked[0]
-                if text[char_start:char_end] == label:
-                    continue
-                matches.append(
-                    {
-                        "word_start": first,
-                        "word_end": last + 1,
-                        "text_start": char_start,
-                        "text_end": char_end,
-                        "start": start,
-                        "end": end,
-                        "label": label,
-                        "heard": text[char_start:char_end],
-                        "distance": distance,
-                        "confidence": round(1 - distance, 4),
-                    }
-                )
-            if stop:
-                break
-        chosen = []
-        for match in sorted(
-            matches, key=lambda item: (item["distance"], item["word_start"], item["word_end"])
-        ):
-            if not any(
-                match["word_start"] < other["word_end"] and match["word_end"] > other["word_start"]
-                for other in chosen
-            ):
-                chosen.append(match)
-        chosen.sort(key=lambda item: item["word_start"])
-        corrected = text
-        for match in reversed(chosen):
-            corrected = (
-                corrected[: match["text_start"]] + match["label"] + corrected[match["text_end"] :]
-            )
-        replacements = {match["word_start"]: match for match in chosen}
-        updated, index = [], 0
-        while index < len(words):
-            match = replacements.get(index)
-            if match is None:
-                updated.append(
-                    {
-                        key: value
-                        for key, value in words[index].items()
-                        if key not in ("char_start", "char_end")
-                    }
-                )
-                index += 1
-                continue
-            last = match["word_end"] - 1
-            prefix = text[words[index]["char_start"] : match["text_start"]]
-            suffix = text[match["text_end"] : words[last]["char_end"]]
-            updated.append(
-                {
-                    "word": prefix + match["label"] + suffix,
-                    "start": match["start"],
-                    "end": match["end"],
-                    "kind": "pronunciation_span",
-                    "original_words": [dict(word) for word in words[index : last + 1]],
-                }
-            )
-            index = last + 1
-        result.update(
-            text=corrected,
-            words=align_words(corrected, updated, duration=source.duration),
-            corrections=chosen,
-        )
-        return result
-    finally:
-        source.close()

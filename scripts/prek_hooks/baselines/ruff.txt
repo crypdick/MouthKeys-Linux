@@ -139,26 +139,6 @@
 4	src/mouthkeys/native_asr.py	PLC0415	`import` should be at the top-level of a file
 1	src/mouthkeys/native_asr.py	TRY004	Prefer `TypeError` exception for invalid type
 2	src/mouthkeys/native_worker.py	PLC0415	`import` should be at the top-level of a file
-1	src/mouthkeys/onboarding.py	ANN001	Missing type annotation for function argument `query`
-1	src/mouthkeys/onboarding.py	ANN001	Missing type annotation for function argument `response`
-1	src/mouthkeys/onboarding.py	ANN001	Missing type annotation for function argument `status`
-1	src/mouthkeys/onboarding.py	ANN001	Missing type annotation for function argument `window`
-2	src/mouthkeys/onboarding.py	ANN002	Missing type annotation for `*args`
-1	src/mouthkeys/onboarding.py	ANN201	Missing return type annotation for public function `apply_route`
-1	src/mouthkeys/onboarding.py	ANN201	Missing return type annotation for public function `check_setup`
-1	src/mouthkeys/onboarding.py	ANN201	Missing return type annotation for public function `filter_languages`
-1	src/mouthkeys/onboarding.py	ANN201	Missing return type annotation for public function `finish`
-1	src/mouthkeys/onboarding.py	ANN201	Missing return type annotation for public function `invalidate_tryout`
-1	src/mouthkeys/onboarding.py	ANN201	Missing return type annotation for public function `open_settings`
-1	src/mouthkeys/onboarding.py	ANN201	Missing return type annotation for public function `record`
-1	src/mouthkeys/onboarding.py	ANN201	Missing return type annotation for public function `refresh_other_banner`
-1	src/mouthkeys/onboarding.py	ANN201	Missing return type annotation for public function `refresh_routes`
-1	src/mouthkeys/onboarding.py	ANN201	Missing return type annotation for public function `update_status`
-1	src/mouthkeys/onboarding.py	ANN202	Missing return type annotation for private function `started`
-1	src/mouthkeys/onboarding.py	ANN204	Missing return type annotation for special method `__init__`
-2	src/mouthkeys/onboarding.py	ARG002	Unused method argument: `args`
-2	src/mouthkeys/onboarding.py	FBT003	Boolean positional value in function call
-2	src/mouthkeys/onboarding.py	PLC0415	`import` should be at the top-level of a file
 1	src/mouthkeys/overlay.py	ANN001	Missing type annotation for function argument `data`
 2	src/mouthkeys/overlay.py	ANN001	Missing type annotation for function argument `response`
 1	src/mouthkeys/overlay.py	ANN201	Missing return type annotation for public function `set_status`
@@ -179,16 +159,6 @@
 2	src/mouthkeys/profiles.py	TRY004	Prefer `TypeError` exception for invalid type
 1	src/mouthkeys/routing.py	PLC0415	`import` should be at the top-level of a file
 1	src/mouthkeys/routing.py	PLR0913	Too many arguments in function definition (6 > 5)
-1	src/mouthkeys/setup_languages.py	ANN001	Missing type annotation for function argument `engine`
-1	src/mouthkeys/setup_languages.py	ANN001	Missing type annotation for function argument `label`
-1	src/mouthkeys/setup_languages.py	ANN001	Missing type annotation for function argument `language_code`
-1	src/mouthkeys/setup_languages.py	ANN001	Missing type annotation for function argument `language`
-1	src/mouthkeys/setup_languages.py	ANN001	Missing type annotation for function argument `model`
-1	src/mouthkeys/setup_languages.py	ANN001	Missing type annotation for function argument `revision`
-1	src/mouthkeys/setup_languages.py	ANN201	Missing return type annotation for public function `languages`
-1	src/mouthkeys/setup_languages.py	ANN201	Missing return type annotation for public function `routes`
-1	src/mouthkeys/setup_languages.py	ANN202	Missing return type annotation for private function `add`
-1	src/mouthkeys/setup_languages.py	PLC0415	`import` should be at the top-level of a file
 1	src/mouthkeys/spoken_send.py	FBT001	Boolean-typed positional argument in function definition
 1	src/mouthkeys/spoken_send.py	FBT002	Boolean default positional argument in function definition
 1	src/mouthkeys/spoken_send.py	RUF100	Unused `noqa` directive (unused: `FBT001`, `FBT002`)
@@ -272,7 +242,7 @@
 3	tests/test_remaining_parity.py	PT011	`pytest.raises(ValueError)` is too broad, set the `match` parameter or use a more specific exception
 1	tests/test_service_learning.py	PT006	Wrong type passed to first argument of `pytest.mark.parametrize`; expected `tuple`
 1	tests/test_service_sessions.py	PT011	`pytest.raises(ValueError)` is too broad, set the `match` parameter or use a more specific exception
-6	tests/test_setup.py	PLC0415	`import` should be at the top-level of a file
+1	tests/test_setup.py	PLC0415	`import` should be at the top-level of a file
 1	tests/test_setup.py	PT006	Wrong type passed to first argument of `pytest.mark.parametrize`; expected `tuple`
 4	tests/test_speech_parity.py	PLC0415	`import` should be at the top-level of a file
 1	tests/test_speech_parity.py	PT006	Wrong type passed to first argument of `pytest.mark.parametrize`; expected `tuple`

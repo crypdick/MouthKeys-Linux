@@ -151,3 +151,38 @@ def test_daemon_binds_private_socket_reaps_stale_files_and_closes_api(monkeypatc
     else:
         assert actions == [0o077, "stop IPC"]
         assert controller.errors == ["Local API unavailable: unsupported configuration"]
+
+
+@pytest.mark.parametrize("ready", [False, True])
+def test_daemon_stops_only_when_a_ready_tray_exits(monkeypatch, ready):
+    controller = FakeCommands()
+    service, tray = socket.socketpair()
+    child = SimpleNamespace(returncode=None, poll=lambda: child.returncode)
+    stopped = []
+    monkeypatch.setattr(daemon.Server, "schedule_shutdown", lambda _: stopped.append(True))
+    with service, tray, daemon.Server(str(runtime_dir() / "control.sock"), controller) as server:
+        service.settimeout(1)
+        server.tray = service, child
+        server.service_actions()
+        assert not controller.interrupted
+        if ready:
+            tray.sendall(b"1")
+        tray.close()
+        child.returncode = -9
+        server.service_actions()
+        assert server.tray is None
+        assert service.fileno() == -1
+        assert controller.interrupted is ready
+        assert stopped == ([True] if ready else [])
+
+
+def test_daemon_shutdown_closes_tray_lifeline(monkeypatch):
+    service, tray = socket.socketpair()
+    controller = FakeCommands()
+    monkeypatch.setattr(daemon, "launch_tray", lambda: (service, SimpleNamespace()))
+    monkeypatch.setattr(signal, "signal", lambda *_: None)
+    monkeypatch.setattr(daemon.Server, "serve_forever", lambda *_args, **_kwargs: None)
+    with service, tray:
+        tray.settimeout(1)
+        daemon.serve(lambda: controller)
+        assert tray.recv(1) == b""

@@ -320,6 +320,13 @@ def test_desktop_commands_load_only_requested_launcher(monkeypatch, command, mod
     launch.assert_called_once_with()
 
 
+def test_tray_command_passes_daemon_lifeline(monkeypatch):
+    launch = Mock(return_value=0)
+    monkeypatch.setattr(cli, "import_module", Mock(return_value=SimpleNamespace(launch=launch)))
+    assert cli.main(["tray", "--service-fd", "7"]) == 0
+    launch.assert_called_once_with(7)
+
+
 def test_config_missing_value_reports_parser_error(capsys):
     with pytest.raises(SystemExit) as exc:
         cli.main(["config", "language"])

@@ -1,12 +1,15 @@
 import fcntl
 import io
 import json
+import os
 import socket
 import stat
 import subprocess
 from contextlib import contextmanager
 from pathlib import Path
+from subprocess import Popen
 from types import SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
 
@@ -50,6 +53,7 @@ def test_control_exchange_uses_private_socket_and_validates_response(
 @pytest.fixture
 def launches(monkeypatch):
     launched = []
+    child = Mock(spec=Popen)
 
     def launch(command, **options):
         assert command[1:4] == ["-P", "-m", "mouthkeys"]
@@ -60,6 +64,7 @@ def launches(monkeypatch):
         path = Path(output.name)
         assert stat.S_IMODE(path.stat().st_mode) == 0o600
         launched.append((command[-1], path))
+        return child
 
     monkeypatch.setattr(subprocess, "Popen", launch)
     return launched
@@ -95,6 +100,50 @@ def test_ready_daemon_needs_no_child_process(monkeypatch, launches):
     monkeypatch.setattr(control, "request", lambda action: {"phase": "idle"})
     control.ensure_daemon()
     assert not launches
+
+
+@pytest.mark.parametrize(
+    ("display", "enabled", "qt"), [(False, "on", True), (True, "off", True), (True, "on", False)]
+)
+def test_daemon_skips_tray_without_desktop_support(monkeypatch, launches, display, enabled, qt):
+    if display:
+        monkeypatch.setenv("WAYLAND_DISPLAY", "fake-wayland")
+    Config(tray=enabled).save()
+    monkeypatch.setattr(control.importlib.util, "find_spec", lambda _: object() if qt else None)
+    assert control.launch_tray() is None
+    assert launches == []
+
+
+@pytest.mark.parametrize("available", [True, False])
+def test_daemon_launch_passes_private_tray_lifeline(monkeypatch, caplog, available):
+    monkeypatch.setenv("DISPLAY", ":0")
+    monkeypatch.setattr(control.importlib.util, "find_spec", lambda _: object())
+    child = Mock(spec=Popen)
+    inherited = []
+
+    def launch(command, **options):
+        (fd,) = options["pass_fds"]
+        assert command[4:] == ["tray", "--service-fd", str(fd)]
+        if not available:
+            raise OSError("could not spawn")
+        inherited.append(socket.socket(fileno=os.dup(fd)))
+        return child
+
+    monkeypatch.setattr(subprocess, "Popen", launch)
+    result = control.launch_tray()
+    if not available:
+        assert result is None
+        assert "could not spawn" in caplog.text
+        return
+    service, process = result
+    (tray,) = inherited
+    with service, tray:
+        assert process is child
+        service.settimeout(1)
+        tray.sendall(b"1")
+        assert service.recv(1) == b"1"
+        tray.close()
+        assert service.recv(1) == b""
 
 
 def test_enabled_panel_starts_with_gui_support_but_not_for_an_existing_panel(monkeypatch, launches):

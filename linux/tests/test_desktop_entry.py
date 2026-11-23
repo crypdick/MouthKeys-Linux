@@ -7,7 +7,7 @@ from unittest.mock import Mock
 import pytest
 
 from mouthkeys import cli, desktop_entry
-from mouthkeys.config import Config
+from mouthkeys.config import Config, config_path
 
 
 def executable_line(entry):
@@ -18,34 +18,42 @@ def executable_line(entry):
     )
 
 
-@pytest.mark.parametrize(
-    ("window", "tray", "qt", "command"),
-    [
-        ("on", "on", True, "gui"),
-        ("off", "on", True, "tray"),
-        ("off", "on", False, "daemon"),
-        ("off", "off", True, "daemon"),
-    ],
-)
-def test_cli_installs_and_removes_login_entry_without_launching(
-    monkeypatch, tmp_path, capsys, window, tray, qt, command
-):
-    Config(show_window_at_login=window, tray=tray).save()
-    available = Mock(return_value=object() if qt else None)
-    monkeypatch.setattr(desktop_entry, "find_spec", available)
+@pytest.mark.parametrize(("window", "command"), [("on", "gui"), ("off", "daemon")])
+def test_cli_installs_and_removes_login_entry_without_launching(tmp_path, capsys, window, command):
+    Config(show_window_at_login=window).save()
     assert cli.main(["install-desktop", "--autostart"]) == 0
     desktop = Path(capsys.readouterr().out.strip())
     startup = tmp_path / "config/autostart/mouthkeys.desktop"
     assert Config.load().launch_at_startup == "on"
     assert shlex.split(executable_line(desktop))[-1] == "gui"
     assert shlex.split(executable_line(startup))[-1] == command
-    assert available.call_count == (window == "off" and tray == "on")
 
     assert cli.main(["config", "launch_at_startup", "off"]) == 0
     assert not startup.exists()
     assert desktop.exists()
     assert cli.main(["config", "launch_at_startup", "off"]) == 0
     assert not startup.exists()
+
+
+@pytest.mark.parametrize("setting", ["on", "off"])
+def test_desktop_installer_syncs_existing_login_entry_without_saving_config(
+    tmp_path, capsys, setting
+):
+    config = config_path()
+    config.parent.mkdir(parents=True)
+    config.write_text(f'{{"launch_at_startup":"{setting}","tray":"off"}}')
+    original = config.read_bytes()
+    startup = tmp_path / "config/autostart/mouthkeys.desktop"
+    startup.parent.mkdir()
+    startup.write_text("stale entry")
+
+    assert cli.main(["install-desktop", "--sync-autostart"]) == 0
+    desktop = Path(capsys.readouterr().out.strip())
+    assert shlex.split(executable_line(desktop))[-1] == "gui"
+    assert startup.exists() == (setting == "on")
+    if setting == "on":
+        assert shlex.split(executable_line(startup))[-1] == "daemon"
+    assert config.read_bytes() == original
 
 
 def test_module_install_uses_current_python_without_resolving_venv_symlink(monkeypatch, tmp_path):

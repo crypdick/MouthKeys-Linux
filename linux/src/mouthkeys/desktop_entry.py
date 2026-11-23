@@ -2,7 +2,6 @@
 
 import os
 import shutil
-from importlib.util import find_spec
 from pathlib import Path
 
 from .config import Config
@@ -33,11 +32,7 @@ def _autostart_entry() -> Path:
 
 
 def _startup_command(config: Config) -> str:
-    if config.show_window_at_login == "on":
-        return "gui"
-    if config.tray == "on" and find_spec("PySide6") is not None:
-        return "tray"
-    return "daemon"
+    return "gui" if config.show_window_at_login == "on" else "daemon"
 
 
 def _write_entry(entry: Path, executable: list[str], command: str) -> None:
@@ -51,13 +46,17 @@ def _write_entry(entry: Path, executable: list[str], command: str) -> None:
     )
 
 
-def install_desktop(*, autostart: bool = False) -> Path:
+def install_desktop(*, autostart: bool = False, sync_autostart: bool = False) -> Path:
     data = Path(os.environ.get("XDG_DATA_HOME", str(Path.home() / ".local/share")))
     entry = data / "applications" / "mouthkeys.desktop"
     executable = _entry_command()
     _write_entry(entry, executable, "gui")
-    if autostart:
-        _write_entry(_autostart_entry(), executable, _startup_command(Config.load()))
+    if autostart or sync_autostart:
+        config = Config.load()
+        if autostart or config.launch_at_startup == "on":
+            _write_entry(_autostart_entry(), executable, _startup_command(config))
+        else:
+            _autostart_entry().unlink(missing_ok=True)
     return entry
 
 

@@ -8,10 +8,8 @@ from mouthkeys import cli, gui_launch, tray
 from mouthkeys.config import Config
 
 
-@pytest.mark.parametrize(("returning", "has_tray"), [(False, False), (True, True)])
-def test_gui_cli_launch_preserves_desktop_lifecycle_without_showing_a_window(
-    monkeypatch, returning, has_tray
-):
+@pytest.mark.parametrize("returning", [False, True])
+def test_gui_cli_starts_daemon_and_settings_but_does_not_own_the_tray(monkeypatch, returning):
     events = []
     if returning:
         Config().save()
@@ -20,7 +18,6 @@ def test_gui_cli_launch_preserves_desktop_lifecycle_without_showing_a_window(
         events.append("app")
         return SimpleNamespace(
             setApplicationName=lambda name: events.append(("name", name)),
-            setQuitOnLastWindowClosed=lambda enabled: events.append(("quit on close", enabled)),
             exec=lambda: events.append("event loop") or 7,
         )
 
@@ -34,20 +31,12 @@ def test_gui_cli_launch_preserves_desktop_lifecycle_without_showing_a_window(
     monkeypatch.setattr(gui_launch, "ensure_hotkeys", lambda: events.append("hotkeys"))
     monkeypatch.setattr(gui_launch, "QApplication", launch_app)
     monkeypatch.setattr(gui_launch, "Window", lambda: events.append("window") or fake_window)
-    monkeypatch.setattr(
-        gui_launch,
-        "create_tray",
-        lambda window: events.append(("tray", window)) or (object() if has_tray else None),
-    )
 
     assert cli.main(["gui"]) == 7
     expected = ["daemon", "overlay", "hotkeys", "app", ("name", "MouthKeys"), "window"]
     if not returning:
         expected.append(("page", 9))
-    expected.extend([("tray", fake_window), ("quit on close", not has_tray)])
-    if not has_tray:
-        expected.append(Qt.WidgetAttribute.WA_DeleteOnClose)
-    assert events == [*expected, "show", "event loop"]
+    assert events == [*expected, Qt.WidgetAttribute.WA_DeleteOnClose, "show", "event loop"]
 
 
 @pytest.mark.parametrize(("enabled", "available"), [("on", True), ("on", False), ("off", True)])
@@ -61,10 +50,10 @@ def test_tray_factory_only_shows_when_enabled_and_supported(monkeypatch, enabled
     monkeypatch.setattr(QSystemTrayIcon, "isSystemTrayAvailable", lambda: available)
     monkeypatch.setattr(tray.Tray, "show", show)
     window = QWidget()
-    result = tray.create_tray(window)
+    result = tray.create_tray()
     if enabled == "on" and available:
         assert shown == [result]
-        assert result.parent() is window
+        assert result.parent() is None
         assert not result.isVisible()
         result.timer.stop()
     else:

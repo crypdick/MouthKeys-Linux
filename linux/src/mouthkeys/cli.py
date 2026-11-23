@@ -242,7 +242,9 @@ def _doctor(_args: argparse.Namespace) -> int:
 def _install_desktop(args: argparse.Namespace) -> int:
     if args.autostart:
         replace(Config.load(), launch_at_startup="on").save()
-    print(desktop_entry.install_desktop(autostart=args.autostart))
+    print(
+        desktop_entry.install_desktop(autostart=args.autostart, sync_autostart=args.sync_autostart)
+    )
     return 0
 
 
@@ -251,6 +253,8 @@ def _launch_desktop(args: argparse.Namespace) -> int:
         args.command, args.command
     )
     module = import_module("." + module_name, __package__)
+    if args.command == "tray" and args.service_fd is not None:
+        return cast("int", module.launch(args.service_fd))
     return cast("int", module.launch())
 
 

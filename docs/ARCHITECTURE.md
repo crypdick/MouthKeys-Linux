@@ -55,6 +55,9 @@ reply before stopping the server.
   results on stdout and diagnostics on stderr. `desktop_entry` owns XDG launcher and login files
   shared by CLI, Settings, and backup restore.
 - **UI and optional integrations:** `gui`, `overlay`, `tray`, and `hotkeys` call the service.
+  The graphical daemon launches one optional Qt tray. A private socket pair marks the tray ready
+  and lets it detect daemon exit. The daemon stops if its ready tray exits; a disabled or
+  unavailable tray does not stop headless or desktop dictation.
   `tray_status` interprets service replies and deduplicates alerts independently of Qt.
   `lark_monitor` polls the opted-in input and discards stale results; only the isolated
   `lark` helper opens the receiver and sends its fixed status heartbeat.

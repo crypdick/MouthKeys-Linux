@@ -219,7 +219,8 @@ class Config:
         self.validate()
         path = config_path()
         private_dir(path.parent)
-        write_private(path, json.dumps(asdict(self), indent=2).encode())
+        # Replace the managed file atomically, not the symlink pointing to it.
+        write_private(path.resolve(), json.dumps(asdict(self), indent=2).encode())
 
 
 RANGES = {

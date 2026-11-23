@@ -1,9 +1,10 @@
 """Exercise tray state with an offscreen menu and fake control responses."""
 
+import socket
 from types import SimpleNamespace
 
 import pytest
-from PySide6.QtWidgets import QSystemTrayIcon
+from PySide6.QtWidgets import QApplication, QSystemTrayIcon
 
 from mouthkeys import gui
 from mouthkeys import tray as tray_module
@@ -200,33 +201,39 @@ def test_quit_without_pending_work(tray, monkeypatch):
 
 
 @pytest.mark.parametrize("available", [True, False])
-def test_standalone_launch_starts_service_and_offscreen_event_loop(monkeypatch, available):
+def test_managed_tray_signals_readiness_and_quits_on_service_exit(monkeypatch, available):
     seen = []
-    app = SimpleNamespace(
-        setApplicationName=seen.append,
-        setQuitOnLastWindowClosed=seen.append,
-        exec=lambda: seen.append("event loop") or 7,
-    )
-    monkeypatch.setattr(tray_module, "ensure_daemon", lambda: seen.append("daemon"))
     monkeypatch.setattr(tray_module, "ensure_overlay", lambda: seen.append("overlay"))
+    icon = SimpleNamespace(finish_quitting=lambda: seen.append("quit"))
+    monkeypatch.setattr(tray_module, "create_tray", lambda: icon if available else None)
+    service, tray = socket.socketpair()
+
+    def run_loop():
+        assert service.recv(1) == b"1"
+        service.close()
+        QApplication.processEvents()
+        return 7
+
+    app = SimpleNamespace(
+        setApplicationName=lambda _: None,
+        setQuitOnLastWindowClosed=lambda _: None,
+        exec=run_loop,
+    )
     monkeypatch.setattr(tray_module, "QApplication", lambda _: app)
-    monkeypatch.setattr(tray_module, "create_tray", lambda: object() if available else None)
-    if not available:
-        with pytest.raises(RuntimeError, match="System tray unavailable"):
-            tray_module.launch()
-        assert seen == ["daemon", "overlay", "MouthKeys", False]
-    else:
-        assert tray_module.launch() == 7
-        assert seen == ["daemon", "overlay", "MouthKeys", False, "event loop"]
+    with service, tray:
+        service.settimeout(1)
+        assert tray_module.launch(tray.detach()) == (7 if available else 0)
+        if not available:
+            assert service.recv(1) == b""
+    assert seen == (["overlay", "quit"] if available else [])
 
 
-def test_standalone_launch_returns_when_another_tray_holds_the_lock(monkeypatch):
-    def already_running(*_):
-        raise BlockingIOError
-
-    monkeypatch.setattr(tray_module.fcntl, "flock", already_running)
-    monkeypatch.setattr(tray_module, "ensure_daemon", lambda: pytest.fail("Started duplicate tray"))
+def test_tray_command_starts_service_without_opening_an_independent_tray(monkeypatch):
+    calls = []
+    monkeypatch.setattr(tray_module, "ensure_daemon", lambda: calls.append("daemon"))
+    monkeypatch.setattr(tray_module, "QApplication", lambda _: pytest.fail("Started extra tray"))
     assert tray_module.launch() == 0
+    assert calls == ["daemon"]
 
 
 @pytest.mark.parametrize(

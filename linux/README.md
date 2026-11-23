@@ -102,10 +102,13 @@ on release). Conflicting bindings fail visibly. Shortcut capture is a deliberate
 The GlobalShortcuts portal supports keyboard chords and compositor-managed consent; unsupported
 or denied portals do not pretend to work. Return to desktop-owned bindings with `shortcut_backend=desktop`.
 
-The first recording command starts a private daemon. `mouthkeys warmup` loads the selected model.
-Closing Settings leaves recording available. `launch_at_startup=on` creates a user autostart entry;
-`show_window_at_login` chooses Settings versus tray/daemon. Changing the session type or service
-environment requires a manual restart.
+The first recording command starts a private daemon and, when enabled and available, its system
+tray. **Quit MouthKeys** in the tray stops both; if either process exits after the tray is ready,
+the other stops too. Headless sessions and desktops without a tray can still run dictation.
+`mouthkeys warmup` loads the selected model. Closing Settings leaves recording available.
+`launch_at_startup=on` creates a user autostart entry; `show_window_at_login` also opens Settings.
+`mouthkeys install-desktop --sync-autostart` applies the saved setting without editing config.
+Changing the session type or service environment requires a manual restart.
 
 ## Recording and architecture
 

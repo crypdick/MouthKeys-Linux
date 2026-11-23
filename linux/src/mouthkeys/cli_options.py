@@ -45,6 +45,8 @@ def build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915
         "shutdown",
     ):
         command = commands.add_parser(action)
+        if action == "tray":
+            command.add_argument("--service-fd", type=int, help=argparse.SUPPRESS)
         if action in ("start", "toggle"):
             command.add_argument("--profile", help="Prompt profile UUID, default, or off")
             command.add_argument(
@@ -130,5 +132,9 @@ def build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915
     config_parser.add_argument("key", nargs="?", choices=list(asdict(Config())))
     config_parser.add_argument("value", nargs="?")
     commands.add_parser("clear-history").add_argument("--yes", action="store_true", required=True)
-    commands.add_parser("install-desktop").add_argument("--autostart", action="store_true")
+    startup = commands.add_parser("install-desktop").add_mutually_exclusive_group()
+    startup.add_argument("--autostart", action="store_true", help="Enable startup at login")
+    startup.add_argument(
+        "--sync-autostart", action="store_true", help="Apply the saved login startup setting"
+    )
     return parser

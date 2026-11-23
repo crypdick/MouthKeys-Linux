@@ -1,5 +1,6 @@
 import json
 from dataclasses import replace
+from pathlib import Path
 
 import pytest
 
@@ -28,6 +29,23 @@ def test_config_validation_and_atomic_roundtrip():
     with pytest.raises(ValueError, match="max_seconds must be between"):
         Config(max_seconds=-1).save()
     assert Config.load() == config
+
+
+def test_save_updates_relative_symlink_target(tmp_path):
+    path = config_path()
+    path.parent.mkdir(parents=True)
+    target = tmp_path / "overlay" / "config.json"
+    target.parent.mkdir()
+    target.write_text('{"model": "small"}')
+    link = Path("../../overlay/config.json")
+    path.symlink_to(link)
+
+    updated = replace(Config.load(), pause_media="on")
+    updated.save()
+
+    assert path.readlink() == link
+    assert Config.from_mapping(json.loads(target.read_text())) == updated
+    assert target.stat().st_mode & 0o777 == 0o600
 
 
 def test_old_config_cannot_reenable_audio_retention():

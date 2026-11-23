@@ -1,15 +1,15 @@
 """Qt system tray, using the same controller commands as desktop shortcuts."""
 
-import fcntl
+import socket
 import sys
 from dataclasses import replace
 from pathlib import Path
 
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import QSocketNotifier, QTimer
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon, QWidget
 
-from .config import Config, runtime_dir
+from .config import Config
 from .control import ensure_daemon, ensure_overlay
 from .desktop import source_names
 from .qt_control import Request, Response, ResponseHandler
@@ -17,9 +17,9 @@ from .tray_status import TrayAlerts, TrayStatus, status_text
 
 
 class Tray(QSystemTrayIcon):
-    def __init__(self, window: QWidget | None = None) -> None:
-        super().__init__(QIcon(str(Path(__file__).parent / "assets" / "icon.png")), window)
-        self.window = window
+    def __init__(self) -> None:
+        super().__init__(QIcon(str(Path(__file__).parent / "assets" / "icon.png")))
+        self.window: QWidget | None = None
         self.jobs: set[Request] = set()
         self.pending = False
         self.quitting = False
@@ -35,8 +35,7 @@ class Tray(QSystemTrayIcon):
         self.microphones.aboutToShow.connect(self.refresh_microphones)
         menu.addSeparator()
         menu.addAction("History / App Settings", self.open_window)
-        menu.addAction("Stop recording service", lambda: self.send("shutdown"))
-        menu.addAction("Quit tray", self.request_quit)
+        menu.addAction("Quit MouthKeys", self.request_quit)
         self.setContextMenu(menu)
         self.menu = menu
         self.activated.connect(self.activate)
@@ -49,6 +48,9 @@ class Tray(QSystemTrayIcon):
         if getattr(self.window, "busy", False):
             self.setToolTip("Wait for current settings operation before quitting")
             return
+        self.finish_quitting()
+
+    def finish_quitting(self) -> None:
         self.quitting = True
         self.timer.stop()
         if not self.jobs and (app := QApplication.instance()) is not None:
@@ -130,26 +132,32 @@ class Tray(QSystemTrayIcon):
                 self.showMessage(title, detail)
 
 
-def create_tray(window: QWidget | None = None) -> Tray | None:
+def create_tray() -> Tray | None:
     if Config.load().tray != "on" or not QSystemTrayIcon.isSystemTrayAvailable():
         return None
-    tray = Tray(window)
+    tray = Tray()
     tray.show()
     return tray
 
 
-def launch() -> int:
-    with (runtime_dir() / "tray.lock").open("w") as lock:
-        try:
-            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
-            return 0
+def launch(service_fd: int | None = None) -> int:
+    if service_fd is None:
         ensure_daemon()
-        ensure_overlay()
+        return 0
+    with socket.socket(fileno=service_fd) as service:
         app = QApplication(sys.argv)
         app.setApplicationName("MouthKeys")
         app.setQuitOnLastWindowClosed(False)
         tray = create_tray()
         if tray is None:
-            raise RuntimeError("System tray unavailable or disabled; run mouthkeys gui")
+            return 0
+        disconnect = QSocketNotifier(service.fileno(), QSocketNotifier.Type.Read)
+
+        def service_stopped(_descriptor: object, _event: object) -> None:
+            disconnect.setEnabled(False)
+            tray.finish_quitting()
+
+        disconnect.activated.connect(service_stopped)
+        ensure_overlay()
+        service.sendall(b"1")
         return app.exec()

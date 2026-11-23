@@ -3,6 +3,7 @@
 import fcntl
 import importlib.util
 import json
+import logging
 import os
 import socket
 import subprocess
@@ -37,25 +38,28 @@ def request(action: str, **data: object) -> object:
     raise RuntimeError("Invalid daemon response")
 
 
-def _launch(action: str) -> Path:
+def _launch(
+    action: str, *arguments: str, pass_fds: tuple[int, ...] = ()
+) -> tuple[subprocess.Popen[bytes], Path]:
     log = state_dir() / f"{action}.log"
     with log.open("a") as output:
         log.chmod(0o600)
-        subprocess.Popen(  # noqa: S603
-            python_command("mouthkeys", action),
+        process = subprocess.Popen(  # noqa: S603
+            python_command("mouthkeys", action, *arguments),
             stdin=subprocess.DEVNULL,
             stdout=output,
             stderr=output,
             start_new_session=True,
+            pass_fds=pass_fds,
         )
-    return log
+    return process, log
 
 
 def ensure_daemon() -> None:
     with suppress(FileNotFoundError, ConnectionRefusedError):
         request("status")
         return
-    log = _launch("daemon")
+    _, log = _launch("daemon")
     deadline = time.monotonic() + 5
     while time.monotonic() < deadline:
         try:
@@ -65,6 +69,23 @@ def ensure_daemon() -> None:
         else:
             return
     raise RuntimeError(f"Daemon did not start; see {log}")
+
+
+def launch_tray() -> tuple[socket.socket, subprocess.Popen[bytes]] | None:
+    if not (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")):
+        return None
+    if Config.load().tray != "on" or importlib.util.find_spec("PySide6") is None:
+        return None
+    service, tray = socket.socketpair()
+    try:
+        with tray:
+            fd = tray.fileno()
+            process, _ = _launch("tray", "--service-fd", str(fd), pass_fds=(fd,))
+    except OSError as exc:
+        service.close()
+        logging.getLogger(__name__).warning("MouthKeys tray: %s", exc)
+        return None
+    return service, process
 
 
 def ensure_overlay() -> None:

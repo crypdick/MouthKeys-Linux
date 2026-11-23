@@ -9,7 +9,6 @@ from .config import config_path
 from .control import ensure_daemon, ensure_overlay
 from .gui import Window
 from .hotkeys import ensure_hotkeys
-from .tray import create_tray
 
 
 def launch() -> int:
@@ -22,9 +21,6 @@ def launch() -> int:
     window = Window()
     if first_launch:
         window.nav.setCurrentRow(9)
-    tray = create_tray(window)
-    app.setQuitOnLastWindowClosed(tray is None)
-    if tray is None:
-        window.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+    window.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
     window.show()
     return app.exec()

@@ -8,12 +8,16 @@ import socketserver
 import threading
 from collections.abc import Callable
 from contextlib import suppress
-from typing import Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 from .config import runtime_dir
-from .control import MAX_MESSAGE
+from .control import MAX_MESSAGE, launch_tray
 from .local_api import start as start_local_api
 from .service import Controller
+
+if TYPE_CHECKING:
+    import socket
+    import subprocess
 
 
 @runtime_checkable
@@ -69,10 +73,20 @@ class Server(socketserver.ThreadingUnixStreamServer):
 
     def __init__(self, path: str, controller: ControlCommands) -> None:
         self.controller = controller
+        self.tray: tuple[socket.socket, subprocess.Popen[bytes]] | None = None
         super().__init__(path, Handler)
 
     def service_actions(self) -> None:
         self.controller.tick()
+        if self.tray is not None:
+            link, process = self.tray
+            if process.poll() is not None:
+                self.tray = None
+                with link:
+                    # A tray that never became available must not stop dictation.
+                    if link.recv(1):
+                        self.controller.interrupt()
+                        self.schedule_shutdown()
 
     def schedule_shutdown(self) -> None:
         threading.Thread(target=self.shutdown, daemon=True).start()
@@ -106,8 +120,11 @@ def serve(make_controller: Callable[[], Controller] = Controller) -> None:
             try:
                 signal.signal(signal.SIGTERM, shutdown)
                 signal.signal(signal.SIGINT, shutdown)
+                server.tray = launch_tray()
                 server.serve_forever(poll_interval=0.025)
             finally:
+                if server.tray is not None:
+                    server.tray[0].close()
                 path.unlink(missing_ok=True)
                 if api is not None:
                     api.shutdown()

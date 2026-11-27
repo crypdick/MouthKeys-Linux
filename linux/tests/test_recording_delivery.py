@@ -3,11 +3,27 @@ import wave
 
 import pytest
 
-from mouthkeys import desktop_input, recording_cleanup, recording_delivery
+from mouthkeys import accessibility, desktop_input, recording_cleanup, recording_delivery
 from mouthkeys.audio import is_short_silence
 from mouthkeys.config import Config
 
 from .pipeline_support import finish, make_controller
+
+
+def test_consecutive_clipboard_dictations_separate_without_cursor_context(monkeypatch):
+    Config(space_between_dictations="on", smart_capitalization="on").save()
+    monkeypatch.setattr(accessibility, "read_context", lambda: None)
+    app = make_controller()
+    for sentence in ("First sentence.", "Second sentence."):
+        app.transcriber.text = sentence
+        app.command("start")
+        app.command("stop")
+        finish(app)
+
+    assert [(text, target) for text, _config, target in app.delivery.calls] == [
+        ("First sentence. ", None),
+        ("Second sentence. ", None),
+    ]
 
 
 @pytest.mark.parametrize(

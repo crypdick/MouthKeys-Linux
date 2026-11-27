@@ -417,9 +417,12 @@ ASR punctuation cleanup preserve untouched punctuation. Punctuation/action rows 
 rewriting paths/prose, and explicit `mention Paul`/`at the rate Paul` forms. Relaxed `at Paul` requires
 captured Slack/Discord/Teams application context and a supported lead-in; ordinary `at work` or
 possessives remain prose. Smart capitalization skips closing quotes/brackets when reading the actual
-preceding field text. `space_between_dictations` adds leading spacing when needed and a trailing space;
-app-specific slash/mention autocomplete trims that trailing space only for supported standalone tokens.
-Both context controls require actual AT-SPI context; unknown preceding text is not guessed.
+preceding field text. Enable **Space between dictations** in **App Settings → Text formatting** or
+run `mouthkeys config space_between_dictations on`. It adds a trailing space even when AT-SPI context
+is unavailable, so consecutive pastes separate in terminals and TUIs that preserve trailing spaces.
+Leading spacing and smart capitalization still require actual preceding field text. App-specific
+slash/mention autocomplete can trim the trailing space for supported tokens. Optional AI cleanup can
+also trim spacing.
 `remove_trailing_period` removes one final period, including from an ellipsis; it is an explicit toggle.
 
 Editable fillers have reset controls and one-time inline **Keep** / **Keep removing** offers in
@@ -780,7 +783,9 @@ configuration before marking a setup verified:
   Switch active source from overlay/Settings/CLI; confirm temporary versus persistent selection,
   ordered temporary audio, reported restart gap, old-source failure recovery and no overlapping captures.
 - Editor and Ghostty/other terminal: Unicode/newlines, normal clipboard paste, direct nonterminal
-  insertion, and no simulated character typing into terminals.
+  insertion, and no simulated character typing into terminals. With `space_between_dictations=on`,
+  paste two recordings into one TUI input; check the separator and that the first has no leading
+  space when cursor context is unavailable.
 - Focus safety: switch windows, fields, tabs, terminal panes, and virtual desktops while processing.
   Test active-window changes where a toolkit leaves its old child locally focused. Stale, protected,
   or unidentifiable destinations must not receive automatic text/Send.

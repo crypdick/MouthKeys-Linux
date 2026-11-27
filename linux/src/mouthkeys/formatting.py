@@ -120,8 +120,13 @@ def format_text(
         text = text[0].lower() + text[1:]
     if enabled(config, "remove_trailing_period") and text.endswith("."):
         text = text[:-1]
-    if context is not None:
-        text = _with_context(text, context, config)
+    if context is not None and enabled(config, "smart_capitalization"):
+        text = _first_letter_case(text, upper=_starts_sentence(context))
+    if enabled(config, "space_between_dictations") and text:
+        if context and not context[-1].isspace() and not text[0].isspace():
+            text = " " + text
+        if not text[-1].isspace():
+            text += " "
     if enabled(config, "literal_formatting"):
         text = literal_autocomplete_spacing(text, **app_context)
     return text
@@ -150,14 +155,3 @@ def _starts_sentence(context: str) -> bool:
         if not horizontal(character) and character not in "\"'”’»›)]}」』":
             return character in ".!?"
     return True
-
-
-def _with_context(text: str, context: str, config: Config) -> str:
-    if enabled(config, "smart_capitalization"):
-        text = _first_letter_case(text, upper=_starts_sentence(context))
-    if enabled(config, "space_between_dictations") and text:
-        if context and not context[-1].isspace() and not text[0].isspace():
-            text = " " + text
-        if not text[-1].isspace():
-            text += " "
-    return text

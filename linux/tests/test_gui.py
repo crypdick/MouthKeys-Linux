@@ -179,6 +179,23 @@ def test_settings_show_app_and_running_service_versions(monkeypatch):
     app.processEvents()
 
 
+def test_settings_show_error_when_service_is_unavailable(monkeypatch):
+    def request(action, **_data):
+        assert action == "status"
+        raise RuntimeError("Service disconnected")
+
+    monkeypatch.setattr(qt_control, "request", request)
+    window = gui.Window()
+    window.timer.stop()
+    deadline = time.monotonic() + 2
+    while window.jobs and time.monotonic() < deadline:
+        QApplication.processEvents()
+        time.sleep(0.01)
+    assert window.status.text() == "Service disconnected"
+    assert window.service_version.text() == "Unavailable"
+    window.close()
+
+
 def test_offscreen_controller_renders_history_and_saves_settings(monkeypatch):
 
     app = QApplication.instance() or QApplication([])

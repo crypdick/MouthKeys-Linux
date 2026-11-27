@@ -210,9 +210,9 @@ def test_ai_rejects_invalid_empty_and_oversized_completions():
             process("raw", config, opener=lambda *a, body=body, **kw: BytesIO(body))
 
 
-def test_context_formatting_requires_actual_context_and_preserves_explicit_overrides():
+def test_capitalization_and_leading_space_require_actual_context():
     config = Config(smart_capitalization="on", space_between_dictations="on")
-    assert format_text("World", config, context=None) == "World"
+    assert format_text("World", config, context=None) == "World "
     assert format_text("World", config, context="Hello") == " world "
     assert format_text("world", config, context="Done. ") == "World "
     assert format_text("world", config, context="") == "World "
@@ -410,7 +410,10 @@ def test_relaxed_mentions_need_real_chat_context(metadata):
         ("world", "hello\n", {}, "World "),
         ("World", 'hello") ', {}, "world "),
         ("world", "Hello", {}, " world "),
-        ("world", None, {}, "world"),
+        ("world", None, {}, "world "),
+        ("world\n", None, {}, "world\n"),
+        ("", None, {}, ""),
+        ("slash model", None, {"app_name": "Codex"}, "/model"),
     ],
 )
 def test_continuous_formatting_and_autocomplete_contract(text, context, metadata, expected):

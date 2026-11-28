@@ -11,6 +11,7 @@ from .profiles import PromptProfile
 from .routing import PromptRoute
 
 MAX_SELECTION_LENGTH = 100000
+QUICK_TOGGLE_SECONDS = 0.2
 
 
 @dataclass
@@ -26,6 +27,7 @@ class DictationJob:
     cancel_event: threading.Event = field(default_factory=threading.Event)
     held_activation: bool = False
     cancelled: bool = False
+    quiet_discard: bool = False
     duration: float = 0
     phase: str = "recording"
     send_pending: bool = False

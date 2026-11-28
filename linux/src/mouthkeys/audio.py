@@ -17,6 +17,10 @@ from numpy.typing import NDArray
 from .capture_recorder import Recorder
 from .config import Config, private_dir, runtime_dir
 
+SHORT_RECORDING_SECONDS = 1
+METER_WINDOW_SECONDS = 0.02
+METER_FLOOR_DBFS = -60
+
 
 @runtime_checkable
 class Recording(Protocol):
@@ -218,6 +222,23 @@ def is_short_silence(path: Path) -> bool:
     return bool(len(samples)) and int(np.max(np.abs(samples.astype(np.int32)))) <= 1
 
 
+def is_subsecond_silence(path: Path, *, ignore_late_audio: bool = False) -> bool:
+    """Check bounded 20 ms windows against the recording meter's noise floor."""
+    try:
+        with _capture_wav(path) as (wav, frames):
+            limit = wav.getframerate() * SHORT_RECORDING_SECONDS
+            if frames >= limit and not ignore_late_audio:
+                return False
+            window = round(wav.getframerate() * METER_WINDOW_SECONDS)
+            samples = _normalized_pcm(wav.readframes(min(frames, limit)))
+    except (OSError, ValueError, EOFError, wave.Error):
+        return False  # Leave unreadable or unsupported audio to normal error handling.
+    return all(
+        _rms_dbfs(samples[start : start + window]) <= METER_FLOOR_DBFS
+        for start in range(0, len(samples), window)
+    )
+
+
 @contextmanager
 def _capture_wav(path: Path) -> Iterator[tuple[wave.Wave_read, int]]:
     with path.open("rb") as source, wave.open(source, "rb") as wav:
@@ -258,8 +279,12 @@ def read_audio_from(
         return _normalized_pcm(wav.readframes(count))
 
 
-def live_meter(path: Path) -> dict[str, int | float]:
-    samples, frames = _read_live_audio(path, 0.02)
+def _rms_dbfs(samples: NDArray[np.float32]) -> float:
     rms = float(np.sqrt(np.mean(samples * samples))) if len(samples) else 0.0
-    level = max(0.0, min(1.0, (20 * math.log10(max(rms, 1e-9)) + 60) / 55))
+    return 20 * math.log10(max(rms, 1e-9))
+
+
+def live_meter(path: Path) -> dict[str, int | float]:
+    samples, frames = _read_live_audio(path, METER_WINDOW_SECONDS)
+    level = max(0.0, min(1.0, (_rms_dbfs(samples) - METER_FLOOR_DBFS) / 55))
     return {"frame": frames, "level": level}

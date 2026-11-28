@@ -116,6 +116,12 @@ Changing the session type or service environment requires a manual restart.
 2. Speak when the panel shows Listening, then stop with the shortcut.
 3. Clipboard mode copies the result; paste normally with Ctrl+V or terminal Ctrl+Shift+V.
 
+Toggling off within 200 ms of activation cancels an accidental start. MouthKeys also discards
+sub-second takes if the signal stays below the meter's noise floor. Neither case transcribes,
+shows a result, or leaves a History entry. Short spoken words still transcribe. An explicit stop
+or hold-to-talk release does not use the 200 ms toggle rule.
+The optional `skip_silent_recordings` setting also skips near-zero audio up to four seconds.
+
 The service owns capture, a serialized model worker, immutable per-recording settings, and FIFO
 jobs. Capture may continue for a newer recording while older jobs transcribe/deliver. `queue_limit`
 bounds pending work; cancellation of a newer job does not cancel an earlier dictation. Live words
@@ -782,6 +788,8 @@ configuration before marking a setup verified:
   Fail a present preferred input and confirm bounded alternate retry/quarantine; cancel during startup.
   Switch active source from overlay/Settings/CLI; confirm temporary versus persistent selection,
   ordered temporary audio, reported restart gap, old-source failure recovery and no overlapping captures.
+- Quick re-toggle: check the panel closes without an error or History entry. Repeat with a silent
+  sub-second take, then speak a short “yes” or “no” and confirm it reaches the clipboard.
 - Editor and Ghostty/other terminal: Unicode/newlines, normal clipboard paste, direct nonterminal
   insertion, and no simulated character typing into terminals. With `space_between_dictations=on`,
   paste two recordings into one TUI input; check the separator and that the first has no leading

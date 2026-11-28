@@ -15,6 +15,7 @@ controller = pytest.fixture(make_controller, name="controller")
 
 def test_dictation_persists_before_delivery_and_discards_audio(controller):
     first = controller.command("toggle")["id"]
+    controller.capture.activated_at -= 1
     controller.command("toggle")
     finish(controller)
     assert controller.history.rows()[0]["status"] == "copied"
@@ -204,6 +205,7 @@ def test_private_files(controller):
 def test_preview_is_live_but_never_persisted_or_delivered(controller):
     controller.transcriber.preview = lambda path, config: "provisional words"
     controller.command("start")
+    controller.capture.activated_at -= 1
     controller.live_preview.preview_at = 0
     controller.tick()
     controller.live_preview.worker.join(3)
@@ -227,6 +229,7 @@ def test_cancelled_preview_cannot_leak_into_next_recording(controller):
 
     controller.transcriber.preview = preview
     controller.command("start")
+    controller.capture.activated_at -= 1
     controller.live_preview.preview_at = 0
     controller.tick()
     assert entered.wait(2)
@@ -251,6 +254,7 @@ def test_final_inference_waits_for_preview_and_cancel_suppresses_delivery(contro
 
     controller.transcriber.preview = preview
     controller.command("start")
+    controller.capture.activated_at -= 1
     controller.live_preview.preview_at = 0
     controller.tick()
     assert entered.wait(2)
@@ -271,6 +275,7 @@ def test_preview_failure_does_not_prevent_final_transcription(controller):
 
     controller.transcriber.preview = preview
     controller.command("start")
+    controller.capture.activated_at -= 1
     controller.live_preview.preview_at = 0
     controller.tick()
     controller.live_preview.worker.join(3)
@@ -283,6 +288,7 @@ def test_preview_failure_does_not_prevent_final_transcription(controller):
 def test_failed_final_never_exposes_provisional_text_as_copyable(controller, empty):
     controller.transcriber.preview = lambda path, config: "unfinished words"
     controller.command("start")
+    controller.capture.activated_at -= 1
     controller.live_preview.preview_at = 0
     controller.tick()
     controller.live_preview.worker.join(3)

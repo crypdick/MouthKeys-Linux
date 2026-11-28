@@ -233,6 +233,7 @@ def test_cancel_after_completed_native_preview_releases_cache_for_file_inference
     app.transcriber.preview = preview
     app.transcriber.reset_stream = reset
     app.command("start")
+    app.capture.activated_at -= 1
     app.live_preview.preview_at = 0
     app.tick()
     app.live_preview.worker.join(2)

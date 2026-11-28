@@ -60,6 +60,11 @@ class RecordingState:
                 self.phase, self.message = phase, message
 
     def discard(self, job: DictationJob, message: str = "Cancelled") -> None:
+        if job.quiet_discard:
+            if job.config.save_history == "on":
+                self.history.forget(job.item_id)
+            self.mark_job(job, "idle", "Cancelled")
+            return
         self.update_job(job, "cancelled")
         self.mark_job(job, "idle", message)
 

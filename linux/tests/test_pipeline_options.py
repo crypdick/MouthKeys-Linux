@@ -260,17 +260,6 @@ def test_successive_recordings_discard_audio():
     assert list(app.job.audio_path.parent.glob("*.wav")) == []
 
 
-def test_skip_silent_recordings_is_explicit_and_does_not_load_model():
-    Config(skip_silent_recordings="on").save()
-    app = controller()
-    app.command("start")
-    app.command("stop")
-    finish(app)
-    assert app.message == "Silent recording skipped"
-    assert not app.transcriber.entered.is_set()
-    assert not app.delivery.calls
-
-
 def test_spoken_pause_stops_but_duration_limit_does_not_send():
     config = Config(delivery="x11", spoken_send="on", send_after_pause="on")
     config.save()
@@ -279,6 +268,7 @@ def test_spoken_pause_stops_but_duration_limit_does_not_send():
     sends = []
     app.delivery.send_key = lambda *_: sends.append(True)
     app.command("start")
+    app.tick()  # Prime the meter before simulating a pause with no new frames.
     app.live_preview.armed_at = time.monotonic() - 1
     app.live_preview.last_voice_at = time.monotonic() - 1
     app.tick()
@@ -360,6 +350,7 @@ def test_old_preview_cannot_arm_a_new_recording(monkeypatch):
     app.transcriber.preview = preview
     app.delivery.deliver = lambda *_: "copied"
     app.command("start")
+    app.capture.activated_at -= 1
     app.live_preview.preview_at = 0
     app.tick()
     preview_worker = app.live_preview.worker
@@ -451,6 +442,7 @@ def test_queued_recording_preview_preserves_predecessor_native_cache():
     app.job.predecessors = (previous,)
     calls = []
     app.transcriber.preview = lambda *_: calls.append(True) or "Preview"
+    app.capture.activated_at -= 1
     app.live_preview.preview_at = 0
     app.tick()
     app.live_preview.worker.join(2)

@@ -8,14 +8,20 @@ from dataclasses import replace
 from pathlib import Path
 from typing import cast
 
-from .audio import CaptureSession, CaptureTeardownError, Recording
+from .audio import (
+    SHORT_RECORDING_SECONDS,
+    CaptureSession,
+    CaptureTeardownError,
+    Recording,
+    is_subsecond_silence,
+)
 from .config import Config, runtime_dir
 from .delivery import Target
 from .desktop import MediaSession, choose_source, play_sound
 from .microphone import MicrophoneSelection, SwitchOutcome, selection
 from .recording_delivery import TranscriptDelivery
 from .recording_destination import FocusGate, StopDestination, snapshot_for_stop
-from .recording_job import DictationJob
+from .recording_job import QUICK_TOGGLE_SECONDS, DictationJob
 from .recording_preview import PreviewWork, RecordingPreview
 from .recording_state import RecordingState
 
@@ -42,6 +48,7 @@ class RecordingCapture:
         self.config = Config()
         self.microphone = MicrophoneSelection(self.lock)
         self.recorder: Recording | None = None
+        self.activated_at = 0.0
         self.started: float | None = None
         self.stop_done = threading.Event()
         self.stop_done.set()
@@ -49,6 +56,12 @@ class RecordingCapture:
 
     def seconds(self) -> float:
         return round(time.monotonic() - self.started, 1) if self.started else 0
+
+    def is_false_start(self) -> bool:
+        return self.state.phase == "starting" or (
+            self.state.phase == "recording"
+            and time.monotonic() < self.activated_at + QUICK_TOGGLE_SECONDS
+        )
 
     def stop_command(self, data: Mapping[str, object], focus_gate: FocusGate) -> None:
         if self.state.phase == "starting":
@@ -155,6 +168,8 @@ class RecordingCapture:
             )
 
     def open(self, job: DictationJob, config: Config, status: StatusReader) -> dict[str, object]:
+        self.activated_at = time.monotonic()
+
         def start(chosen: Config, timeout: float) -> Recording:
             factory = self.factory
             capture: Recording
@@ -196,10 +211,12 @@ class RecordingCapture:
         with self.lock:
             cancelled = job.cancel_event.is_set()
             if not self.state.interrupted:
-                error = "" if cancelled else str(failure)
-                self.state.update_job(job, "cancelled" if cancelled else "failed", error=error)
-                self.state.phase = "idle"
-                self.state.message = "Microphone start cancelled" if cancelled else error
+                if cancelled:
+                    self.state.discard(job, "Microphone start cancelled")
+                else:
+                    error = str(failure)
+                    self.state.update_job(job, "failed", error=error)
+                    self.state.mark_job(job, "idle", error)
             job.audio_path.unlink(missing_ok=True)
             job.done.set()
         self.media.resume()
@@ -247,7 +264,14 @@ class RecordingCapture:
         self, job: DictationJob, recorder: Recording, target: object, focus_gate: FocusGate | None
     ) -> None:
         try:
+            focus_started = time.monotonic()
             destination = self._stop_destination(job, target)
+            # A slow desktop probe can keep capture open past the short-take cutoff.
+            ignore_late_audio = (
+                job.duration
+                < SHORT_RECORDING_SECONDS
+                <= job.duration + (time.monotonic() - focus_started)
+            )
             job.context = destination.context
             if focus_gate:
                 focus_gate.resolved()
@@ -256,10 +280,14 @@ class RecordingCapture:
             finally:
                 self.stop_done.set()
                 self.media.resume()
+            silent = not job.cancelled and is_subsecond_silence(
+                job.audio_path, ignore_late_audio=ignore_late_audio
+            )
+            if not (job.quiet_discard or silent):
                 play_sound(job.config, stop=True)
-            metadata = destination.metadata(self.delivery)
-            if metadata is not None:
-                job.metadata = metadata
+                metadata = destination.metadata(self.delivery)
+                if metadata is not None:
+                    job.metadata = metadata
         # The job or IPC response reports the failure; avoid duplicating private data in logs.
         except Exception as exc:  # allow: exception-handling  # noqa: BLE001
             with self.lock:
@@ -283,28 +311,29 @@ class RecordingCapture:
             if self.state.interrupted:
                 job.done.set()
                 return
-            if job.cancelled:
-                self.state.mark_job(job, "queued", "Cancelling; waiting for model cleanup")
-            else:
+            if silent and not job.cancelled:
+                job.quiet_discard = job.cancelled = True
+                job.cancel_event.set()
+            if not job.cancelled:
                 self.state.mark_job(job, "queued", "Waiting for earlier dictation")
                 self.state.update_job(job, "transcribing")
         target = None if focus_gate and not focus_gate.valid else destination.target
         self.finalize(job, cast("Target", target), destination.automatic)
 
     def _stop_destination(self, job: DictationJob, target: object) -> StopDestination:
-        try:
-            return snapshot_for_stop(
-                self.delivery, job.config, target, start_target=job.start_target, mode=job.mode
-            )
         # An unavailable desktop must never prevent the microphone from stopping.
-        except Exception:  # allow: exception-handling  # noqa: BLE001
-            return StopDestination(
-                None,
-                automatic=target == "capture-focus",
-                context=None,
-                metadata_target=None,
-                collect_metadata=False,
-            )
+        if not job.quiet_discard:
+            with suppress(Exception):
+                return snapshot_for_stop(
+                    self.delivery, job.config, target, start_target=job.start_target, mode=job.mode
+                )
+        return StopDestination(
+            None,
+            automatic=target == "capture-focus",
+            context=None,
+            metadata_target=None,
+            collect_metadata=False,
+        )
 
     def _publish_preview(self, text: str) -> None:
         self.state.preview_text = text
@@ -315,7 +344,7 @@ class RecordingCapture:
                 return
             job = cast("DictationJob", self.state.job)  # Recording always has a job.
             self.live_preview.sample(job.audio_path, self.state.preview_text)
-            if self.live_preview.due(self.config):
+            if not self.is_false_start() and self.live_preview.due(self.config):
                 self.live_preview.schedule(
                     PreviewWork(
                         job.audio_path,

@@ -117,6 +117,7 @@ def test_preview_started_before_microphone_switch_cannot_publish_afterward():
 
     app.transcriber.preview = preview
     app.command("start")
+    app.capture.activated_at -= 1
     app.live_preview.preview_at = 0
     app.tick()
     try:
@@ -156,7 +157,9 @@ def test_automatic_stop_keeps_daemon_available_during_focus_lookup(monkeypatch, 
     ).save()
     app = make_controller()
     app.command("start")
+    app.capture.activated_at -= 1
     app.live_preview.preview_at = 0  # This transcriber has no preview adapter.
+    app.tick()  # Prime the meter before simulating a pause with no new frames.
     app.live_preview.armed_at = app.live_preview.last_voice_at = time.monotonic() - 1
     app.recorder.ended = not spoken
     entered, release = threading.Event(), threading.Event()

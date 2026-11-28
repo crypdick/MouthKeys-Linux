@@ -108,19 +108,21 @@ def test_native_reload_waits_for_release_and_reuses_ordered_dispatch(monkeypatch
     times = iter([2, 3, 3.5, 5, 7, 9, 11, 13])
     monkeypatch.setattr(hotkeys, "time", SimpleNamespace(monotonic=lambda: next(times)))
 
-    def stream(backend):
+    def stream(backend, press_at):
         backend.down = {"key": "toggle"}
         assert not backend.close.called
-        yield "toggle", True, 1.0, "key"
+        yield "toggle", True, press_at, "key"
         backend.down.clear()
-        yield "toggle", False, 2.0, "key"
+        yield "toggle", False, press_at + 1, "key"
         yield None
         yield None
         pytest.fail("configuration change did not retire the older grabbings")
 
     backends = [Mock() for _ in range(3)]
-    for backend in backends:
-        backend.events.side_effect = lambda backend=backend: stream(backend)
+    for index, backend in enumerate(backends):
+        backend.events.side_effect = lambda backend=backend, press_at=1.0 + 3 * index: stream(
+            backend, press_at
+        )
     listener.grabs.side_effect = backends
     assert hotkeys.launch() == 0
     assert listener.request.call_args_list == [

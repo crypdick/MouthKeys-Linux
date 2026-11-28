@@ -22,6 +22,7 @@ from . import profiles
 from .config import Config, runtime_dir, state_dir
 from .control import ensure_daemon, request
 from .processes import python_command
+from .recording_job import QUICK_TOGGLE_SECONDS
 from .x11_shortcuts import ShortcutBinding, ShortcutEvent, X11Grabs
 
 logger = logging.getLogger(__name__)
@@ -130,9 +131,20 @@ class Activation:
         self.primary.add(token)
         if len(self.primary) > 1:
             return
+        # The start RPC can block while another press is already queued.
+        quick_cancel = (
+            self.recording_id
+            if self.mode != "hold"
+            and self.started
+            and self.primary_at <= when < self.primary_at + QUICK_TOGGLE_SECONDS
+            else None
+        )
         self.primary_at = when
         self.started = False
         self.recording_id = None
+        if quick_cancel is not None:
+            self.send("cancel", id=quick_cancel, quiet=True)
+            return
         options: dict[str, object] = {}
         if action.startswith("profile:"):
             options["profile"] = action.split(":", 1)[1]

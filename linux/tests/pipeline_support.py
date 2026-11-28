@@ -7,12 +7,12 @@ from mouthkeys.service import Controller
 from mouthkeys.storage import History
 
 
-def write_audio(path):
+def write_audio(path, *, frames=8000, sample=500):
     with wave.open(str(path), "wb") as wav:
         wav.setnchannels(1)
         wav.setsampwidth(2)
         wav.setframerate(16000)
-        wav.writeframes(b"\0\0" * 8000)
+        wav.writeframes(sample.to_bytes(2, "little", signed=True) * frames)
 
 
 class FakeRecorder:

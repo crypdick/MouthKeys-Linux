@@ -8,7 +8,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-from .audio import live_meter
+from .audio import is_subsecond_silence, live_meter
 from .config import Config
 from .formatting import enabled, parse_send
 
@@ -117,6 +117,8 @@ class RecordingPreview:
                         return
                     if any(not done.is_set() for done in work.predecessors):
                         return  # Preserve earlier native stream caches until ordered finalization.
+                if is_subsecond_silence(work.audio_path):
+                    return
                 text = decode(work.audio_path, work.config)
                 if work.cancelled():
                     reset_owned_stream(work.transcriber, work.audio_path)

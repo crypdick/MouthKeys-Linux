@@ -167,19 +167,6 @@ class Controller:
         return result
 
     def _command(self, action: str, _focus_gate: FocusGate, **data: object) -> object:
-        if action == "toggle":
-            with self.lock:
-                action = (
-                    "cancel"
-                    if self.state.phase == "starting"
-                    else (
-                        "stop"
-                        if self.state.phase in ("recording", "switching", "capture_failed")
-                        else "start"
-                    )
-                )
-        if action == "start":
-            return self._start_recording(data)
         if action == "select_microphone":
             return self.capture.select(data, self.status)
         if action == "accept_edit":
@@ -189,7 +176,16 @@ class Controller:
         if action in ("learning_pending", "learning_accept", "learning_dismiss"):
             return self.learning.command(cast("LearningCommand", action), data)
         with self.lock:
-            return self._locked_command(action, data, _focus_gate)
+            if action == "toggle" and self.state.phase not in (
+                "starting",
+                "recording",
+                "switching",
+                "capture_failed",
+            ):
+                action = "start"
+            if action != "start":
+                return self._locked_command(action, data, _focus_gate)
+        return self._start_recording(data)
 
     def _locked_command(
         self, action: str, data: Mapping[str, object], focus_gate: FocusGate
@@ -213,18 +209,19 @@ class Controller:
             return result
         if self.state.interrupted:
             raise ValueError("Service is shutting down")
-        if action in ("cancel", "stop"):
+        if action in ("cancel", "stop", "toggle"):
             if data.get("id") is not None and (
                 not self.state.job or data["id"] != self.state.job.item_id
             ):
                 return self.status()
-            if action == "cancel":
-                return self._cancel_command()
+            if action == "cancel" or (action == "toggle" and self.capture.is_false_start()):
+                focus_gate.resolved()
+                return self._cancel_command(quiet=action == "toggle" or data.get("quiet") is True)
             self.capture.stop_command(data, focus_gate)
             return self.status()
         return self._idle_command(action)
 
-    def _cancel_command(self) -> dict[str, object]:
+    def _cancel_command(self, *, quiet: bool = False) -> dict[str, object]:
         self.learning.cancel()
         if self.state.phase == "delivering" and self.state.job and self.state.job.send_pending:
             if self.state.job.send_dispatched:
@@ -240,6 +237,7 @@ class Controller:
         self.state.cancelled = True
         if self.state.job:
             self.state.job.cancelled = True
+            self.state.job.quiet_discard = self.state.job.quiet_discard or quiet
             self.state.job.cancel_event.set()
         if self.state.phase in ("recording", "switching", "capture_failed"):
             self.capture.stop(None)
@@ -361,6 +359,9 @@ class Controller:
             for job in self.pending_jobs():
                 job.cancelled = True
                 job.cancel_event.set()
+                if job.quiet_discard:
+                    self.state.discard(job)
+                    continue
                 rows = self.history.rows(limit=10000)
                 row = next((r for r in rows if r["id"] == job.item_id), {})
                 saved_text = row.get("text")
